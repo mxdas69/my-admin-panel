@@ -3,59 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Escape Tsunami for FNAF | HQ</title>
+    <title>Escape Tsunami for FNAF | Admin Panel</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root { --accent: #3b82f6; --danger: #ef4444; --bg: #0f172a; --card: #1e293b; }
-        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: #f8fafc; margin: 0; display: flex; height: 100vh; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: #f8fafc; margin: 0; display: flex; height: 100vh; overflow: hidden; }
         
         /* Layout */
         .sidebar { width: 300px; background: #0b1120; border-right: 1px solid #334155; display: flex; flex-direction: column; }
-        .main-content { flex: 1; display: flex; justify-content: center; align-items: center; padding: 20px; }
+        .main-content { flex: 1; padding: 40px; display: flex; flex-direction: column; align-items: center; overflow-y: auto; }
         
         /* Elements */
-        .card { background: var(--card); padding: 2rem; border-radius: 16px; width: 100%; max-width: 500px; box-shadow: 0 20px 25px rgba(0,0,0,0.3); }
-        .log-box { flex: 1; overflow-y: auto; padding: 15px; font-size: 12px; color: #94a3b8; }
+        .card { background: var(--card); padding: 2rem; border-radius: 16px; width: 100%; max-width: 700px; box-shadow: 0 20px 25px rgba(0,0,0,0.3); }
+        .log-box { flex: 1; overflow-y: auto; padding: 15px; font-size: 12px; color: #94a3b8; font-family: monospace; }
         .log-entry { padding: 8px; border-bottom: 1px solid #1e293b; margin-bottom: 5px; }
         
-        input { width: 100%; padding: 10px; margin: 5px 0; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: white; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; transition: 0.2s; background: var(--accent); color: white; }
+        input { width: 100%; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: white; box-sizing: border-box; }
+        button { padding: 12px 24px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; transition: 0.2s; background: var(--accent); color: white; }
+        button:hover { filter: brightness(1.2); }
         
         .ban-table { width: 100%; margin-top: 20px; border-collapse: collapse; font-size: 13px; }
-        .ban-table th { text-align: left; color: #64748b; padding: 8px; border-bottom: 1px solid #334155; }
-        .ban-table td { padding: 8px; border-bottom: 1px solid #1e293b; }
+        .ban-table th { text-align: left; color: #64748b; padding: 12px; border-bottom: 2px solid #334155; text-transform: uppercase; font-size: 11px; }
+        .ban-table td { padding: 12px; border-bottom: 1px solid #1e293b; }
         
-        #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100; display: flex; justify-content: center; align-items: center; }
+        #overlay { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; justify-content: center; align-items: center; }
         #admin-panel { display: none; width: 100%; height: 100%; }
     </style>
 </head>
 <body>
 
 <div id="overlay">
-    <div class="card" style="max-width: 300px;">
-        <h3>Admin Identity</h3>
-        <input type="text" id="admin-id" placeholder="Enter Your Name">
-        <button onclick="saveIdentity()">Access Terminal</button>
+    <div class="card" style="max-width: 350px; text-align: center;">
+        <h2 style="margin-top:0;">Admin Login</h2>
+        <input type="email" id="adm-email" placeholder="Email Address">
+        <input type="password" id="adm-pass" placeholder="Password">
+        <hr style="border: 0; border-top: 1px solid #334155; margin: 20px 0;">
+        <input type="text" id="admin-name" placeholder="Display Name (For Logs)">
+        <button onclick="handleAuth()" style="width: 100%; margin-top: 10px;">Authorize & Enter</button>
     </div>
 </div>
 
-<div id="admin-panel" style="display: flex;">
+<div id="admin-panel">
     <div class="sidebar">
-        <div style="padding: 15px; border-bottom: 1px solid #334155; font-weight: bold;">ACTION LOGS</div>
+        <div style="padding: 15px; border-bottom: 1px solid #334155; font-weight: bold; font-size: 12px; color: #64748b;">ACTION LOGS</div>
         <div class="log-box" id="logs">
             <div class="log-entry">System ready...</div>
         </div>
     </div>
 
     <div class="main-content">
-        <div class="card" style="max-width: 650px;">
-            <h1>Escape Tsunami for FNAF</h1>
-            <p id="welcome-msg" style="color: var(--accent); margin-bottom: 20px;">Welcome, Admin</p>
+        <div class="card">
+            <h1 style="margin-top:0;">Escape Tsunami for FNAF</h1>
+            <p id="welcome-msg" style="color: var(--accent); margin-bottom: 20px; font-size: 14px;">Logged in as: ---</p>
             
             <div style="display: flex; gap: 10px;">
-                <input type="text" id="target" placeholder="Roblox Username">
-                <input type="text" id="reason" placeholder="Reason">
-                <button onclick="handleBan()" style="width: 150px; background: var(--danger);">BAN</button>
+                <input type="text" id="target" placeholder="Roblox Username" style="flex:2;">
+                <input type="text" id="reason" placeholder="Reason" style="flex:3;">
+                <button onclick="handleBan()" style="background: var(--danger); flex:1;">BAN</button>
             </div>
 
             <table class="ban-table">
@@ -67,9 +71,11 @@
                         <th>ACTION</th>
                     </tr>
                 </thead>
-                <tbody id="ban-list-body">
-                    </tbody>
+                <tbody id="ban-list-body"></tbody>
             </table>
+            <div style="text-align: right; margin-top: 15px;">
+                <span onclick="fetchData()" style="color: var(--accent); cursor: pointer; font-size: 12px;">↻ Refresh List</span>
+            </div>
         </div>
     </div>
 </div>
@@ -80,28 +86,41 @@
     const client = supabase.createClient(SB_URL, SB_KEY);
     let currentAdmin = "Unknown";
 
-    function saveIdentity() {
-        const name = document.getElementById('admin-id').value;
-        if (!name) return alert("Please enter your name.");
-        currentAdmin = name;
-        document.getElementById('overlay').style.display = 'none';
-        document.getElementById('admin-panel').style.display = 'flex';
-        document.getElementById('welcome-msg').innerText = "Logged in as: " + currentAdmin;
-        fetchData();
+    async function handleAuth() {
+        const email = document.getElementById('adm-email').value;
+        const pass = document.getElementById('adm-pass').value;
+        const name = document.getElementById('admin-name').value;
+
+        if (!email || !pass || !name) return alert("Fill in all fields!");
+
+        // 1. Check Supabase Password
+        const { error } = await client.auth.signInWithPassword({ email: email, password: pass });
+        
+        if (error) {
+            alert("Login Failed: " + error.message);
+        } else {
+            // 2. Setup Panel
+            currentAdmin = name;
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('admin-panel').style.display = 'flex';
+            document.getElementById('welcome-msg').innerText = "Logged in as: " + currentAdmin;
+            addLog("Admin Authorized.");
+            fetchData();
+        }
     }
 
     async function handleBan() {
         const user = document.getElementById('target').value;
-        const res = document.getElementById('reason').value || "No reason";
+        const res = document.getElementById('reason').value || "Moderator Action";
         if (!user) return;
 
         const { error } = await client.from('ban_list').insert([
             { username: user, reason: res, admin_name: currentAdmin }
         ]);
 
-        if (error) alert(error.message);
+        if (error) alert("Error: " + error.message);
         else {
-            addLog(`Banned ${user} for: ${res}`);
+            addLog(`Banned ${user}`);
             fetchData();
             document.getElementById('target').value = "";
             document.getElementById('reason').value = "";
@@ -117,19 +136,23 @@
     }
 
     async function fetchData() {
-        const { data } = await client.from('ban_list').select('*');
+        const { data, error } = await client.from('ban_list').select('*');
         const tbody = document.getElementById('ban-list-body');
         tbody.innerHTML = "";
         
-        data.forEach(item => {
-            const row = `<tr>
-                <td>${item.username}</td>
-                <td>${item.reason}</td>
-                <td style="color: #94a3b8;">${item.admin_name || 'System'}</td>
-                <td><span class="unban-link" style="color:var(--danger); cursor:pointer;" onclick="handleUnban('${item.username}')">Unban</span></td>
-            </tr>`;
-            tbody.innerHTML += row;
-        });
+        if (data && data.length > 0) {
+            data.forEach(item => {
+                const row = `<tr>
+                    <td><b>${item.username}</b></td>
+                    <td>${item.reason}</td>
+                    <td style="color: #94a3b8;">${item.admin_name || 'System'}</td>
+                    <td><span style="color:var(--danger); cursor:pointer; font-weight:bold;" onclick="handleUnban('${item.username}')">[UNBAN]</span></td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+        } else {
+            tbody.innerHTML = "<tr><td colspan='4' style='text-align:center; color:#64748b;'>No active bans.</td></tr>";
+        }
     }
 
     function addLog(msg) {
@@ -138,8 +161,8 @@
         logs.innerHTML = `<div class="log-entry">[${time}] ${currentAdmin}: ${msg}</div>` + logs.innerHTML;
     }
 
-    // Auto-refresh every 10 seconds for "Live Data" feel
-    setInterval(fetchData, 10000);
+    // Auto-refresh list every 15 seconds
+    setInterval(fetchData, 15000);
 </script>
 </body>
 </html>
