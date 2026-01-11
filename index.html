@@ -4,56 +4,57 @@
     <title>Admin Ban Panel</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #1a1a1a; color: white; text-align: center; padding-top: 50px; }
-        .box { background: #2a2a2a; padding: 20px; border-radius: 10px; display: inline-block; width: 300px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        body { font-family: sans-serif; background: #1a1a1a; color: white; text-align: center; padding-top: 50px; }
+        .box { background: #2a2a2a; padding: 20px; border-radius: 10px; display: inline-block; width: 300px; }
         input { width: 80%; padding: 10px; margin: 10px 0; border-radius: 5px; border: none; }
-        button { width: 85%; padding: 10px; background: #00c853; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        button:hover { background: #00e676; }
+        button { width: 85%; padding: 10px; background: #00c853; color: white; border: none; border-radius: 5px; cursor: pointer; }
         #admin-panel { display: none; }
     </style>
 </head>
 <body>
     <div class="box">
         <h2>Admin Panel</h2>
-        
         <div id="login-section">
-            <input type="email" id="email" placeholder="Admin Email">
+            <input type="email" id="email" placeholder="Email">
             <input type="password" id="password" placeholder="Password">
-            <button onclick="login()">LOGIN</button>
+            <button onclick="handleLogin()">LOGIN</button>
         </div>
-
         <div id="admin-panel">
-            <p style="color: #00c853;">● System Online</p>
             <input type="text" id="target" placeholder="Roblox Username">
-            <button onclick="banPlayer()" style="background: #d32f2f;">BAN PLAYER</button>
+            <button onclick="handleBan()" style="background: #d32f2f;">BAN PLAYER</button>
         </div>
     </div>
 
     <script>
         const SB_URL = "https://indsiirpiwatrrkabklu.supabase.co";
         const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluZHNpaXJwaXdhdHJya2Fia2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNTQ1NzEsImV4cCI6MjA4MzczMDU3MX0.xnVNrPDDKhyORc8vkVHtCnU-3ws7MU0ltNT_OK2FC7w";
-        const supabase = supabase.createClient(SB_URL, SB_KEY);
+        
+        // Fix: Use 'client' instead of 'supabase' to avoid naming conflicts
+        const client = supabase.createClient(SB_URL, SB_KEY);
 
-        async function login() {
+        async function handleLogin() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            
+            const { data, error } = await client.auth.signInWithPassword({ email, password });
 
-            if (error) alert("Login Error: " + error.message);
-            else {
+            if (error) {
+                alert("Login Error: " + error.message);
+            } else {
                 document.getElementById('login-section').style.display = 'none';
                 document.getElementById('admin-panel').style.display = 'block';
+                alert("Welcome, Admin!");
             }
         }
 
-        async function banPlayer() {
+        async function handleBan() {
             const user = document.getElementById('target').value;
-            const { error } = await supabase
+            const { error } = await client
                 .from('ban_list')
                 .insert([{ username: user, reason: 'Remote Admin Ban' }]);
 
             if (error) alert("Ban failed: " + error.message);
-            else alert(user + " has been banned successfully!");
+            else alert(user + " has been banned!");
         }
     </script>
 </body>
