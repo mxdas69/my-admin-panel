@@ -2,110 +2,113 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Escape Tsunami: FNAF Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escape Tsunami Admin</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root {
-            --fnaf-red: #8b0000;
-            --hazard-orange: #ff8c00;
-            --metal: #2c2c2c;
-            --bg: #0a0a0a;
-        }
-
         body {
-            font-family: 'Courier New', Courier, monospace;
-            background-color: var(--bg);
-            color: #eee;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            color: #1c1e21;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             margin: 0;
-            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url('https://www.transparenttextures.com/patterns/dark-matter.png');
         }
 
-        .container {
-            background: var(--metal);
-            padding: 30px;
-            border-radius: 4px;
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
             width: 100%;
-            max-width: 420px;
-            box-shadow: 0 0 20px rgba(139, 0, 0, 0.5);
-            border: 2px solid var(--fnaf-red);
+            max-width: 400px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             text-align: center;
         }
 
-        h2 { color: var(--fnaf-red); text-transform: uppercase; letter-spacing: 3px; border-bottom: 1px solid #444; padding-bottom: 10px; }
+        h2 { color: #0061ff; margin-bottom: 0.5rem; }
+        p { color: #65676b; font-size: 14px; margin-bottom: 1.5rem; }
 
         input {
             width: 100%;
             padding: 12px;
-            margin: 10px 0;
-            border-radius: 0;
-            border: 1px solid #555;
-            background: #1a1a1a;
-            color: #ff8c00;
+            margin: 8px 0;
+            border-radius: 8px;
+            border: 1px solid #dddfe2;
+            background: #f5f6f7;
             box-sizing: border-box;
+            font-size: 15px;
         }
+
+        input:focus { border-color: #0061ff; outline: none; background: white; }
 
         button {
             width: 100%;
-            padding: 15px;
+            padding: 12px;
             margin-top: 10px;
+            border-radius: 8px;
             border: none;
-            font-weight: bold;
+            font-weight: 600;
             cursor: pointer;
-            text-transform: uppercase;
-            transition: 0.2s;
+            transition: background 0.2s;
+            font-size: 15px;
         }
 
-        .btn-auth { background: var(--fnaf-red); color: white; }
-        .btn-ban { background: #660000; color: white; border: 1px solid var(--fnaf-red); }
-        .btn-ban:hover { background: var(--fnaf-red); box-shadow: 0 0 10px var(--fnaf-red); }
+        .btn-blue { background: #0061ff; color: white; }
+        .btn-blue:hover { background: #0052d9; }
+        
+        .btn-red { background: #ff4757; color: white; margin-top: 5px; }
+        .btn-red:hover { background: #e04050; }
 
         #admin-panel { display: none; }
 
         .ban-list {
             margin-top: 20px;
-            background: #111;
-            border: 1px solid #444;
-            padding: 10px;
-            max-height: 150px;
-            overflow-y: auto;
             text-align: left;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
         }
 
         .ban-row {
             display: flex;
             justify-content: space-between;
-            padding: 8px;
-            border-bottom: 1px solid #333;
-            font-size: 13px;
-            color: #bbb;
+            align-items: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            font-size: 14px;
         }
 
-        .unban-btn { color: var(--hazard-orange); cursor: pointer; font-weight: bold; }
+        .unban-link { color: #ff4757; font-weight: bold; cursor: pointer; font-size: 12px; }
+        .unban-link:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>RECOVERY TERMINAL</h2>
-    <div style="font-size: 10px; color: #666; margin-bottom: 20px;">PROJECT: ESCAPE TSUNAMI FOR FNAF</div>
+<div class="card">
+    <h2>Escape Tsunami</h2>
+    <p>Internal Admin Dashboard</p>
     
     <div id="login-section">
-        <input type="email" id="email" placeholder="SECURE_EMAIL">
-        <input type="password" id="pass" placeholder="ACCESS_CODE">
-        <button class="btn-auth" onclick="handleLogin()">BYPASS SECURITY</button>
+        <input type="email" id="email" placeholder="Email Address">
+        <input type="password" id="pass" placeholder="Password">
+        <button class="btn-blue" onclick="handleLogin()">Sign In</button>
     </div>
 
     <div id="admin-panel">
-        <input type="text" id="target" placeholder="TARGET_USERNAME">
-        <input type="text" id="reason" placeholder="VIOLATION_REASON">
-        <button class="btn-ban" onclick="handleBan()">INITIALIZE BAN</button>
+        <input type="text" id="target" placeholder="Roblox Username">
+        <input type="text" id="reason" placeholder="Reason (Optional)">
+        <button class="btn-red" onclick="handleBan()">Ban Player</button>
 
-        <div class="ban-list" id="list-content">Scanning database...</div>
-        <button onclick="loadList()" style="background:none; color:#555; font-size:10px; border:none; width:auto;">[REFRESH_SYSTEM]</button>
+        <div class="ban-list">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <b style="font-size: 13px;">Banned Players</b>
+                <span onclick="loadList()" style="color: #0061ff; font-size: 12px; cursor: pointer;">Refresh</span>
+            </div>
+            <div id="list-content">Loading...</div>
+        </div>
     </div>
 </div>
 
@@ -115,10 +118,11 @@
     const client = supabase.createClient(URL, KEY);
 
     async function handleLogin() {
-        const e = document.getElementById('email').value;
-        const p = document.getElementById('pass').value;
-        const { error } = await client.auth.signInWithPassword({ email: e, password: p });
-        if (error) alert("REJECTED: " + error.message);
+        const { error } = await client.auth.signInWithPassword({ 
+            email: document.getElementById('email').value, 
+            password: document.getElementById('pass').value 
+        });
+        if (error) alert("Login failed. Check your credentials.");
         else {
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('admin-panel').style.display = 'block';
@@ -128,31 +132,36 @@
 
     async function handleBan() {
         const user = document.getElementById('target').value;
-        const reason = document.getElementById('reason').value || "Security Protocol Violation";
+        const reason = document.getElementById('reason').value || "No reason specified";
         if (!user) return;
         const { error } = await client.from('ban_list').insert([{ username: user, reason: reason }]);
-        if (error) alert("SYSTEM ERROR: " + error.message);
-        else { loadList(); document.getElementById('target').value = ""; document.getElementById('reason').value = ""; }
+        if (error) alert("Error adding ban.");
+        else { 
+            document.getElementById('target').value = ""; 
+            document.getElementById('reason').value = "";
+            loadList(); 
+        }
     }
 
     async function handleUnban(user) {
-        const { error } = await client.from('ban_list').delete().eq('username', user);
-        if (error) alert("ERROR: " + error.message);
-        else loadList();
+        await client.from('ban_list').delete().eq('username', user);
+        loadList();
     }
 
     async function loadList() {
         const content = document.getElementById('list-content');
-        const { data, error } = await client.from('ban_list').select('username');
-        if (error) { content.innerHTML = "OFFLINE"; return; }
-        content.innerHTML = data.length === 0 ? "NO THREATS DETECTED" : "";
-        data.forEach(item => {
-            const row = document.createElement('div');
-            row.className = 'ban-row';
-            row.innerHTML = `<span>${item.username}</span><span class="unban-btn" onclick="handleUnban('${item.username}')">[RELEASE]</span>`;
-            content.appendChild(row);
-        });
+        const { data } = await client.from('ban_list').select('username');
+        content.innerHTML = (data && data.length > 0) ? "" : "<span style='color:#999; font-size:12px;'>No active bans.</span>";
+        if (data) {
+            data.forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'ban-row';
+                row.innerHTML = `<span>${item.username}</span><span class="unban-link" onclick="handleUnban('${item.username}')">Remove</span>`;
+                content.appendChild(row);
+            });
+        }
     }
 </script>
+
 </body>
 </html>
