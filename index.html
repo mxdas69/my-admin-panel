@@ -3,13 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Escape Tsunami Admin</title>
+    <title>Escape Tsunami | Admin</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
+        :root {
+            --accent: #3b82f6; /* Modern Blue */
+            --danger: #ef4444; /* Modern Red */
+            --bg: #0f172a;    /* Deep Navy */
+            --card: #1e293b;  /* Slate Blue */
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f0f2f5;
-            color: #1c1e21;
+            font-family: 'Inter', -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: #f8fafc;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -17,149 +24,176 @@
             margin: 0;
         }
 
-        .card {
-            background: white;
-            padding: 2rem;
-            border-radius: 12px;
+        .container {
+            background: var(--card);
+            padding: 2.5rem;
+            border-radius: 16px;
             width: 100%;
             max-width: 400px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
             text-align: center;
         }
 
-        h2 { color: #0061ff; margin-bottom: 0.5rem; }
-        p { color: #65676b; font-size: 14px; margin-bottom: 1.5rem; }
+        h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #fff; }
+        .subtitle { color: #94a3b8; font-size: 0.875rem; margin-bottom: 2rem; }
 
         input {
             width: 100%;
-            padding: 12px;
-            margin: 8px 0;
+            padding: 0.75rem 1rem;
+            margin: 0.5rem 0;
             border-radius: 8px;
-            border: 1px solid #dddfe2;
-            background: #f5f6f7;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: white;
             box-sizing: border-box;
-            font-size: 15px;
+            transition: 0.2s;
         }
 
-        input:focus { border-color: #0061ff; outline: none; background: white; }
+        input:focus { border-color: var(--accent); outline: none; ring: 2px var(--accent); }
 
         button {
             width: 100%;
-            padding: 12px;
-            margin-top: 10px;
+            padding: 0.75rem;
+            margin-top: 1rem;
             border-radius: 8px;
             border: none;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s;
-            font-size: 15px;
+            transition: 0.2s;
         }
 
-        .btn-blue { background: #0061ff; color: white; }
-        .btn-blue:hover { background: #0052d9; }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: #2563eb; }
         
-        .btn-red { background: #ff4757; color: white; margin-top: 5px; }
-        .btn-red:hover { background: #e04050; }
+        .btn-ban { background: var(--danger); color: white; margin-top: 0.5rem; }
+        .btn-ban:hover { background: #dc2626; }
 
         #admin-panel { display: none; }
 
-        .ban-list {
-            margin-top: 20px;
-            text-align: left;
-            border-top: 1px solid #eee;
-            padding-top: 15px;
+        /* Ban List Styling */
+        .list-header { 
+            display: flex; 
+            justify-content: space-between; 
+            margin: 2rem 0 0.5rem; 
+            font-size: 0.75rem; 
+            text-transform: uppercase; 
+            color: #64748b;
+            font-weight: bold;
         }
 
-        .ban-row {
+        .ban-list {
+            background: #0f172a;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #334155;
+        }
+
+        .ban-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 6px;
-            margin-bottom: 5px;
-            font-size: 14px;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #334155;
+            font-size: 0.875rem;
         }
 
-        .unban-link { color: #ff4757; font-weight: bold; cursor: pointer; font-size: 12px; }
-        .unban-link:hover { text-decoration: underline; }
+        .remove-link { color: var(--danger); cursor: pointer; font-weight: 500; }
+        .remove-link:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>Escape Tsunami</h2>
-    <p>Internal Admin Dashboard</p>
+<div class="container">
+    <h1>Escape Tsunami</h1>
+    <div class="subtitle">Management Terminal</div>
     
     <div id="login-section">
-        <input type="email" id="email" placeholder="Email Address">
+        <input type="email" id="email" placeholder="Admin Email">
         <input type="password" id="pass" placeholder="Password">
-        <button class="btn-blue" onclick="handleLogin()">Sign In</button>
+        <button class="btn-primary" onclick="handleLogin()">Sign In</button>
     </div>
 
     <div id="admin-panel">
         <input type="text" id="target" placeholder="Roblox Username">
         <input type="text" id="reason" placeholder="Reason (Optional)">
-        <button class="btn-red" onclick="handleBan()">Ban Player</button>
+        <button class="btn-ban" onclick="handleBan()">Execute Ban</button>
 
-        <div class="ban-list">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                <b style="font-size: 13px;">Banned Players</b>
-                <span onclick="loadList()" style="color: #0061ff; font-size: 12px; cursor: pointer;">Refresh</span>
-            </div>
-            <div id="list-content">Loading...</div>
+        <div class="list-header">
+            <span>Banned Database</span>
+            <span onclick="fetchBans()" style="cursor:pointer; color:var(--accent)">Refresh</span>
+        </div>
+        <div class="ban-list" id="ban-list">
+            <div style="padding:1rem; color:#64748b; font-size:12px;">Scanning...</div>
         </div>
     </div>
 </div>
 
 <script>
-    const URL = "https://indsiirpiwatrrkabklu.supabase.co";
-    const KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluZHNpaXJwaXdhdHJya2Fia2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNTQ1NzEsImV4cCI6MjA4MzczMDU3MX0.xnVNrPDDKhyORc8vkVHtCnU-3ws7MU0ltNT_OK2FC7w";
-    const client = supabase.createClient(URL, KEY);
+    // These are cleaned up to ensure no "Malformed URL" errors
+    const SB_URL = "https://indsiirpiwatrrkabklu.supabase.co";
+    const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluZHNpaXJwaXdhdHJya2Fia2x1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNTQ1NzEsImV4cCI6MjA4MzczMDU3MX0.xnVNrPDDKhyORc8vkVHtCnU-3ws7MU0ltNT_OK2FC7w";
+    
+    const client = supabase.createClient(SB_URL, SB_KEY);
 
     async function handleLogin() {
-        const { error } = await client.auth.signInWithPassword({ 
-            email: document.getElementById('email').value, 
-            password: document.getElementById('pass').value 
-        });
-        if (error) alert("Login failed. Check your credentials.");
-        else {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('pass').value;
+        
+        const { error } = await client.auth.signInWithPassword({ email, password });
+        
+        if (error) {
+            alert("Login Failed: " + error.message);
+        } else {
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('admin-panel').style.display = 'block';
-            loadList();
+            fetchBans();
         }
     }
 
     async function handleBan() {
         const user = document.getElementById('target').value;
-        const reason = document.getElementById('reason').value || "No reason specified";
+        const res = document.getElementById('reason').value || "Moderator Decision";
+        
         if (!user) return;
-        const { error } = await client.from('ban_list').insert([{ username: user, reason: reason }]);
-        if (error) alert("Error adding ban.");
-        else { 
-            document.getElementById('target').value = ""; 
+
+        const { error } = await client.from('ban_list').insert([{ username: user, reason: res }]);
+        
+        if (error) alert("Ban Error: " + error.message);
+        else {
+            document.getElementById('target').value = "";
             document.getElementById('reason').value = "";
-            loadList(); 
+            fetchBans();
         }
     }
 
-    async function handleUnban(user) {
-        await client.from('ban_list').delete().eq('username', user);
-        loadList();
+    async function handleUnban(username) {
+        const { error } = await client.from('ban_list').delete().eq('username', username);
+        if (error) alert("Unban Error: " + error.message);
+        else fetchBans();
     }
 
-    async function loadList() {
-        const content = document.getElementById('list-content');
-        const { data } = await client.from('ban_list').select('username');
-        content.innerHTML = (data && data.length > 0) ? "" : "<span style='color:#999; font-size:12px;'>No active bans.</span>";
-        if (data) {
-            data.forEach(item => {
-                const row = document.createElement('div');
-                row.className = 'ban-row';
-                row.innerHTML = `<span>${item.username}</span><span class="unban-link" onclick="handleUnban('${item.username}')">Remove</span>`;
-                content.appendChild(row);
-            });
+    async function fetchBans() {
+        const listDiv = document.getElementById('ban-list');
+        const { data, error } = await client.from('ban_list').select('username');
+        
+        if (error) {
+            listDiv.innerHTML = "<div style='padding:1rem'>Error loading data.</div>";
+            return;
         }
+
+        if (data.length === 0) {
+            listDiv.innerHTML = "<div style='padding:1rem; color:#64748b; font-size:12px;'>No active bans.</div>";
+            return;
+        }
+
+        listDiv.innerHTML = "";
+        data.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'ban-item';
+            row.innerHTML = `<span>${item.username}</span><span class="remove-link" onclick="handleUnban('${item.username}')">Unban</span>`;
+            listDiv.appendChild(row);
+        });
     }
 </script>
 
