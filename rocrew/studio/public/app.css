@@ -450,3 +450,4 @@ body.with-remote-bar .app { padding-top: 42px; }
 
 .nav-item.quit { width: 100%; background: none; border: 0; color: var(--muted); font: inherit; cursor: pointer; text-align: left; }
 .nav-item.quit:hover { color: #fecdd3; }
+.setup-log { background: #0d0b14; border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: 12px; white-space: pre-wrap; max-height: 160px; overflow: auto; }

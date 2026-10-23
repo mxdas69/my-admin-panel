@@ -5,9 +5,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 
-// Start the add-on's server a few seconds after Blender opens (if the add-on is installed).
+export const ADDON_MODULE = "blender_mcp_addon";
+
+// Turn the add-on on (setup installs it), then start its server once Blender has opened.
 const START_ADDON = [
   "import bpy",
+  "try:",
+  `    bpy.ops.preferences.addon_enable(module='${ADDON_MODULE}')`,
+  "except Exception as e:",
+  "    print('RoCrew: Blender MCP add-on not enabled:', e)",
   "def _rocrew_start():",
   "    try:",
   "        bpy.ops.blendermcp.start_server()",

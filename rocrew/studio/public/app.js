@@ -1886,7 +1886,9 @@ function obHtml() {
       <label class="field">What should the crew call you?<input class="input" id="ob-name" placeholder="mxdas" value="${esc(S.ui.drafts["ob-name"] ?? "")}"></label>`,
     claude: `<h3>Claude Code ${ok(c.claude?.installed)}</h3><p class="muted">Every agent runs on Claude Code with your Claude plan.</p>
       ${c.claude?.installed ? `<p>Found ${esc(c.claude.version ?? "")}. You're good.</p>` : `<ol class="steps"><li>Install Claude Code from <span class="mono">claude.ai/download</span>.</li><li>Open a terminal, type <span class="mono">claude</span>, and sign in once.</li><li>Press Check again.</li></ol>`}
-      <button class="btn small" data-act="ob-check">${icon("refresh")}Check again</button>`,
+      <div class="row"><button class="btn primary small" data-act="ob-install">${icon("upload")}Install everything for me</button><button class="btn small" data-act="ob-check">${icon("refresh")}Check again</button></div>
+      <p class="faint" style="font-size:12px">Installs Claude Code and ffmpeg if they're missing, and the Blender add-on only if you already have Blender. Nothing optional is forced.</p>
+      <pre class="setup-log" id="ob-log" ${S.ui.obLog ? "" : "hidden"}>${esc(S.ui.obLog ?? "")}</pre>`,
     studio: `<h3>Roblox Studio ${ok(c.studio?.status === "connected")}</h3><p class="muted">Agents build inside Studio through its MCP connection.</p>
       <ol class="steps"><li>Open Roblox Studio with your place (turn on <b>Team Create</b> so every change is saved to the cloud).</li><li>Open the Assistant → its settings → <b>MCP Servers</b>.</li><li>Quick connect <b>Claude Code</b>, then press Check again.</li></ol>
       <button class="btn small" data-act="ob-check">${icon("refresh")}Check again</button> <span class="faint" style="font-size:12px">You can skip this and connect later.</span>`,
@@ -1933,6 +1935,14 @@ Object.assign(ACTIONS, {
   "ob-next": async () => {
     if (!(await obSaveStep())) return;
     S.ui.ob = (S.ui.ob ?? 0) + 1;
+    await refresh();
+    showOnboarding();
+  },
+  "ob-install": async (el) => {
+    el.disabled = true;
+    el.innerHTML = `<span class="spinner"></span> Installing… (a few minutes)`;
+    const res = await attempt(() => api("POST", "/api/setup"));
+    S.ui.obLog = res ? res.log.join("\n") : "Setup didn't finish. Try again, or run Install RoCrew.bat.";
     await refresh();
     showOnboarding();
   },

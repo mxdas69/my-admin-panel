@@ -849,6 +849,18 @@ route("POST", /^\/api\/roblox\/visible$/, async (req) => {
   return robloxBrowser.view();
 });
 
+// Install what's missing (Claude Code, ffmpeg; uv and the Blender add-on only if Blender exists).
+route("POST", /^\/api\/setup$/, async (req) => {
+  ownerOnly(req);
+  const { setup } = await import("./setup.mjs");
+  const lines = [];
+  const report = await setup({ log: (l) => lines.push(l) });
+  // Blender is on this PC and its add-on is in: switch it on for the crew (hidden, closes on quit).
+  if (report.some((r) => r.name === "Blender MCP add-on" && r.ok) && !blenderEnabled()) setBlender(true);
+  checkConnections().catch(() => {});
+  return { report, log: lines };
+});
+
 // Quit everything RoCrew started: agents, Blender, the tunnel, the sign-in window, the app.
 route("POST", /^\/api\/quit$/, (req) => {
   ownerOnly(req);

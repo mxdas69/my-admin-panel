@@ -131,6 +131,12 @@ There are two ways to do it.
 
 Anyone with a link can direct the crew and spend the host's plan, so only invite people you trust.
 
+## Easiest install
+
+1. Download the ZIP, extract it, open the `rocrew` folder.
+2. Double-click **`Install RoCrew.bat`**. It installs Node.js if needed, then Claude Code and ffmpeg, and, only if you already have Blender, `uv` and the Blender MCP add-on. Nothing optional is forced, and Rojo isn't needed (agents work in Studio directly).
+3. When it asks, sign in to Claude in the window that opens. Then RoCrew starts in your system tray and the setup wizard does the rest.
+
 ## Setup
 
 You need:
