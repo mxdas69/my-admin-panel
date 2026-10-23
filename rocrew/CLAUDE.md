@@ -133,6 +133,15 @@ vault/            the knowledge vault — read the pages your role lists before 
 When the owner has signed the crew in to Roblox (Settings → Roblox account), Liveops and Merchant tasks, and any task queued with `--browser yes`, get a browser signed in to the owner's account (the `roblox-browser` tools). Use it for the Creator Hub: analytics (retention, funnels, engagement, monetization), game passes and developer products, thumbnails. Read pages as text snapshots rather than screenshots. Accept cookie banners yourself. Never spend or trade Robux, buy anything, change account or security settings, or message anyone. If Roblox asks to sign in again or for a code, ask the owner. You may accept Roblox's terms for creator features when a page requires it.
 When creating game passes or developer products, turn on **regional pricing** wherever Roblox offers it, and upload an icon made with `store-art pass`. When setting up a place, set the max server size from `plan.md` and allow every device (phone, PC, console, tablet) to join. **Never change the experience's genre** setting; leave that to the owner.
 
+## Hand cheap work to Gemini (saves the owner's Claude plan)
+
+The owner's Gemini key has a free tier, so simple text work goes there instead of costing Claude usage. Use `node studio/cli.mjs gemini --prompt "…" [--image a.png]` and use its answer, for:
+- writing or rewriting store descriptions, titles, update notes, item and pass names, NPC lines, tips and codes;
+- brainstorming lists (20 pet names, 10 quest ideas), translating text;
+- summarizing something long you'd otherwise read in full (a big log, a long web page saved to a file, a long report): ask for the 10 lines that matter;
+- first-pass image checks ("is any text cut off in this screenshot?", "which of these 4 icons reads best at small size?").
+Keep the thinking, code, Studio work and final decisions yourself. If Gemini isn't set up (no key), just do it yourself, briefly.
+
 ## Working while the owner is away
 
 - Don't stop to ask small questions. Make the sensible call, write it in `games/<slug>/decisions.md`, and keep going.
