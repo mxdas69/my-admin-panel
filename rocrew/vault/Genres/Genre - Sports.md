@@ -25,7 +25,7 @@ Read this page before pitching or planning any sports game or sports mode, and b
 **Why players come back.**
 1. **Skill.** Dribbles, shots and passes get better with practice; that's the core reason.
 2. **Rank.** A visible tier (Bronze → Legend) and a number that moves after every match.
-3. **Abilities or styles** (anime sports): rolling for a better style is a login reason; guides describe spins coming from codes, daily challenges and matches, and Lucky Spins sold for Robux [6].
+3. **Abilities or styles** (anime sports): rolling for a better style is a login reason; guides describe spins coming from codes, daily challenges and matches, and Lucky Spins sold for Robux [5][6][8].
 4. **Friends.** Team games are better with friends; parties queue together.
 5. **Cosmetics that show in play:** goal explosions, ball trails, kits, celebrations.
 
@@ -53,7 +53,7 @@ Read this page before pitching or planning any sports game or sports mode, and b
 ### Sports rules
 
 1. **The ball has exactly one authority at any moment, and the server knows who it is.**
-   Why: ownership flipping between nearby players causes the jumps and stutters DevForum threads describe [1][2]; Roblox switches physics ownership automatically by proximity unless you set it [8].
+   Why: ownership flipping between nearby players causes the jumps and stutters DevForum threads describe [1][2]; Roblox switches physics ownership automatically by proximity unless you set it [9].
    How: `ball:SetNetworkOwner(nil)` at spawn (server owns it) and never leave it on auto. Possession (dribbling) is a server state, not physics (rule 2).
 
 2. **Dribbling is possession, not physics: the ball follows the possessor's feet.**
@@ -101,11 +101,11 @@ Read this page before pitching or planning any sports game or sports mode, and b
     How: each ability has a 0.2-0.5 s wind-up with a color flash and a distinct sound; cooldowns in Config; the server validates cooldown and range.
 
 13. **Every style or ability is viable; rarity adds options, not a win button.**
-    Why: tier lists already rank styles hard [7][9]; if Mythics simply win, free players quit.
+    Why: tier lists already rank styles hard [7][10]; if Mythics simply win, free players quit.
     How: Balance caps the stat gap between the lowest and highest rarity at 20% on any single stat; Mythics get more unique moves, not much bigger numbers. Ranked can be run in "standard styles only" seasons.
 
 14. **Spin odds are shown and pity is visible.**
-    Why: Roblox's paid random items policy requires every outcome with numeric odds [10]; guides describe Blue Lock Rivals' pity guaranteeing a Mythic style every 50 Lucky Spins [11].
+    Why: Roblox's paid random items policy requires every outcome with numeric odds [11]; guides describe Blue Lock Rivals guaranteeing a Mythic style every 50 Lucky Spins [5][6][8].
     How: the spin screen lists every style rarity with its percent and a "Mythic in N" counter from server data.
 
 15. **Every input has keyboard, touch and gamepad, and shooting works with one thumb.**
@@ -127,7 +127,7 @@ Read this page before pitching or planning any sports game or sports mode, and b
 ## 3. Top games in the genre
 
 ### Blue Lock Rivals
-**What it does:** An anime-ability soccer game where players roll **styles** and **flows** with spins. Guides publish style and flow tier lists (S-tier entries such as Kaiser, Kunigami, NEL Isagi, Sae and NEL Bachira in one October 2025 list) and note rarer styles are usually, but not always, stronger [9][7]. One guide gives Mythic odds of 0.5% on regular spins and 5% on Lucky Spins; another describes a guaranteed Mythic every 50 Lucky Spins and a preference system that steers rolls toward a target tier [6][11]. Spins come from codes, daily challenges and matches, and Lucky Spins can be bought with Robux [6]. Guides exist for getting individual styles [15].
+**What it does:** An anime-ability soccer game where players roll **styles** and **flows** with spins. Guides publish style and flow tier lists (one dated October 2025) and note rarer styles are usually, but not always, stronger [7][10]. Across guides: Mythic odds of 0.5% on regular spins and 5% on Lucky Spins, a guaranteed Mythic every 50 Lucky Spins, and a preference system that steers rolls toward a target tier; spins come from codes, daily challenges and matches, and Lucky Spins are sold for Robux (sources differ by date; unverified against the current game) [5][6][8]. Guides exist for getting individual styles [15].
 **Steal:** Style rolls as the collection layer on top of a skill game; a premium spin with better odds plus pity; tier-list culture as free marketing; daily challenges paying spins.
 **Avoid:** Licensed anime characters and names (it is based on an existing manga; we make original styles). Avoid power gaps so large that rolls decide matches (rule 13).
 
@@ -185,7 +185,7 @@ Opening rules:
 
 ### Styles and abilities (anime sports)
 - Spins from: daily challenges (3 per day), level-ups (1 per level), match wins (1 per 5 wins), codes.
-- Studio default spin rates (all shown): Common 60%, Rare 28%, Epic 9%, Legendary 2.5%, Mythic 0.5%. Lucky spin: Mythic 5% with pity at 50 (the shape guides describe [6][11], not their exact numbers).
+- Studio default spin rates (all shown): Common 60%, Rare 28%, Epic 9%, Legendary 2.5%, Mythic 0.5%. Lucky spin: Mythic 5% with pity at 50 (the shape guides describe [5][6][8], not their exact numbers).
 - A **lock/keep** system: players choose to keep or discard a rolled style; 2 free style storage slots, more by pass.
 - Each style: one passive (e.g. +8% sprint), 2-3 moves; flows (temporary super mode) charge from match actions.
 - Stat gap cap: rule 13.
@@ -212,7 +212,7 @@ Players pay for **looking good while playing** (most of it), **rolls** (anime sp
 
 Rules:
 1. **One `ProcessReceipt`, idempotent by `PurchaseId`** [18][19].
-2. **Spin products follow the paid random items policy:** all outcomes with numeric odds [10]; check `PolicyService` for restricted players and offer direct style or cosmetic purchases instead [20].
+2. **Spin products follow the paid random items policy:** all outcomes with numeric odds [11]; check `PolicyService` for restricted players and offer direct style or cosmetic purchases instead [20].
 3. **No purchase prompts during a match.** Shops live in the lobby and the result screen.
 4. **No paid stats in ranked beyond the rule 13 cap.** Ranked can lock to standard styles.
 5. **Passes checked on the server** in `pcall` [21].
@@ -299,7 +299,7 @@ Rules:
 ReplicatedStorage/
   Shared/Config          FIELD, MATCH, KICK, TACKLE, abilities, styles, rates, rewards, ids
   Remotes/               ShootStart, ShootRelease, Pass, Tackle, Ability, Sprint (C→S)
-                         Possession, Goal, MatchState, KickFx (S→C)
+                         Possession, Goal, MatchState, KickFx, TackleFx (S→C)
 ServerScriptService/Services/
   PlayerData, BallService, MatchService, TackleService, AbilityService, AfkService,
   RankService, SpinService, ProductService
@@ -319,7 +319,7 @@ Workspace/Map/
 | Tackle | C→S | — | in match; cooldown 1 s; not possessor | 2 per s |
 | Ability | C→S | slot: 1-3 | style owns ability; cooldown; range; match phase | 4 per s |
 | Sprint | C→S | on: boolean | stamina > 0 | 10 per s |
-| Possession / Goal / MatchState | S→C | userId / team, scorer, assist / phase, clock, score | — | on change |
+| Possession / Goal / MatchState / KickFx / TackleFx | S→C | userId / team, scorer, assist / phase, clock, score | — | on change |
 | KickFx | S→C | userId, origin, velocity | — | per kick |
 
 The client never sends "I scored", "my shot power", "I stole it" or "my rank".
@@ -464,6 +464,9 @@ Remotes.ShootRelease.OnServerEvent:Connect(function(p: Player, aim: unknown)
 	local ball = BallService.ball()
 	BallService.release()
 	BallService.setImmune(p, 0.3) -- don't re-claim your own shot
+	-- re-place the ball at the kicker's feet from server-side data, so a dribbler's client can't
+	-- park the owned ball inside the goal before shooting
+	ball:PivotTo(CFrame.new(root.Position + facing * 3 + Vector3.new(0, -1.5, 0)))
 	ball.AssemblyLinearVelocity = Vector3.new(aim.X, 0, aim.Z).Unit * speed + Vector3.new(0, lift, 0)
 	Remotes.KickFx:FireAllClients(p.UserId, ball.Position, ball.AssemblyLinearVelocity)
 end)
@@ -515,6 +518,7 @@ return watchGoals
 ### Luau: tackle with wind-up (server)
 ```lua
 --!strict
+-- TackleService (Remotes, BallService and rootOf as in BallService above)
 local TACKLE_RANGE, WINDUP, COOLDOWN = 6, 0.25, 1.0
 local lastTackle: { [Player]: number } = {}
 
@@ -556,14 +560,14 @@ end
 
 ## 13. Failure modes
 
-1. **Ball stutter and jumps:** ownership on auto or flipping between players [1][2][8].
+1. **Ball stutter and jumps:** ownership on auto or flipping between players [1][2][9].
 2. **Laggy kicks:** server force with no local feedback [1][3].
 3. **Fake goals or super shots:** client-reported goals or client-sent power.
 4. **Unfair steals:** no wind-up, no cooldown, no range check.
 5. **Lopsided teams** and parties split.
 6. **Leavers and AFKs** ruining matches with no replacement.
 7. **Empty queues:** waiting for 10 players that never come.
-8. **Pay-to-win styles:** Mythics decide matches [7][9].
+8. **Pay-to-win styles:** Mythics decide matches [7][10].
 9. **Unreadable abilities:** no tell, no sound, instant effects.
 10. **Phone-hostile controls:** small buttons, shoot requires mouse aim.
 11. **Physics overload:** many loose balls and props in one server causing choppy ball paths [4].
@@ -599,7 +603,7 @@ end
 
 ## Common mistakes
 
-1. Leaving ball ownership on auto [8].
+1. Leaving ball ownership on auto [9].
 2. Physics dribbling (pushing a loose ball) instead of possession.
 3. Trusting client shot power or a client goal event.
 4. Server-only kicks with no local feedback, so shots feel late [1].
@@ -619,12 +623,12 @@ end
 [3] Soccer Ball Latency (DevForum) — https://devforum.roblox.com/t/soccer-ball-latency/2088353 — server-only velocity lag; clients apply velocity locally.
 [4] Physics of soccer ball lagging (DevForum) — https://devforum.roblox.com/t/physics-of-soccer-ball-lagging/1776969 — choppy paths even with server ownership; check the MicroProfiler.
 [5] Blue Lock Rivals styles (Pocket Tactics) — https://www.pockettactics.com/blue-lock-rivals-styles
-[6] Blue Lock Rivals style tier list (Destructoid) — https://www.destructoid.com/blue-lock-rivals-style-tier-list/ — spin odds; spins from codes, dailies, matches; Lucky Spins for Robux.
+[6] Blue Lock Rivals style tier list (Destructoid) — https://www.destructoid.com/blue-lock-rivals-style-tier-list/
 [7] Blue Lock Rivals tier list: all styles and flows ranked (Dot Esports) — https://dotesports.com/roblox/news/blue-lock-rivals-tier-list-all-styles-and-flows-ranked
-[8] Network ownership (Creator Docs) — https://create.roblox.com/docs/en-us/physics/network-ownership
-[9] Blue Lock Rivals best Styles and Flows tier list, October 2025 (FRVR) — https://frvr.com/blog/roblox-blue-lock-rivals-styles-and-flows-tier-list
-[10] Paid random items policy — https://create.roblox.com/docs/en-us/production/monetization/paid-random-items
-[11] Blue Lock Rivals Roblox Guide: How To Get Igaguri Flow and Style (Deltia's Gaming) — https://deltiasgaming.com/?p=201747 — Lucky Spin pity; preference system.
+[8] Blue Lock Rivals Roblox Guide: How To Get Igaguri Flow and Style (Deltia's Gaming) — https://deltiasgaming.com/?p=201747
+[9] Network ownership (Creator Docs) — https://create.roblox.com/docs/en-us/physics/network-ownership
+[10] Blue Lock Rivals best Styles and Flows tier list, October 2025 (FRVR) — https://frvr.com/blog/roblox-blue-lock-rivals-styles-and-flows-tier-list
+[11] Paid random items policy — https://create.roblox.com/docs/en-us/production/monetization/paid-random-items
 [12] ContextActionService reference (Creator Docs) — https://create.roblox.com/docs/en-us/reference/engine/classes/ContextActionService
 [13] Mobile input (Creator Docs) — https://create.roblox.com/docs/input/mobile
 [14] Gamepad input (Creator Docs) — https://create.roblox.com/docs/input/gamepad
