@@ -518,7 +518,7 @@ route("POST", /^\/api\/store-art$/, async (req) => {
   }
   let set;
   try {
-    set = await makeStoreArt({ styleRefs, apiKey: cfg.apiKey, imageModel: cfg.imageModel, textModel: cfg.textModel, kind, variants: b.variants ?? [], refs: (b.refs ?? []).map((r) => inside(ROOT, r)), dir, text: b.text ?? "", format: b.format ?? "", hasFfmpeg });
+    set = await makeStoreArt({ styleRefs, apiKey: cfg.apiKey, imageModel: cfg.imageModel, textModel: cfg.textModel, kind, variants: b.variants ?? [], refs: (b.refs ?? []).map((r) => inside(ROOT, r)), dir, text: b.text ?? "", format: b.format ?? "", greenScreen: Boolean(b.greenScreen), backdrop: b.backdrop ?? "", hasFfmpeg });
   } catch (err) {
     throw new HttpError(400, err.message);
   }

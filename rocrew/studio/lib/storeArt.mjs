@@ -134,6 +134,36 @@ async function gradeCapture(src, out, look, square) {
   return out;
 }
 
+// Green-screen compositing: Splash captures the posed characters in front of a pure green
+// (0,255,0) backdrop part in Studio; here the green is keyed out and the cut-out is placed on a
+// stylized backdrop with a soft glow behind it, like a GFX artist would in Photoshop.
+export const BACKDROPS = {
+  jungle: ["0x37d67a", "0x04220f", "0xb6ffcc"],
+  night: ["0x8b5cf6", "0x0c0620", "0xd8c8ff"],
+  fire: ["0xff7a1a", "0x2a0500", "0xffd29a"],
+  gold: ["0xffd23f", "0x3a2400", "0xfff2b0"],
+  ice: ["0x5ad1ff", "0x031a2e", "0xd8f6ff"],
+  candy: ["0xff5fb8", "0x2b0420", "0xffd0ec"],
+};
+
+async function composite(src, out, backdrop, square, { tight = false } = {}) {
+  const [c0, c1, glow] = BACKDROPS[backdrop] ?? BACKDROPS.jungle;
+  const [w, h] = square ? [1024, 1024] : [1920, 1080];
+  const r = parseInt(glow.slice(2, 4), 16);
+  const g = parseInt(glow.slice(4, 6), 16);
+  const b = parseInt(glow.slice(6, 8), 16);
+  const fit = tight ? `scale=${Math.round(w * 1.25)}:${Math.round(h * 1.25)}:force_original_aspect_ratio=increase,crop=${w}:${h}` : `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}`;
+  const filter = [
+    `gradients=s=${w}x${h}:c0=${c0}:c1=${c1}:type=radial:x0=${w / 2}:y0=${Math.round(h * 0.42)}:x1=${w}:y1=${h}:d=1,format=rgba,vignette=PI/4.2[bg]`,
+    `[0]${fit},format=rgba,chromakey=0x00FF00:0.28:0.08,despill=type=green,split[fg][sh]`,
+    `[sh]lutrgb=r=${r}:g=${g}:b=${b},boxblur=28:2[glow]`,
+    `[bg][glow]overlay=0:0:shortest=1[b2]`,
+    `[b2][fg]overlay=0:0,eq=saturation=1.3:contrast=1.1,unsharp=5:5:0.8`,
+  ].join(";");
+  await run("ffmpeg", ["-y", "-loglevel", "error", "-i", src, "-filter_complex", filter, "-frames:v", "1", out]);
+  return out;
+}
+
 export const isQuotaError = (msg) => /\b429\b|quota|RESOURCE_EXHAUSTED|billing/i.test(String(msg));
 
 export function parseJudge(text) {
@@ -158,7 +188,7 @@ export function parseJudge(text) {
  * @param {string} o.dir          where to write (games/<slug>/art/<kind>s-<date>)
  * @param {string} [o.text]       1-3 words of title text, set with ffmpeg
  */
-export async function makeStoreArt({ apiKey, imageModel, textModel, kind, variants, refs = [], styleRefs = [], dir, text = "", format = "", hasFfmpeg, generate = generateImage, ask = askGemini }) {
+export async function makeStoreArt({ apiKey, imageModel, textModel, kind, variants, refs = [], styleRefs = [], dir, text = "", format = "", greenScreen = false, backdrop = "", hasFfmpeg, generate = generateImage, ask = askGemini }) {
   if (!["icon", "thumb", "pass"].includes(kind)) throw new Error('kind must be "icon", "thumb" or "pass".');
   const list = variants.map((v) => v.trim()).filter(Boolean).slice(0, 6);
   if (!list.length) throw new Error("Give at least one variant line.");
@@ -172,7 +202,7 @@ export async function makeStoreArt({ apiKey, imageModel, textModel, kind, varian
   const aspect = square ? "1:1" : "16:9";
 
   // No key, or Google's image model has no free quota: grade the real Studio captures instead.
-  let freeMode = !apiKey && refs.length > 0;
+  let freeMode = (!apiKey || greenScreen) && refs.length > 0;
   let raw = freeMode ? [] : await Promise.all(
     list.map(async (line, i) => {
       const id = LETTERS[i];
@@ -189,7 +219,18 @@ export async function makeStoreArt({ apiKey, imageModel, textModel, kind, varian
   if (freeMode) {
     if (!refs.length) throw new Error("Free mode needs a Studio capture: pass --ref with a screenshot of the staged shot.");
     if (!canFinish) throw new Error("Free mode needs ffmpeg installed.");
-    raw = await Promise.all(list.map(async (line, i) => ({ id: LETTERS[i], line: `${line} (graded Studio capture)`, raw: await gradeCapture(refs[0], path.join(dir, `${kind}_${LETTERS[i]}_raw.png`), LOOKS[i % LOOKS.length], square) })));
+    const names = Object.keys(BACKDROPS);
+    raw = await Promise.all(
+      list.map(async (line, i) => {
+        const out = path.join(dir, `${kind}_${LETTERS[i]}_raw.png`);
+        if (greenScreen) {
+          // Each variant gets its own backdrop unless one was chosen; odd ones are framed tighter.
+          const bd = backdrop && BACKDROPS[backdrop] ? backdrop : names[i % names.length];
+          return { id: LETTERS[i], line: `${line} (green-screen cut-out on ${bd})`, raw: await composite(refs[0], out, bd, square, { tight: i % 2 === 1 }) };
+        }
+        return { id: LETTERS[i], line: `${line} (graded Studio capture)`, raw: await gradeCapture(refs[0], out, LOOKS[i % LOOKS.length], square) };
+      }),
+    );
   }
   const ok = raw.filter((r) => r.raw);
   if (!ok.length) throw new Error(`Gemini made no images: ${raw[0]?.error ?? "unknown error"}`);
