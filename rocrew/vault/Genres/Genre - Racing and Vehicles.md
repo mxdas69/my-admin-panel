@@ -25,7 +25,7 @@ Read this page before pitching or planning any driving, racing or vehicle game, 
 **Why players come back.**
 1. **The garage.** Every car is a goal with a price tag, and a new car is a new feel.
 2. **Customization.** Paint, rims, spoilers, underglow: a car is an avatar.
-3. **Passive income layers.** Car Dealership Tycoon adds a dealership with display cars that earn while you play, which a comparison credits as its edge over pure driving games [4][5].
+3. **Passive income layers.** Car Dealership Tycoon adds a dealership with display cars that earn while you play, which a comparison credits as its edge over pure driving games [1][4].
 4. **Racing mastery.** Lines, drifts, shortcuts and personal bests.
 5. **Social showing.** Cruising past other players in a rare car is the reward.
 
@@ -34,7 +34,7 @@ Read this page before pitching or planning any driving, racing or vehicle game, 
 ## 2. The core loop
 
 **Loop statement (open world):**
-> Players **drive, race and do jobs** to earn **cash**, which they spend on **new cars and upgrades** so they can **drive faster, look better and win harder races** [4][5].
+> Players **drive, race and do jobs** to earn **cash**, which they spend on **new cars and upgrades** so they can **drive faster, look better and win harder races** [1][4].
 
 **Loop statement (circuit racing):**
 > Players **race a lap circuit against others** to **place on the podium**, which pays **cash and XP**, which they spend on **car upgrades and new classes** so they can **win the next tier of races**.
@@ -59,24 +59,24 @@ Read this page before pitching or planning any driving, racing or vehicle game, 
    How: spawn next to a free starter car with a glowing "Drive" ProximityPrompt; the prompt seats the player and the camera swings behind the car. No shop or dealer screen first.
 
 2. **Every vehicle's physics is owned by its driver, set by the server when the seat's Occupant changes.**
-   Why: Roblox docs give the driver-and-passenger case: if a passenger owns the car the driver feels sluggish; the fix is assigning ownership to the driver on occupant change and back to automatic when they leave [6][7].
+   Why: Roblox docs give the driver-and-passenger case: if a passenger owns the car the driver feels sluggish; the fix is assigning ownership to the driver on occupant change and back to automatic when they leave [5][6].
    How: server `VehicleSeat:GetPropertyChangedSignal("Occupant")` → `root:SetNetworkOwner(player)`; on exit → `SetNetworkOwnershipAuto()` (section 11).
 
 3. **Because the driver owns the car, the server checks its speed 5 times a second.**
-   Why: the owner's client can move the car anywhere; Roblox's security guidance is server-side detection of impossible movement [8][9].
+   Why: the owner's client can move the car anywhere; Roblox's security guidance is server-side detection of impossible movement [7][8].
    How: sample the car's root every 0.2 s; if horizontal speed exceeds `maxSpeed × 1.25 + 15` studs/s for 3 samples in a row, return the car to its last good position and log a strike.
 
 4. **Race checkpoints are crossed in order and checked by the server from sampled positions, never by the client.**
-   Why: client Touched events and client-reported laps are trivial to fake; ordered checkpoints are the standard anti-shortcut tool [10][11].
+   Why: client Touched events and client-reported laps are trivial to fake; ordered checkpoints are the standard anti-shortcut tool [9][10].
    How: the server keeps `nextCheckpoint` per racer and tests the line segment between the last two samples against the next gate's plane and width.
 
 5. **Lap and race times come from the server clock, and any lap faster than the track's minimum is rejected.**
-   Why: client timers give wrong or identical times [12]; a minimum lap time catches teleports and cut-throughs.
+   Why: client timers give wrong or identical times [11]; a minimum lap time catches teleports and cut-throughs.
    How: `workspace:GetServerTimeNow()` at start and finish; `MIN_LAP_MS` per track = 85% of the fastest legit test lap.
 
 6. **Cars don't collide with each other for the first 5 s of a race and in open-world passive mode.**
    Why: first-corner pileups and ramming griefers are the top frustration in shared driving.
-   How: collision groups `Cars` and `GhostCars`; ghost cars don't collide with each other [13][14]; ghost cars render at 0.5 transparency locally.
+   How: collision groups `Cars` and `GhostCars`; ghost cars don't collide with each other [12][13]; ghost cars render at 0.5 transparency locally.
 
 7. **The car never flips over and stays stuck: auto-righting within 2 s, plus a Reset button.**
    Why: a flipped car with no fix ends the session.
@@ -104,7 +104,7 @@ Read this page before pitching or planning any driving, racing or vehicle game, 
 
 13. **The grid starts on a shared server countdown, with cars held by the server until GO.**
     Why: a client-started race lets someone jump the gun.
-    How: server sets `VehicleSeat.Disabled`-free hold by anchoring each chassis root during 3-2-1, then unanchors and re-sets ownership at GO time `t0` broadcast as server time.
+    How: the server anchors each chassis root during 3-2-1, then unanchors and re-sets ownership at GO time `t0`, broadcast as server time.
 
 14. **Position on the leaderboard = laps, then checkpoints, then distance to the next checkpoint.**
     Why: players watch the position number more than the map.
@@ -112,7 +112,7 @@ Read this page before pitching or planning any driving, racing or vehicle game, 
 
 15. **Every action has keyboard, touch and gamepad controls, and the default vehicle controls stay on.**
     Why: studio rule; VehicleSeat already reads throttle and steer from the default controls, including gamepad.
-    How: extra actions (nitro, handbrake, horn, camera, exit) are bound with ContextActionService with touch buttons [15][16][17]; gamepad: RT throttle, LT brake, left stick steer (Roblox default), A nitro, X handbrake, Y reset, B exit.
+    How: extra actions (nitro, handbrake, horn, camera, exit) are bound with ContextActionService with touch buttons [14][15][16]; gamepad: RT throttle, LT brake, left stick steer (Roblox default), A nitro, X handbrake, Y reset, B exit.
 
 16. **Map roads are wide: 24+ studs for two-way roads, 36+ studs on race tracks.**
     Why: phone thumbsticks steer coarsely; narrow roads punish touch players.
@@ -120,7 +120,7 @@ Read this page before pitching or planning any driving, racing or vehicle game, 
 
 17. **Cars stream as whole models.**
     Why: half-streamed cars (wheels missing) break physics and look broken.
-    How: car Models use `ModelStreamingMode = Atomic`; the player's own car is `Persistent` while they drive it [18].
+    How: car Models use `ModelStreamingMode = Atomic`; the player's own car is `Persistent` while they drive it [17].
 
 18. **No vehicle reward is Robux-only on a race podium.**
     Why: paid cars that win ranked races kill racing; class-locked ranked racing protects fairness (rule 9).
@@ -129,12 +129,12 @@ Read this page before pitching or planning any driving, racing or vehicle game, 
 ## 3. Top games in the genre
 
 ### Driving Empire
-**What it does:** An open-world driving game described as a coastal world with 350+ licensed vehicles from real manufacturers to collect, customize and race (one source; unverified) [1]; it runs codes for free rewards [19]. A comparison notes it has no dedicated passive income system, unlike Car Dealership Tycoon [5].
+**What it does:** An open-world driving game described as a coastal world with 350+ licensed vehicles from real manufacturers to collect, customize and race (one source; unverified) [1]; it runs codes for free rewards [18]. A comparison notes it has no dedicated passive income system, unlike Car Dealership Tycoon [1].
 **Steal:** A big, readable world built for cruising; a huge garage as the long-term goal; codes as a light retention touch.
 **Avoid:** Real car brands and logos. We don't have licensing deals; we design our own cars with original names.
 
 ### Car Dealership Tycoon
-**What it does:** Driving plus a dealership tycoon. Money comes from driving, racing and displaying cars at your dealership; one source says expensive cars earn more and Robux cars are faster and earn more than cash cars (low-quality source; unverified) [4]. Codes give one-time cash boosts tied to community milestones and seasons [20][21].
+**What it does:** Driving plus a dealership tycoon. Money comes from driving, racing and displaying cars at your dealership; one source says expensive cars earn more and Robux cars are faster and earn more than cash cars (low-quality source; unverified) [4]. Codes give one-time cash boosts tied to community milestones and seasons [19][20].
 **Steal:** A passive layer (a showroom that earns) so time away still matters; showing your cars on platforms is a natural social flex.
 **Avoid:** Paid cars that out-earn free ones by a lot; it makes free players feel the grind is rigged.
 
@@ -144,7 +144,7 @@ Read this page before pitching or planning any driving, racing or vehicle game, 
 **Avoid:** Shipping with no tutorial; our first 5 minutes must teach the vehicle.
 
 ### Dead Rails
-**What it does:** A train journey survival game with several train variants at different prices and uses [22] (see [[Genre - Survival]]).
+**What it does:** A train journey survival game with several train variants at different prices and uses [21] (see [[Genre - Survival]]).
 **Steal:** A vehicle on a fixed track makes the driving easy and the defending hard, which suits young players.
 **Avoid:** Copying its theme and train designs.
 
@@ -154,7 +154,7 @@ Read this page before pitching or planning any driving, racing or vehicle game, 
 **Avoid:** Copying any game's map or vehicle set.
 
 ### Racing templates and community racing games
-**What it does:** Community guides and templates teach the race skeleton: checkpoint-validated laps against shortcuts, countdown starts and post-race rewards [11]. A DevForum feedback thread on a kart racer suggested slowing karts on grass or adding time for time spent off-track, instead of hard-blocking every cut [10].
+**What it does:** Community guides and templates teach the race skeleton: checkpoint-validated laps against shortcuts, countdown starts and post-race rewards [10]. A DevForum feedback thread on a kart racer suggested slowing karts on grass or adding time for time spent off-track, instead of hard-blocking every cut [9].
 **Steal:** Checkpoints + off-track penalties as two layers of fairness.
 **Avoid:** Invisible walls everywhere; they feel worse than a grass slowdown.
 
@@ -202,7 +202,7 @@ Opening rules:
 Engine (top speed +4% per level, 5 levels), Turbo (accel), Tires (grip), Nitro (boost duration). Level cost `= carPrice × 0.08 × 1.5^level`. Each level adds PI and may move the car up a class (rule 9). Cosmetics (paint, rims, underglow, spoilers, horns) are cheap cash items and premium unlocks.
 
 ### Time trial boards
-Store times as integer milliseconds in an ordered data store per track and season (`TT_<track>_S1`) [23][24]; write only improvements.
+Store times as integer milliseconds in an ordered data store per track and season (`TT_<track>_S1`) [22][23]; write only improvements.
 
 ## 6. Monetization that fits
 
@@ -216,15 +216,15 @@ Players pay for **cars** (desire), **looks** (status), **time** (cash boosts) an
 | VIP (tag, VIP garage, horn pack) | Game pass | 199-399 R$ | Shop |
 | Extra garage slots (+10) | Game pass | 99-199 R$ | Garage when full |
 | Paint/underglow packs | Game pass | 79-199 R$ | Customization screen |
-| Private server | Subscription | 100-250 R$/month | Server list; popular for cruising with friends [25] |
+| Private server | Subscription | 100-250 R$/month | Server list; popular for cruising with friends [24] |
 | Season pass (limited car at tier 30) | Game pass per season | 399-799 R$ | Season board; free track always |
 
 Rules:
-1. **One `ProcessReceipt` in the place, granting by `PurchaseId` idempotently** [26].
-2. **Pass ownership checked on the server** with `UserOwnsGamePassAsync` in `pcall` [27]; premium cars spawn only after the server confirms.
+1. **One `ProcessReceipt` in the place, granting by `PurchaseId` idempotently** [25].
+2. **Pass ownership checked on the server** with `UserOwnsGamePassAsync` in `pcall` [26]; premium cars spawn only after the server confirms.
 3. **Premium cars race in their class** and earn at the same rate as cash cars of that class.
 4. **No purchase prompts while driving above 10 studs/s.** Prompts appear at the dealer, in the garage, or after a race.
-5. **Off-limits:** loot-box cars without shown odds [28], fake "last chance" timers, ranked advantages for Robux only.
+5. **Off-limits:** loot-box cars without shown odds [27], fake "last chance" timers, ranked advantages for Robux only.
 
 ## 7. UI and HUD for this genre
 
@@ -242,8 +242,8 @@ The driving HUD stays at the edges: the road is the screen. See [[05 UI and HUD]
 | Touch buttons | right side above jump area | 96×96 | Nitro, Handbrake, Reset, Exit |
 
 Rules:
-1. **On touch, the default thumbstick drives** (steer and throttle). Keep the bottom-left 300×300 area clear; put Nitro/Handbrake/Reset/Exit as ContextActionService touch buttons on the right [15][16].
-2. **Gamepad:** default triggers and stick drive; A nitro, X handbrake, Y reset, B exit seat, d-pad cycles camera; show glyphs on first drive [17].
+1. **On touch, the default thumbstick drives** (steer and throttle). Keep the bottom-left 300×300 area clear; put Nitro/Handbrake/Reset/Exit as ContextActionService touch buttons on the right [14][15].
+2. **Gamepad:** default triggers and stick drive; A nitro, X handbrake, Y reset, B exit seat, d-pad cycles camera; show glyphs on first drive [16].
 3. **Menus (Dealer, Garage, Customize) are ScreenGuis built in StarterGui;** car cards are one template cloned per car. Open with `GuiService.SelectedObject` set; B closes.
 4. **Dealer card:** 3D preview (ViewportFrame), price, class badge, stat bars vs current car (green/red), Buy / Test Drive.
 5. **Test drive** lets the player try any cash car for 60 s on a test loop; it sells cars better than stat bars.
@@ -256,7 +256,7 @@ Rules:
 3. **Districts by color and landmark** (beach, downtown, desert, mountain pass); a tall landmark per district so players navigate without the minimap.
 4. **Race tracks are fenced with soft barriers** (low walls with `Friction 0.1` so cars slide along them) and grass run-off that slows to 40%.
 5. **Ramps and jumps** are clearly marked (yellow-black chevrons) and land on wide flat zones.
-6. **Performance:** large maps need `StreamingEnabled` [18]; anchor all scenery, `CastShadow = false` on small props, mesh roads with low triangle counts. Target a phone holding 30 FPS at top speed downtown.
+6. **Performance:** large maps need `StreamingEnabled` [17]; anchor all scenery, `CastShadow = false` on small props, mesh roads with low triangle counts. Target a phone holding 30 FPS at top speed downtown.
 7. **Cars are Models with a `Chassis` PrimaryPart**, unanchored, mass set by `CustomPhysicalProperties` (density lower on the body, higher on the floor pan to keep the center of mass low), wheels as cylinders with high friction.
 8. **Lighting:** bright day for cruising, a night district or night races with streetlights (`PointLight` budget: 1 per 2 lamps) and headlights as `SpotLight` on the car.
 9. **World is built in Studio as Instances in `Workspace.Map`;** spawn points for cars are parts tagged `CarSpawn` with an attribute `Class`.
@@ -267,7 +267,7 @@ Rules:
 2. **Garage as a profile:** a showroom other players can walk through.
 3. **Crews:** friends spawn cars next to each other; a "Join friend's car" passenger option.
 4. **Badges:** first car, first S class, 10 wins, every track's gold time.
-5. **Time-trial boards** per track (global top 50, friends board) on ordered stores [23][24].
+5. **Time-trial boards** per track (global top 50, friends board) on ordered stores [22][23].
 6. **Speed traps and drift zones** around the map with per-server and global best values.
 7. **Weekly featured race** with a cosmetic reward.
 8. **Car meets:** a parking lot event every hour where players line up cars and vote (cosmetic prize).
@@ -303,17 +303,6 @@ Rules:
 9. **Liveops:** race, purchase and distance analytics; **Reviewer:** forges every remote, tests speedhack and teleport detection, saves.
 10. **Producer:** section 15 with evidence.
 
-### Systems list
-1. **PlayerData** (session lock, autosave 60 s, save on leave and BindToClose).
-2. **VehicleService** (spawn the owned car at a CarSpawn, one car per player, ownership on Occupant change, despawn after 60 s empty).
-3. **DriveController** (client: reads seat input, drives motors and steering, nitro, auto-right).
-4. **MovementGuard** (server: speed sanity, last good position, strikes).
-5. **RaceService** (queues, grid, server countdown, ordered gates, server timing, positions, DNF).
-6. **GarageService** (buy, upgrade, customize; all prices from Config).
-7. **LeaderboardService** (time-trial ordered stores).
-8. **ProductService** (Merchant: one ProcessReceipt).
-9. **HudController**, **CameraController** (client).
-
 ### Architecture
 ```
 ReplicatedStorage/
@@ -333,12 +322,12 @@ Workspace/Vehicles/      spawned cars (server parents them)
 ### The reference car (built in Studio)
 - `Chassis`: a flat part, about 6×1×12 studs, density 2 (`CustomPhysicalProperties`), the PrimaryPart. Body parts welded to it with `WeldConstraint`, `Massless = true` so the body doesn't raise the center of mass.
 - Four wheels: cylinder parts (diameter 3, width 1.5), friction 1.2-2.0 by class, `CustomPhysicalProperties` elasticity 0.
-- Suspension: per wheel, a `SpringConstraint` (Stiffness and Damping tuned per car, e.g. Stiffness 4,000-8,000, Damping 150-300, FreeLength = ride height) plus a `PrismaticConstraint` on a vertical axis to keep the wheel from moving sideways. DevForum advice for car physics is the same: use standard motor and spring constraints with damping instead of hand-coding forces [29][30].
+- Suspension: per wheel, a `SpringConstraint` (Stiffness and Damping tuned per car, e.g. Stiffness 4,000-8,000, Damping 150-300, FreeLength = ride height) plus a `PrismaticConstraint` on a vertical axis to keep the wheel from moving sideways. DevForum advice for car physics is the same: use standard motor and spring constraints with damping instead of hand-coding forces [28][29].
 - Drive: each driven wheel on a `HingeConstraint` (or `CylindricalConstraint`) with `ActuatorType = Motor`; the controller sets `AngularVelocity` and `MotorMaxTorque`.
 - Steering: front wheels hang off small "knuckle" parts joined to the suspension by a `HingeConstraint` with `ActuatorType = Servo` on the vertical axis; the controller sets `TargetAngle`.
 - A `VehicleSeat` welded to the chassis, `MaxSpeed`, `Torque` and `TurnSpeed` unused (we drive constraints ourselves), `HeadsUpDisplay = false`.
 - Attributes on the Model: `CarId`, `TopSpeed`, `Torque`, `MaxSteer`, `NitroBoost`.
-Community threads on car scripting are a good start for the VehicleSeat basics [31][32].
+Community threads on car scripting are a good start for the VehicleSeat basics [30][31].
 
 ### Remotes contract
 
@@ -368,7 +357,7 @@ There is no "I crossed a gate", "my lap time" or "I finished" remote. The server
 	settings = { camera = "Chase", units = "kmh", music = true },
 }
 ```
-Wrap every data-store call in `pcall` [33][34].
+Wrap every data-store call in `pcall` [32][33].
 
 ### Luau: ownership on occupant change (server)
 ```lua
@@ -395,7 +384,7 @@ end
 
 return bindSeat
 ```
-Passenger seats are plain `Seat`s, which don't take ownership of the car's physics the way the driver seat logic does here. Roblox's network ownership page describes exactly this driver/passenger split [6][7]; one DevForum thread notes that sitting grants ownership by default, so manage it from the seat [35]. Unanchor the chassis before setting ownership (setting ownership on an anchored part errors, as one thread found with an anchor-based brake [36]).
+Passenger seats are plain `Seat`s; because the server sets the driver as owner explicitly, a passenger can't end up simulating the car. Roblox's network ownership page describes exactly this driver/passenger split [5][6]; one DevForum thread notes that sitting grants ownership by default, so manage it from the seat [34]. Unanchor the chassis before setting ownership: the ownership API errors on anchored parts, so an anchor-based handbrake must release first. A replication-library thread reports seat-weld ownership conflicts and resyncs ownership on every Occupant change [35].
 
 ### Luau: drive controller (client, driver only)
 ```lua
@@ -525,7 +514,7 @@ local function step(r: Racer, gates: { Gate }, laps: number, minLapMs: number, n
 	return nil
 end
 ```
-`RaceService` calls `step` for every racer at 10 Hz with `now = workspace:GetServerTimeNow()`. Gate parts in Studio are invisible, non-colliding, `CanQuery = false`, with their front face pointing along the race direction and `Size.X` = track width (so `halfWidth = Size.X / 2`). Sample rate matters: at 170 studs/s a car moves 17 studs per sample, which is why the test is segment-vs-plane, not "inside the gate part". Race results use `UpdateAsync` to keep only better times in the ordered store [23].
+`RaceService` calls `step` for every racer at 10 Hz with `now = workspace:GetServerTimeNow()`. Gate parts in Studio are invisible, non-colliding, `CanQuery = false`, with their front face pointing along the race direction and `Size.X` = track width (so `halfWidth = Size.X / 2`). Sample rate matters: at 170 studs/s a car moves 17 studs per sample, which is why the test is segment-vs-plane, not "inside the gate part". Race results use `UpdateAsync` to keep only better times in the ordered store [22].
 
 ### Countdown and grid
 1. Racers are pivoted to `Grid/Slot_N`, `MovementGuard.watch` is reset, chassis roots anchored.
@@ -538,7 +527,7 @@ end
 2. **Journey survival:** a long road with day and night, fuel and threats ([[Genre - Survival]]).
 3. **Delivery jobs:** cargo that can fall off or break; pay by condition and time.
 4. **Cops and robbers:** vehicle chases with roles.
-5. **Dealership tycoon layer:** a showroom that earns while you play [4][5].
+5. **Dealership tycoon layer:** a showroom that earns while you play [1][4].
 6. **Kart racing with items:** short tracks, item boxes, catch-up items for last place.
 7. **Vehicle obby:** ramps, loops and gaps for cars (recompute the jump budget with car speeds; see [[Genre - Obby]]).
 8. **Boats and planes:** the same ownership and guard patterns; planes need a separate flight controller with `AlignOrientation` and `VectorForce`.
@@ -547,13 +536,13 @@ end
 
 ## 13. Failure modes
 
-1. **Rubber-banding and jitter:** ownership flipping between players or to the server [6][37].
+1. **Rubber-banding and jitter:** ownership flipping between players or to the server [5][36].
 2. **Flinging:** cars colliding at speed with physics owned by different clients; fix with ghost groups in races.
 3. **Flipped and stuck cars:** no auto-right, no reset.
-4. **Speedhack and teleport cheats:** no server speed guard; client-reported laps [8][9].
-5. **Shortcut abuse:** unordered checkpoints or gates the size of the track's AABB [10][11].
+4. **Speedhack and teleport cheats:** no server speed guard; client-reported laps [7][8].
+5. **Shortcut abuse:** unordered checkpoints or gates the size of the track's AABB [9][10].
 6. **Twitchy thumbstick steering:** no speed-sensitive steering, narrow roads.
-7. **Lag on big maps:** no streaming, high-poly roads, hundreds of unanchored props [18].
+7. **Lag on big maps:** no streaming, high-poly roads, hundreds of unanchored props [17].
 8. **Half-loaded cars:** non-atomic models streaming wheels out.
 9. **Pay-to-win racing:** Robux cars beating every class.
 10. **Empty queues:** race lobbies that wait forever for 8 players; no bots or solo start.
@@ -592,10 +581,10 @@ end
 
 ## Common mistakes
 
-1. Leaving network ownership automatic, so a passenger or nearby player owns the car [6].
-2. Setting network ownership on an anchored part [36].
+1. Leaving network ownership automatic, so a passenger or nearby player owns the car [5].
+2. Setting network ownership on an anchored part (it errors).
 3. Using `Touched` on gate parts as the source of truth for laps.
-4. Client-side lap timers [12].
+4. Client-side lap timers [11].
 5. Tweening a car's CFrame instead of using constraints (no physics, no collisions).
 6. Body parts with mass raising the center of mass so cars roll; set `Massless`.
 7. Same steering angle at every speed.
@@ -607,42 +596,41 @@ end
 
 ## References
 
-[1] Car Dealership Tycoon vs Driving Empire (2026) (Earnaldo) — https://earnaldo.com/blog/car-dealership-tycoon-vs-driving-empire — Driving Empire world and catalog description; no dedicated passive system.
-[2] A Dusty Trip: Guide (Sportskeeda) — https://sportskeeda.com/roblox-news/a-dusty-trip-guide — repair a vehicle; stamina and hunger; no tutorial.
-[3] How to build a van in A Dusty Trip (Pocket Gamer) — https://www.pocketgamer.com/roblox/how-to-build-a-van-in-a-dusty-trip — vehicles from engine, radiator and wheel parts.
-[4] Play Car Dealership Tycoon on Roblox (StealthyGaming) — https://stealthygaming.com/play-car-dealership-tycoon-on-roblox/ — money from driving, racing and display; expensive and Robux cars earn more.
-[5] Car Dealership Tycoon vs Driving Empire (2026) (Earnaldo) — https://earnaldo.com/blog/car-dealership-tycoon-vs-driving-empire — CDT's passive income from display vehicles.
-[6] Network ownership (Creator Docs) — https://create.roblox.com/docs/scripting/networking/network-ownership — driver/passenger example; assign ownership on occupant change.
-[7] Network ownership (Creator Docs, physics) — https://create.roblox.com/docs/en-us/physics/network-ownership
-[8] Security and cheat mitigation tactics (Creator Docs) — https://create.roblox.com/docs/scripting/security/security-tactics
-[9] Server-side detection (Creator Docs) — https://create.roblox.com/docs/scripting/security/server-side-detection.md
-[10] Feedback on upcoming racing game (DevForum) — https://devforum.roblox.com/t/feedback-on-upcoming-racing-game/311758 — slow on grass or add time for off-track instead of hard cut detection.
-[11] Racing template (creation.dev) — https://www.creation.dev/templates/racing-template — checkpoint-validated laps, countdown starts, post-race rewards.
-[12] Best way to get accurate speed-run times? (DevForum) — https://devforum.roblox.com/t/best-way-to-get-accurate-speed-run-times/2520069 — client timing gave inaccurate times.
-[13] Collisions (Creator Docs) — https://create.roblox.com/docs/en-us/workspace/collisions.md — collision groups.
-[14] PhysicsService (engine reference) — https://create.roblox.com/docs/en-us/reference/engine/classes/PhysicsService.md
-[15] ContextActionService reference (Creator Docs) — https://create.roblox.com/docs/en-us/reference/engine/classes/ContextActionService
-[16] Mobile input (Creator Docs) — https://create.roblox.com/docs/input/mobile — mobile buttons with BindAction.
-[17] Gamepad input (Creator Docs) — https://create.roblox.com/docs/input/gamepad
-[18] Instance streaming (Creator Docs) — https://create.roblox.com/docs/en-us/workspace/streaming — StreamingEnabled, ModelStreamingMode.
-[19] Roblox Driving Empire codes (Prima Games) — https://primagames.com/codes/roblox-driving-empire-codes
-[20] Car Dealership Tycoon codes (Sportskeeda) — https://sportskeeda.com/roblox-news/car-dealership-tycoon-codes-roblox-free-cash-october-2022
-[21] Car Dealership Tycoon codes (RacingGames.gg) — https://racinggames.gg/article/car-dealership-tycoon-codes — codes after milestones and seasonal events.
-[22] All Train variants in Dead Rails: Price and usage (Sportskeeda) — https://www.sportskeeda.com/roblox-news/all-train-variants-dead-rails-price-usage
-[23] OrderedDataStore (engine reference) — https://create.roblox.com/docs/reference/engine/classes/OrderedDataStore — positive integers; GetSortedAsync.
-[24] Create a leaderboard (tutorial) — https://create.roblox.com/docs/en-us/tutorials/use-case-tutorials/data-storage/create-leaderboard.md
-[25] Private servers — https://create.roblox.com/docs/production/monetization/private-servers
-[26] Developer products — https://create.roblox.com/docs/production/monetization/developer-products — ProcessReceipt; test purchases.
-[27] Passes — https://create.roblox.com/docs/production/monetization/passes — UserOwnsGamePassAsync in a pcall.
-[28] Paid random items policy — https://create.roblox.com/docs/en-us/production/monetization/paid-random-items
-[29] How to make car physics better? (DevForum) — https://devforum.roblox.com/t/how-to-make-car-physics-better/3066491 — springs and damping.
-[30] Vehicle & Character Physics (DevForum) — https://devforum.roblox.com/t/vehicle-character-physics/408883 — motor and spring constraints for a regular car.
-[31] Car scripting, where to start? (DevForum) — https://devforum.roblox.com/t/car-scripting-where-to-start/388923
-[32] Help on car script (DevForum) — https://devforum.roblox.com/t/help-on-car-script/1022852
-[33] Data stores error codes and limits (Creator Docs) — https://create.roblox.com/docs/cloud-services/data-stores/error-codes-and-limits
-[34] Data stores (Roblox creator-docs on GitHub) — https://github.com/Roblox/creator-docs/blob/main/content/en-us/cloud-services/data-stores/index.md
-[35] Question about network ownership (DevForum) — https://devforum.roblox.com/t/2657613 — sitting grants ownership by default.
-[36] Chrono custom physics replication library, page 13 (DevForum) — https://devforum.roblox.com/t/chrono-drop-in-custom-physics-replication-library/3873294?page=13 — seat-weld ownership conflicts; anchored brake errors on SetNetworkOwner.
-[37] NetworkOwnership lag (DevForum) — https://devforum.roblox.com/t/networkownership-lag/2888685
+[1] Car Dealership Tycoon vs Driving Empire (2026) (Earnaldo) — https://earnaldo.com/blog/car-dealership-tycoon-vs-driving-empire
+[2] A Dusty Trip: Guide (Sportskeeda) — https://sportskeeda.com/roblox-news/a-dusty-trip-guide
+[3] How to build a van in A Dusty Trip (Pocket Gamer) — https://www.pocketgamer.com/roblox/how-to-build-a-van-in-a-dusty-trip
+[4] Play Car Dealership Tycoon on Roblox (StealthyGaming) — https://stealthygaming.com/play-car-dealership-tycoon-on-roblox/
+[5] Network ownership (Creator Docs) — https://create.roblox.com/docs/scripting/networking/network-ownership
+[6] Network ownership (Creator Docs, physics) — https://create.roblox.com/docs/en-us/physics/network-ownership
+[7] Security and cheat mitigation tactics (Creator Docs) — https://create.roblox.com/docs/scripting/security/security-tactics
+[8] Server-side detection (Creator Docs) — https://create.roblox.com/docs/scripting/security/server-side-detection.md
+[9] Feedback on upcoming racing game (DevForum) — https://devforum.roblox.com/t/feedback-on-upcoming-racing-game/311758
+[10] Racing template (creation.dev) — https://www.creation.dev/templates/racing-template
+[11] Best way to get accurate speed-run times? (DevForum) — https://devforum.roblox.com/t/best-way-to-get-accurate-speed-run-times/2520069
+[12] Collisions (Creator Docs) — https://create.roblox.com/docs/en-us/workspace/collisions.md
+[13] PhysicsService (engine reference) — https://create.roblox.com/docs/en-us/reference/engine/classes/PhysicsService.md
+[14] ContextActionService reference (Creator Docs) — https://create.roblox.com/docs/en-us/reference/engine/classes/ContextActionService
+[15] Mobile input (Creator Docs) — https://create.roblox.com/docs/input/mobile
+[16] Gamepad input (Creator Docs) — https://create.roblox.com/docs/input/gamepad
+[17] Instance streaming (Creator Docs) — https://create.roblox.com/docs/en-us/workspace/streaming
+[18] Roblox Driving Empire codes (Prima Games) — https://primagames.com/codes/roblox-driving-empire-codes
+[19] Car Dealership Tycoon codes (Sportskeeda) — https://sportskeeda.com/roblox-news/car-dealership-tycoon-codes-roblox-free-cash-october-2022
+[20] Car Dealership Tycoon codes (RacingGames.gg) — https://racinggames.gg/article/car-dealership-tycoon-codes
+[21] All Train variants in Dead Rails: Price and usage (Sportskeeda) — https://www.sportskeeda.com/roblox-news/all-train-variants-dead-rails-price-usage
+[22] OrderedDataStore (engine reference) — https://create.roblox.com/docs/reference/engine/classes/OrderedDataStore
+[23] Create a leaderboard (tutorial) — https://create.roblox.com/docs/en-us/tutorials/use-case-tutorials/data-storage/create-leaderboard.md
+[24] Private servers — https://create.roblox.com/docs/production/monetization/private-servers
+[25] Developer products — https://create.roblox.com/docs/production/monetization/developer-products
+[26] Passes — https://create.roblox.com/docs/production/monetization/passes
+[27] Paid random items policy — https://create.roblox.com/docs/en-us/production/monetization/paid-random-items
+[28] How to make car physics better? (DevForum) — https://devforum.roblox.com/t/how-to-make-car-physics-better/3066491
+[29] Vehicle & Character Physics (DevForum) — https://devforum.roblox.com/t/vehicle-character-physics/408883
+[30] Car scripting, where to start? (DevForum) — https://devforum.roblox.com/t/car-scripting-where-to-start/388923
+[31] Help on car script (DevForum) — https://devforum.roblox.com/t/help-on-car-script/1022852
+[32] Data stores error codes and limits (Creator Docs) — https://create.roblox.com/docs/cloud-services/data-stores/error-codes-and-limits
+[33] Data stores (Roblox creator-docs on GitHub) — https://github.com/Roblox/creator-docs/blob/main/content/en-us/cloud-services/data-stores/index.md
+[34] Question about network ownership (DevForum) — https://devforum.roblox.com/t/2657613
+[35] Chrono custom physics replication library, page 13 (DevForum) — https://devforum.roblox.com/t/chrono-drop-in-custom-physics-replication-library/3873294?page=13
+[36] NetworkOwnership lag (DevForum) — https://devforum.roblox.com/t/networkownership-lag/2888685
 
 Related: [[00 Start Here]] · [[02 The Core Loop]] · [[04 Progression and Economy]] · [[05 UI and HUD]] · [[06 World and Look]] · [[08 Mobile]] · [[09 Shops and Monetization]] · [[13 Building It Right]] · [[16 Console and Controllers]] · [[17 Security and Anti-Cheat]] · [[Genre - Survival]] · [[Genre - Obby]] · [[Genre - Tycoon]]
