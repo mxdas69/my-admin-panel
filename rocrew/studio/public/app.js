@@ -443,7 +443,7 @@ PAGES.home = {
       cards.push(`<div class="card glow"><div class="card-head">${tile("lead", "lg")}<div class="grow">
         <div class="eyebrow">Approve work</div><h3>The crew wants to start ${proposed.length} task${proposed.length > 1 ? "s" : ""}</h3>
         <p class="muted" style="margin-top:0">Untick anything you don't want. Nothing starts until you press Start.</p>
-        <div class="approve-list">${proposed.map((t) => `<label class="check"><input type="checkbox" data-propose="${t.id}" checked><span>${tile(t.agent)} <b>${esc(agent(t.agent).name)}</b>: ${esc(t.title)}${t.brief ? `<br><small class="muted">${esc(t.brief.slice(0, 160))}${t.brief.length > 160 ? "…" : ""}</small>` : ""}</span></label>`).join("")}</div>
+        <div class="approve-list">${proposed.map((t) => `<label class="check"><input type="checkbox" data-propose="${t.id}" checked><span>${tile(t.agent)} <b>${esc(agent(t.agent).name)}</b>: ${esc(t.title)}</span></label>${t.brief ? `<details class="brief-more"><summary>What exactly will it do?</summary><div class="md">${renderMarkdown(t.brief)}</div></details>` : ""}`).join("")}</div>
         <div class="row" style="margin-top:10px"><button class="btn primary" data-act="approve-tasks">${icon("play")}Start ticked</button><button class="btn" data-act="skip-tasks">Skip all</button></div>
       </div></div></div>`);
     }
