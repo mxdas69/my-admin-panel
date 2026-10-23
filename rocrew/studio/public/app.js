@@ -922,7 +922,7 @@ function lookAlikes(p) {
   if (!cc?.closest?.length && !found.length) return "";
   const rows = (cc?.closest ?? []).map((g) => `<li><b>${esc(g.name)}</b>${g.playing ? ` <span class="faint">${fmt(g.playing)} playing</span>` : ""}: ${esc(g.different)}</li>`).join("");
   const extra = found.filter((f) => !(cc?.closest ?? []).some((g) => String(g.name).toLowerCase() === String(f.name).toLowerCase())).slice(0, 4);
-  return `<div style="padding:12px 22px 0"><div class="eyebrow">Popular games like this, and why ours isn't a copy</div>${rows ? `<ul>${rows}</ul>` : ""}
+  return `<div style="padding:12px 22px 0"><div class="eyebrow">Popular games like this, and our twist</div>${rows ? `<ul>${rows}</ul>` : ""}
     ${extra.length ? `<div class="faint" style="font-size:12px">Roblox search also shows: ${extra.map((g) => `${esc(g.name)} (${fmt(g.playing)} playing)`).join(", ")}</div>` : ""}</div>`;
 }
 
