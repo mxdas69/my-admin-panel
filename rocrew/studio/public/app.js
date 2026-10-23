@@ -92,6 +92,13 @@ function statusPill(s) {
   return `<span class="pill ${map[s] ?? ""}">${s === "working" ? '<span class="dot live"></span>' : ""}${esc(label)}</span>`;
 }
 
+/** A plain summary; "first|then|finally" becomes a numbered list of what will happen. */
+function plainSteps(text) {
+  const parts = String(text).split("|").map((x) => x.trim()).filter(Boolean);
+  if (parts.length < 2) return `<br>${esc(parts[0] ?? "")}`;
+  return `<ol class="plain-steps">${parts.map((p) => `<li>${esc(p)}</li>`).join("")}</ol>`;
+}
+
 /** A task title without file names, ids and jargon prefixes, for when no plain summary was given. */
 function plainTitle(title) {
   return String(title)
@@ -214,6 +221,12 @@ function renderSidebar(r) {
     </div>`;
 }
 
+function approveBanner() {
+  const n = S.state.tasks.filter((t) => t.status === "proposed").length;
+  if (!n || !isOwner()) return "";
+  return `<a class="approve-banner" href="#/home" data-act="go-approve">${icon("play")}<b>${n} task${n > 1 ? "s" : ""} waiting for your OK</b><span>Tap to see what each one will do</span></a>`;
+}
+
 function renderTopbar(r) {
   const s = S.state;
   const c = counts();
@@ -226,6 +239,7 @@ function renderTopbar(r) {
     <h1>${esc(page.title(r.arg))}</h1>
     ${s.games.length ? `<div class="seg game-switch">${[["all", "All games"], ...s.games.map((g) => [g.slug, g.name])].map(([slug, name]) => `<button class="${S.ui.game === slug ? "active" : ""}" data-act="pick-game" data-id="${esc(slug)}">${esc(name)}</button>`).join("")}</div>` : ""}
     <span class="spacer"></span>
+    ${approveBanner()}
     ${s.remote?.sharing === true || s.remote?.sharing?.on ? `<span class="status-pill remote-pill"><span class="dot live" style="color:var(--green)"></span><span class="lbl">Remote Control ${s.remote.sharing?.status === "joined" ? `· ${esc(s.remote.partnerName || "friend")} is here` : "on"}</span>${isOwner() ? `<button class="btn ghost small" data-act="remote-off" title="Turn off Remote Control">${icon("x")}</button>` : ""}</span>` : ""}
     ${live}
     <button class="btn" data-act="refresh" title="Refresh">${icon("refresh")}<span class="lbl">Refresh</span></button>
@@ -452,7 +466,7 @@ PAGES.home = {
       cards.push(`<div class="card glow"><div class="card-head">${tile("lead", "lg")}<div class="grow">
         <div class="eyebrow">Approve work</div><h3>The crew wants to start ${proposed.length} task${proposed.length > 1 ? "s" : ""}</h3>
         <p class="muted" style="margin-top:0">Untick anything you don't want. Nothing starts until you press Start.</p>
-        <div class="approve-list">${proposed.map((t) => `<label class="check approve-item"><input type="checkbox" data-propose="${t.id}" checked><span>${tile(t.agent)} <b>${esc(agent(t.agent).name)}</b><br>${esc(t.plain || plainTitle(t.title))}</span></label>${t.brief ? `<details class="brief-more"><summary>Technical details (for the crew)</summary><div class="md">${renderMarkdown(t.brief)}</div></details>` : ""}`).join("")}</div>
+        <div class="approve-list">${proposed.map((t) => `<label class="check approve-item"><input type="checkbox" data-propose="${t.id}" checked><span>${tile(t.agent)} <b>${esc(agent(t.agent).name)}</b>${plainSteps(t.plain || plainTitle(t.title))}</span></label>${t.brief ? `<details class="brief-more"><summary>Technical details (for the crew)</summary><div class="md">${renderMarkdown(t.brief)}</div></details>` : ""}`).join("")}</div>
         <div class="row" style="margin-top:10px"><button class="btn primary" data-act="approve-tasks">${icon("play")}Start ticked</button><button class="btn" data-act="skip-tasks">Skip all</button></div>
       </div></div></div>`);
     }
@@ -1528,6 +1542,10 @@ const ACTIONS = {
     await refresh();
   },
   "select-all": (el) => el.select(),
+  "go-approve": () => {
+    location.hash = "#/home";
+    setTimeout(() => document.querySelector(".approve-list")?.closest(".card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+  },
   "open-report": (el) => {
     S.ui.gameTab = "files";
     S.fileView = { slug: el.dataset.slug, path: el.dataset.id };
