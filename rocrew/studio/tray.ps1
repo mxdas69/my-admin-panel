@@ -27,8 +27,10 @@ $icon.ContextMenuStrip = $menu
 $openApp = {
   $port = 4600
   try { $port = (Get-Runtime).port } catch {}
+  $brave = @("$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe", "${env:ProgramFiles(x86)}\BraveSoftware\Brave-Browser\Application\brave.exe", "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\Application\brave.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
   $appProfile = Join-Path $root '.rocrew\app-window'
-  try { Start-Process 'msedge' "--app=http://localhost:$port --user-data-dir=`"$appProfile`" --no-first-run --no-default-browser-check" } catch { Start-Process "http://localhost:$port" }
+  if ($brave) { Start-Process $brave "--app=http://localhost:$port --user-data-dir=`"$appProfile`" --no-first-run --no-default-browser-check" }
+  else { try { Start-Process 'msedge' "--app=http://localhost:$port" } catch { Start-Process "http://localhost:$port" } }
 }
 $openItem.add_Click($openApp)
 $icon.add_DoubleClick($openApp)
