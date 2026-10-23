@@ -210,6 +210,10 @@ studio/cli.mjs          the crew's CLI
 .rocrew/                your settings, keys and state (git-ignored)
 ```
 
+## Planned
+
+- An in-game **admin panel** template the crew can add to any game (server-checked by UserId: kick, ban, give items, spawn events, view live stats).
+
 ## Good to know
 
 - **Roblox Studio tools.** Roblox decides which tools its MCP server offers, so what the agents can do in Studio (run code, playtest, read output, screenshots) depends on your Studio version.
