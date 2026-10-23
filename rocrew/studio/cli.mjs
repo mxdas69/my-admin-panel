@@ -57,6 +57,11 @@ Games and library
   system add --name "…" --summary "…" [--path f] [--game s]
   upload --file <image> --name "…"         Upload an image to Roblox as a Decal (Open Cloud); prints the asset id
 
+Gemini app (free, made by the owner, never waited for)
+  gemini-prompt --title "Thumbnail: DAY 1 vs DAY 999" --prompt "…" [--kind thumb|icon|pass] [--ref capture.png]
+                                            Gives the owner a ready prompt to paste into gemini.google.com, plus the
+                                            capture to upload. Their image lands in Review. Carry on straight away.
+
 Store art (Splash) — the cheap, high-quality way to make icons and thumbnails
   store-art icon|thumb|pass --variants "A: warm sunset grade|B: cool night grade|C: tighter crop|D: stronger hero glow"
            [--ref games/<slug>/art/cap_wide.png,games/<slug>/art/cap_hero.png] [--text "MEGA EGGS"] [--game slug]
@@ -161,6 +166,17 @@ switch (cmd) {
     if (r.freeMode) console.log("Free mode: Gemini's image model isn't available on this key, so these are your Studio captures graded and finished with ffmpeg (no AI).");
     if (r.styleFrom) console.log(`Style references (top games right now): ${r.styleFrom}`);
     console.log(`\nSent to the owner's Review as "${r.group}".${r.sheet ? ` Phone-size sheet: ${r.sheet}` : ""}${r.finished ? "" : " (ffmpeg isn't installed, so no resizing, title text or scores.)"}`);
+    break;
+  }
+
+  case "gemini-prompt": {
+    if (typeof o.title !== "string" || typeof o.prompt !== "string") fail('Usage: gemini-prompt --title "Thumbnail: DAY 1 vs DAY 999" --prompt "what to make" [--kind thumb|icon|pass] [--ref capture.png]');
+    const { ENDINGS } = await import("./lib/storeArt.mjs");
+    const kind = ["icon", "pass"].includes(o.kind) ? o.kind : "thumb";
+    const refs = list(o.ref);
+    const full = `${o.prompt.trim()} ${refs.length ? `${ENDINGS.edit} ` : ""}${ENDINGS[kind]}${kind === "thumb" ? " Make it 16:9 widescreen." : " Make it square."}`;
+    const a = await api("POST", "/api/asks", { from: ME, title: o.title, body: full, game, kind: "gemini", media: refs });
+    console.log(`${a.id}: the owner gets a one-tap "copy prompt" card for the Gemini app. Don't wait for it: carry on with your work. Their image will appear in Review if they make one.`);
     break;
   }
 

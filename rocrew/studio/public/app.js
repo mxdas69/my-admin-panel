@@ -525,7 +525,28 @@ function setupHtml() {
   </div>`;
 }
 
+/** A Gemini-app job: copy the prompt, open Gemini, drop the picture back in. */
+function geminiCard(a) {
+  const attached = S.ui.askMedia[a.id] ?? [];
+  const ref = (a.media ?? [])[0];
+  return `<div class="card glow gemini-job"><div class="card-head">${tile(a.from, "lg")}<div class="grow">
+    <div class="eyebrow">Optional · about 1 minute · the crew isn't waiting</div>
+    <h3>${esc(a.title)}</h3>
+    <ol class="gemini-steps">
+      <li><button class="btn primary" data-act="copy-prompt" data-id="${a.id}">${icon("clip")}Copy the prompt</button></li>
+      ${ref ? `<li><a class="btn" href="${media(ref)}" download="${esc(ref)}">${icon("image")}Save the screenshot</a> <span class="faint">(you'll upload it to Gemini)</span></li>` : ""}
+      <li><a class="btn" href="https://gemini.google.com/app" target="_blank" rel="noopener">${icon("sparkle")}Open Gemini</a> <span class="faint">paste${ref ? ", add the screenshot" : ""}, press send, then download the picture</span></li>
+      <li><label class="btn green">${icon("upload")}Drop the picture here<input type="file" accept="image/*" multiple hidden data-ask-upload="${a.id}"></label>
+        ${attached.length ? `<button class="btn primary" data-act="gemini-done" data-id="${a.id}">${icon("check")}Add to Review</button>` : ""}</li>
+    </ol>
+    ${attached.length ? `<div class="thumbs">${attached.map((m) => `<img src="${media(m)}" alt="">`).join("")}</div>` : ""}
+    <details class="brief-more" style="margin-left:0"><summary>See the prompt</summary><pre class="task-body" id="gp-${a.id}">${esc(a.body)}</pre></details>
+    <div class="row" style="margin-top:6px"><button class="btn ghost small" data-act="ask-done" data-id="${a.id}">Skip this one</button></div>
+  </div></div></div>`;
+}
+
 function askCard(a) {
+  if (a.kind === "gemini") return geminiCard(a);
   const files = a.media ?? [];
   const steps = a.steps ?? [];
   const checks = S.ui.checks[a.id] ?? [];
@@ -1544,6 +1565,29 @@ const ACTIONS = {
     await refresh();
   },
   "select-all": (el) => el.select(),
+  "copy-prompt": async (el) => {
+    const text = S.state.asks.find((a) => a.id === el.dataset.id)?.body ?? "";
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const box = document.getElementById(`gp-${el.dataset.id}`);
+      box?.closest("details")?.setAttribute("open", "");
+      const r = document.createRange();
+      r.selectNodeContents(box);
+      getSelection().removeAllRanges();
+      getSelection().addRange(r);
+      document.execCommand("copy");
+    }
+    el.innerHTML = `${icon("check")}Copied! Now open Gemini`;
+    toast("Prompt copied. Paste it into Gemini with Ctrl+V.");
+  },
+  "gemini-done": async (el) => {
+    const id = el.dataset.id;
+    if (await attempt(() => api("POST", `/api/asks/${id}/to-review`, { media: S.ui.askMedia[id] ?? [] }), "Added to Review.")) {
+      delete S.ui.askMedia[id];
+      await refresh();
+    }
+  },
   "explain-task": async (el, e) => {
     e?.preventDefault();
     el.disabled = true;

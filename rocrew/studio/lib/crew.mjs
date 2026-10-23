@@ -463,7 +463,7 @@ export class Crew extends EventEmitter {
       title,
       body,
       game,
-      kind: kind === "test" ? "test" : "question",
+      kind: ["test", "gemini"].includes(kind) ? kind : "question",
       steps: steps.map((x) => String(x).trim()).filter(Boolean).slice(0, 20),
       media,
       status: "open",

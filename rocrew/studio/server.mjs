@@ -579,6 +579,20 @@ route("POST", /^\/api\/asks$/, async (req) => {
     media,
   });
 });
+// A Gemini-app job: the owner's image goes straight into Review; the crew never waited for it.
+route("POST", /^\/api\/asks\/([\w]+)\/to-review$/, async (req, url, [id]) => {
+  const ask = store.data.asks.find((a) => a.id === id && a.kind === "gemini");
+  need(ask, "No such Gemini job.");
+  const { media = [] } = await readJson(req);
+  need(media.length, "Drop in the image Gemini made first.");
+  for (const m of media.slice(0, 8)) {
+    store.push("reviews", { id: store.id("r"), agent: ask.from, game: ask.game, title: `${ask.title} (made in Gemini)`.slice(0, 120), question: "Use this one?", file: `media/${m}`, media: m, kind: /\.(mp4|webm|mov)$/i.test(m) ? "video" : "image", group: ask.title, status: "pending", note: "", createdAt: Date.now() });
+  }
+  ask.status = "done";
+  ask.reply = "Added to Review";
+  crew.changed();
+  return { ok: true };
+});
 route("POST", /^\/api\/asks\/([\w]+)\/answer$/, async (req, url, [id]) => {
   const b = await readJson(req);
   const names = (b.media ?? []).filter((n) => typeof n === "string" && fs.existsSync(path.join(MEDIA, path.basename(n)))).map((n) => path.basename(n));
