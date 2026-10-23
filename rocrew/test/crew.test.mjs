@@ -53,7 +53,7 @@ const relay = http
   .listen(RELAY_PORT);
 relay.unref();
 
-const env = { ...process.env, ROCREW_DATA: DATA, PORT: String(PORT), FAKE_DELAY: "300", ROCREW_RELAY_URL: `http://127.0.0.1:${RELAY_PORT}`, ROCREW_FAKE_TUNNEL: "1", ROCREW_NO_MARKET: "1" };
+const env = { ...process.env, ROCREW_DATA: DATA, PORT: String(PORT), FAKE_DELAY: "300", ROCREW_RELAY_URL: `http://127.0.0.1:${RELAY_PORT}`, ROCREW_FAKE_TUNNEL: "1", ROCREW_NO_MARKET: "1", ROCREW_NO_EXPLAIN: "1" };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function api(method, route, body, headers = {}) {
