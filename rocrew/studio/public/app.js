@@ -1270,7 +1270,7 @@ function robloxCardHtml() {
   return `<h3 class="section-title">${icon("lock")} Roblox account</h3>
     <p class="muted" style="margin-top:0">Sign in once so the crew can read your game's stats, retention and funnels, and set up game passes and products on the Creator Hub for you. It stays signed in.</p>
     <div class="row">${status}<span class="grow"></span>
-      ${r.signedIn ? `<button class="btn small" data-act="roblox-check">${icon("refresh")}Check</button><button class="btn ghost small" data-act="roblox-signout">Sign out</button>` : `<button class="btn primary" data-act="roblox-signin" ${r.windowOpen || !r.browser ? "disabled" : ""}>${icon("lock")}Sign in to Roblox</button>`}</div>
+      ${r.signedIn ? `<button class="btn small" data-act="roblox-check">${icon("refresh")}Check</button><button class="btn ghost small" data-act="roblox-signout">Sign out</button>` : `<button class="btn small" data-act="roblox-check">${icon("refresh")}Check</button><button class="btn primary" data-act="roblox-signin" ${r.windowOpen || !r.browser ? "disabled" : ""}>${icon("lock")}Sign in to Roblox</button>`}</div>
     ${r.windowOpen ? `<div class="banner blue" style="margin:10px 0 0"><b>A browser window opened on this PC.</b>Sign in to Roblox there (with your 2-step code if asked), then close that window. RoCrew checks it worked.</div>` : ""}
     ${!r.browser ? `<p class="faint" style="font-size:12px">Needs Brave, Microsoft Edge or Google Chrome on this PC.</p>` : ""}
     ${r.error && !r.windowOpen ? `<p class="faint" style="font-size:12px">${esc(r.error)}</p>` : ""}
