@@ -79,7 +79,7 @@ crew.browserTool = {
 
 /** For tests: a "tunnel" that is just this computer's own address. */
 function fakeTunnel() {
-  return { onExit: null, find: () => "fake", canInstall: () => false, install: async () => {}, start: async (p) => `http://127.0.0.1:${p}`, stop() {} };
+  return { onExit: null, find: () => "fake", canInstall: () => false, install: async () => {}, url: null, async start(p) { return (this.url = `http://127.0.0.1:${p}`); }, stop() { this.url = null; } };
 }
 
 // ---------- helpers ----------
@@ -855,7 +855,7 @@ function ownerOnly(req) {
 }
 
 function peopleView() {
-  return (store.data.people ?? []).filter((p) => !p.remote).map((p) => ({ id: p.id, name: p.name, createdAt: p.createdAt, lastSeenAt: p.lastSeenAt ?? null, links: linkFor(p.token), key: p.token }));
+  return (store.data.people ?? []).filter((p) => !p.remote).map((p) => ({ id: p.id, name: p.name, createdAt: p.createdAt, lastSeenAt: p.lastSeenAt ?? null, links: linkFor(p.token), anywhere: remote.tunnel.url ? `${remote.tunnel.url}/?key=${p.token}` : null, key: p.token }));
 }
 
 route("GET", /^\/api\/people$/, (req) => {
@@ -869,6 +869,17 @@ route("POST", /^\/api\/people$/, async (req) => {
   store.data.people ??= [];
   store.data.people.push({ id: store.id("u"), name: String(name).trim().slice(0, 40), token: randomBytes(24).toString("hex"), createdAt: Date.now() });
   crew.changed();
+  return { people: peopleView(), lan: lanMode(), addresses: networkAddresses(), port };
+});
+// One click for a link that works from any house: start (or reuse) the Cloudflare tunnel.
+route("POST", /^\/api\/people\/anywhere$/, async (req) => {
+  ownerOnly(req);
+  try {
+    if (!remote.tunnel.find()) await remote.tunnel.install();
+    await remote.tunnel.start(port);
+  } catch (err) {
+    throw new HttpError(502, `Couldn't make the link: ${err.message}`);
+  }
   return { people: peopleView(), lan: lanMode(), addresses: networkAddresses(), port };
 });
 route("DELETE", /^\/api\/people\/([\w]+)$/, (req, url, [id]) => {

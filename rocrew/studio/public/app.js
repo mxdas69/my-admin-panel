@@ -1358,17 +1358,17 @@ function peopleHtml() {
     <p class="muted" style="margin-top:0">Make games together. Each friend gets their own private link: they can talk to the Lead and the team, review work, test builds and approve pitches. Only you can change Settings. Everything they do shows their name, and the crew runs on your Claude plan.</p>
     <div class="row"><input class="input grow" id="invite-name" placeholder="Friend's name, e.g. Sam" maxlength="40"><button class="btn primary" data-act="invite">${icon("plus")}Invite</button></div>
     ${p.people.length ? p.people.map((f) => `<div class="friend"><div class="row"><span class="tile sm" style="--c:#4aa8ff">${icon("users")}</span><b class="grow">${esc(f.name)}</b><small class="faint">${f.lastSeenAt ? `here ${ago(f.lastSeenAt)}` : "hasn't opened it yet"}</small><button class="btn ghost small" data-act="remove-friend" data-id="${f.id}" data-name="${esc(f.name)}" title="Remove their access">${icon("trash")}</button></div>
+      ${f.anywhere ? `<label class="field" style="margin:8px 0 0">Send them this link (works from any house) <small>It changes when you restart RoCrew; press the button again for a fresh one.</small><input class="input mono small" readonly value="${esc(f.anywhere)}" data-act="select-all"></label>` : `<div class="row" style="margin-top:8px"><button class="btn primary small" data-act="anywhere-link">${icon("send")}Get a link for ${esc(f.name)}</button><small class="faint">Takes about 10 seconds.</small></div>`}
       ${(f.links ?? []).map((l) => `<label class="field" style="margin:8px 0 0">${esc(l.kind === "tailscale" ? "Over Tailscale (any Wi-Fi)" : l.kind === "home network" ? "On your Wi-Fi" : l.kind)}<input class="input mono small" readonly value="${esc(l.url)}" data-act="select-all"></label>`).join("")}
-      ${f.links?.length ? "" : `<p class="faint" style="font-size:12px;margin:8px 0 0">No link yet: turn on <b>Open on my phone too</b> and restart, or use a tunnel (below).</p>`}
-      <label class="field" style="margin:8px 0 0">Their key <small>Add <span class="mono">?key=…</span> to any address that reaches this app, like a tunnel.</small><input class="input mono small" readonly value="${esc(f.key)}" data-act="select-all"></label></div>`).join("") : `<div class="empty" style="margin-top:10px">No friends invited yet.</div>`}
-    <details class="how" ${p.people.length ? "" : "open"}><summary><b>How your friend reaches it</b></summary>
+</div>`).join("") : `<div class="empty" style="margin-top:10px">No friends invited yet.</div>`}
+    <details class="how" ${p.people.length ? "" : "open"}><summary><b>How to connect</b></summary>
       <ol class="steps">
-        <li><b>Same house or Wi-Fi:</b> turn on <b>Open on my phone too</b> (left), save, restart the app. Their link appears above.</li>
-        <li><b>Different houses, easiest:</b> both install <a href="https://tailscale.com/download" target="_blank" rel="noopener">Tailscale</a> (free) and sign in to the same tailnet, or share this computer with them. Turn on <b>Open on my phone too</b>. Their Tailscale link appears above.</li>
-        <li><b>Different houses, no installs for them:</b> on this computer run <span class="mono">cloudflared tunnel --url ${esc(local)}</span>. It prints a <span class="mono">https://….trycloudflare.com</span> address. Send them that address with <span class="mono">/?key=</span> and their key on the end. The address changes each time you start the tunnel.</li>
-        <li><b>Building in the same place:</b> in Roblox Studio turn on <b>Team Create</b> (File → Game Settings → Permissions, or the Collaborate button) and add your friend, so you can both open the place while the crew works in it.</li>
+        <li>Type your friend's name above and press <b>Invite</b>.</li>
+        <li>Press <b>Get a link</b> under their name and send them the link (Discord, text, anything).</li>
+        <li>They open it in their browser. That's it: no installs for them.</li>
+        <li>To both open the game in Studio, turn on <b>Team Create</b> in Roblox Studio and add them.</li>
       </ol>
-      <p class="faint" style="font-size:12px">Anyone with a link can direct your crew and use your Claude plan, so only share it with people you trust. Remove someone here and their link stops working right away.</p></details>`;
+      <p class="faint" style="font-size:12px">The link only works while RoCrew is running on this PC. Anyone with it can direct your crew and use your Claude plan, so only send it to people you trust. Remove someone here and their link stops working right away.</p></details>`;
 }
 
 function connectionsHtml() {
@@ -1733,6 +1733,13 @@ const ACTIONS = {
     (S.ui.dismissed ??= {})[el.dataset.id] = true;
     renderRemoteLayer();
     await attempt(() => api("POST", "/api/remote/answer", { session: el.dataset.id, join: false }));
+  },
+  "anywhere-link": async (el) => {
+    el.disabled = true;
+    el.textContent = "Making the link…";
+    const r = await attempt(() => api("POST", "/api/people/anywhere"));
+    if (r) S.people = r;
+    render(true);
   },
   invite: async () => {
     const box = document.getElementById("invite-name");
