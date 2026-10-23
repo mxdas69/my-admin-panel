@@ -193,9 +193,10 @@ function renderSidebar(r) {
       <b>${s.paused ? "Crew paused" : c.working ? `${c.working} agent${c.working > 1 ? "s" : ""} working` : "Crew is idle"}</b>
       <small>${holder ? `${icon("lock")} ${esc(holder)} has Studio` : c.queued ? `${c.queued} task(s) queued` : "Nothing running"}</small>
     </div>
+    ${s.update?.available ? `<div class="side-box update-box"><b>${icon("upload")} Update ready</b><small>${esc(s.update.latest?.message ?? "A new version of RoCrew")}</small><button class="btn primary small" data-act="update-now">Update now</button></div>` : ""}
     ${s.usage?.fiveHour || s.usage?.week ? `<div class="side-box usage" title="Your Claude plan's usage, as Claude Code last reported it">${s.usageHold ? `<b style="color:var(--amber)">Waiting for your plan to reset</b>` : `<b>Claude plan usage</b>`}${usageBars(s.usage)}</div>` : ""}
     <div class="side-foot">
-      ${isOwner() ? `${nav("settings", "settings", "Settings")}<button class="nav-item quit" data-act="quit">${icon("x")}<span>Quit RoCrew</span></button>` : `<div class="side-box"><small>${icon("users")} You're in ${esc(s.owner || "your friend")}'s studio as <b>${esc(s.me?.name ?? "a guest")}</b></small></div>`}
+      ${isOwner() ? `<button class="nav-item quit" data-act="update-check">${icon("refresh")}<span>Check for updates</span></button>${nav("settings", "settings", "Settings")}<button class="nav-item quit" data-act="quit">${icon("x")}<span>Quit RoCrew</span></button>` : `<div class="side-box"><small>${icon("users")} You're in ${esc(s.owner || "your friend")}'s studio as <b>${esc(s.me?.name ?? "a guest")}</b></small></div>`}
       <a class="side-box" href="#/settings" style="display:block;text-decoration:none">
         <small><span class="dot" style="color:${conn.claude?.installed ? "var(--green)" : "var(--red)"}"></span>Claude Code ${conn.claude?.installed ? esc(conn.claude.version ?? "") : conn.claude ? "not found" : "checking…"}</small>
         <small><span class="dot" style="color:${studioOk ? "var(--green)" : "var(--amber)"}"></span>Roblox Studio ${studioOk ? "connected" : conn.studio ? conn.studio.status : "not set up"}</small>
@@ -1488,6 +1489,34 @@ const ACTIONS = {
     await refresh();
   },
   "select-all": (el) => el.select(),
+  "update-now": async (el) => {
+    el.disabled = true;
+    el.innerHTML = '<span class="spinner"></span> Updating…';
+    if (!(await attempt(() => api("POST", "/api/update/install")))) {
+      el.disabled = false;
+      el.textContent = "Update now";
+      return;
+    }
+    document.body.insertAdjacentHTML("beforeend", `<div class="modal-back"><div class="modal"><h3>Updating RoCrew…</h3><p class="muted">Your settings, sign-ins and tasks stay as they are. This takes a few seconds.</p><div class="empty"><span class="spinner"></span></div></div></div>`);
+    const started = Date.now();
+    const wait = async () => {
+      await new Promise((r) => setTimeout(r, 2500));
+      try {
+        const res = await fetch("/api/state", { headers: { "x-rocrew-token": TOKEN } });
+        if (res.ok) return location.reload();
+      } catch {}
+      if (Date.now() - started < 90000) wait();
+      else document.querySelector(".modal").innerHTML = "<h3>Almost there</h3><p>RoCrew didn't come back by itself. Start it again from Start RoCrew.vbs.</p>";
+    };
+    wait();
+  },
+  "update-check": async () => {
+    const v = await attempt(() => api("POST", "/api/update/check"));
+    if (v?.error) {
+      if (confirm(`Couldn't check GitHub for a new version (${v.error}). Download and install the latest version anyway?`)) ACTIONS["update-now"](document.createElement("button"));
+    } else if (v) toast(v.available ? "An update is ready: press Update now in the sidebar." : "You're on the latest version.");
+    await refresh();
+  },
   quit: async () => {
     if (!confirm("Quit RoCrew? Running agents stop (their tasks pick up again next time), and Blender, the Roblox sign-in window and Remote Control close.")) return;
     await api("POST", "/api/quit").catch(() => {});

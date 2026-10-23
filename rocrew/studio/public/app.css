@@ -462,3 +462,5 @@ body.with-remote-bar .app { padding-top: 42px; }
 .steps-fold[open] > summary svg { transform: rotate(90deg); }
 .steps-fold > summary .err { color: #fca5a5; }
 .steps-fold[open] > summary { margin-bottom: 6px; }
+.update-box { border-color: rgba(52, 211, 153, 0.5); display: grid; gap: 6px; }
+.update-box small { color: var(--muted); }

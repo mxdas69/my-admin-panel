@@ -21,6 +21,7 @@ import { RemoteControl } from "./lib/remote.mjs";
 import { RobloxBrowser } from "./lib/robloxBrowser.mjs";
 import { makeStoreArt } from "./lib/storeArt.mjs";
 import { HiddenBlender } from "./lib/blender.mjs";
+import { Updater } from "./lib/updater.mjs";
 
 const blender = new HiddenBlender();
 
@@ -66,6 +67,7 @@ const remote = new RemoteControl({
   ...(process.env.ROCREW_FAKE_TUNNEL ? { tunnel: fakeTunnel() } : {}),
 });
 remote.on("change", () => crew.changed("remote"));
+const updater = new Updater({ root: ROOT, dataDir: DATA });
 
 const robloxBrowser = new RobloxBrowser({ dir: path.join(DATA, "browser"), getShow: () => config.get().robloxBrowser?.visible });
 robloxBrowser.onChange = () => crew.changed("roblox");
@@ -378,6 +380,7 @@ function stateView(req) {
     usage: db.usage ?? null,
     usageHold: crew.usageHold(),
     usageCeilingPct: config.get().usageCeilingPct,
+    update: me?.owner ? updater.view() : null,
     roblox: me?.owner ? robloxBrowser.view() : { signedIn: robloxBrowser.status.signedIn },
     connections: connectionsView(),
   };
@@ -883,6 +886,32 @@ route("POST", /^\/api\/setup$/, async (req) => {
   return { report, log: lines };
 });
 
+// ---------- updates ----------
+
+route("POST", /^\/api\/update\/check$/, async (req) => {
+  ownerOnly(req);
+  const v = await updater.check();
+  crew.changed("update");
+  return v;
+});
+route("POST", /^\/api\/update\/install$/, async (req) => {
+  ownerOnly(req);
+  try {
+    await updater.install();
+  } catch (err) {
+    throw new HttpError(502, err.message);
+  }
+  // Restart into the new version: the tray (or the log-window launcher) starts RoCrew again.
+  setTimeout(() => {
+    remote.stop();
+    blender.stop();
+    for (const run of crew.running.values()) run.kill("app updating");
+    store.flush();
+    process.exit(3);
+  }, 400);
+  return { ok: true };
+});
+
 // Quit everything RoCrew started: agents, Blender, the tunnel, the sign-in window, the app.
 route("POST", /^\/api\/quit$/, (req) => {
   ownerOnly(req);
@@ -1031,6 +1060,10 @@ server.listen(port, host, () => {
   console.log(`\n  RoCrew agent studio is running → http://${shown}:${port}\n  Project: ${ROOT}\n  Stop with Ctrl+C.\n`);
   crew.tick();
   checkConnections().catch(() => {});
+  if (!process.env.ROCREW_NO_MARKET) {
+    setTimeout(() => updater.check().then(() => crew.changed("update")).catch(() => {}), 15000);
+    setInterval(() => updater.check().then(() => crew.changed("update")).catch(() => {}), 6 * 3600000).unref();
+  }
   const recheck = () => robloxBrowser.status.signedIn && !crew.browserHolder && robloxBrowser.check().catch(() => {});
   setTimeout(recheck, 5000);
   // Snapshot the charts every 3 hours, so rank moves and breakouts build up on their own.

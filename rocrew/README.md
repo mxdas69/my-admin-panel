@@ -87,6 +87,10 @@ On top of that, the Lead marks quick, mechanical tasks `small` (one model lighte
 
 The sidebar shows your 5-hour and weekly usage as Claude Code reports it. When either passes **Stop new work at** (90% by default), agents wait until it resets and pick up on their own; messages you send the Lead still go through. If a run hits the limit anyway, its task goes back in the queue instead of failing.
 
+## Updating
+
+RoCrew checks for a new version every few hours. When one is ready, the sidebar shows **Update ready → Update now**: it downloads the new version, replaces only the program files and restarts. Your settings, keys, sign-ins, tasks and games are never touched. You can also press **Check for updates** in the sidebar.
+
 ## Remote Control (mxdas and Othman)
 
 Each of you runs RoCrew on your own PC. Pair once, then either of you can share your studio live with the other.
