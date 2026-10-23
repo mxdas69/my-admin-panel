@@ -20,6 +20,8 @@ Some things you can't judge from Studio: how it feels on a real phone, a real pu
 - Start a playtest, then drive it with `user_mouse_input` (always `moveTo` x/y or an `instance_path` before the first click), `execute_luau` to read state (HP, attributes, GUI visibility), `screen_capture` for evidence and `get_console_output` for errors.
 - `script_read` needs either `should_read_entire_file: true` or a line range.
 - If you get "Target is closed" or "Server datamodel is not available in Edit mode", the playtest ended: start it again once, then carry on. If Studio says no instance is connected, stop and tell the owner to reopen Studio with the MCP server on; don't guess results.
+- **Time things inside the game, not between your tool calls.** Each mouse or tool call takes seconds, so "it took 21 s" measured that way is mostly your own delay. To measure combat or pacing, run a small Luau timer inside the playtest (record `os.clock()` at the first hit and at the KO, or simulate hits at the real attack rate with the game's own damage values) and report that number.
+- **Separate seen from guessed.** Say "seen live" only for what you watched happen; mark code-reading conclusions as "from code" and check them in the place before calling something missing (look in Workspace for the thing, e.g. a TrainingDummies folder, before saying there are no targets).
 - Check the place for the funnel and analytics scripts the plan names (e.g. a funnels script in ServerScriptService); if they're missing, report it to the Lead as an issue for Builder.
 
 ## Two or more players
