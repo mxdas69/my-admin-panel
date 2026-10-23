@@ -915,6 +915,17 @@ PAGES.pitches = {
   },
 };
 
+/** Popular games that already play like this pitch, and what's different from each. */
+function lookAlikes(p) {
+  const cc = p.data?.cloneCheck;
+  const found = p.lookAlikes ?? [];
+  if (!cc?.closest?.length && !found.length) return "";
+  const rows = (cc?.closest ?? []).map((g) => `<li><b>${esc(g.name)}</b>${g.playing ? ` <span class="faint">${fmt(g.playing)} playing</span>` : ""}: ${esc(g.different)}</li>`).join("");
+  const extra = found.filter((f) => !(cc?.closest ?? []).some((g) => String(g.name).toLowerCase() === String(f.name).toLowerCase())).slice(0, 4);
+  return `<div style="padding:12px 22px 0"><div class="eyebrow">Popular games like this, and why ours isn't a copy</div>${rows ? `<ul>${rows}</ul>` : ""}
+    ${extra.length ? `<div class="faint" style="font-size:12px">Roblox search also shows: ${extra.map((g) => `${esc(g.name)} (${fmt(g.playing)} playing)`).join(", ")}</div>` : ""}</div>`;
+}
+
 function pitchCard(p) {
   const d = p.data ?? {};
   const ev = d.evidence ?? {};
@@ -936,6 +947,7 @@ function pitchCard(p) {
       <div class="row" style="gap:6px">${(d.tags ?? []).map((t) => `<span class="pill purple">${esc(t)}</span>`).join("")}${p.status !== "pending" ? statusPill(p.status) : ""}</div>
       <h3>${esc(p.title)}</h3><div>${esc(d.summary ?? "")}</div></div></div>
     ${d.different ? `<div class="card glow" style="margin:16px 22px 0"><div class="eyebrow">How we're different</div><b>${esc(d.different)}</b><div class="row" style="margin-top:6px">${(d.versus ?? []).map((v) => `<span class="pill">vs ${esc(v)}</span>`).join("")}</div></div>` : ""}
+    ${lookAlikes(p)}
     ${stats.length ? `<div class="kv-stats">${stats.map(([l, v]) => `<div class="stat"><div class="l">${esc(l)}</div><div class="v">${esc(typeof v === "number" ? fmt(v) : v)}</div></div>`).join("")}</div>` : ""}
     ${rows.length ? `<div class="kv">${rows.map(([k, v]) => `<div class="k">${esc(k)}</div><div>${esc(v)}</div>`).join("")}</div>` : ""}
     ${d.risks?.length ? `<div style="padding:0 22px 8px"><div class="eyebrow">Risks</div><ul>${d.risks.map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>` : ""}

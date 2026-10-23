@@ -662,8 +662,22 @@ route("POST", /^\/api\/media$/, async (req, url) => {
 route("POST", /^\/api\/pitches$/, async (req) => {
   const b = await readJson(req);
   need(b.title?.trim(), "A pitch needs a title.");
+  // The owner never wants a popular game with a new name. Pulse has to show it searched for
+  // look-alikes and that none of them already plays the same way.
+  const cc = b.cloneCheck ?? {};
+  need(Array.isArray(cc.searched) && cc.searched.filter((t) => String(t).trim()).length >= 3, 'Add "cloneCheck.searched": at least 3 `market search` terms you ran for look-alikes (the core action, the theme, and the two together).');
+  need(Array.isArray(cc.closest) && cc.closest.length >= 1 && cc.closest.every((g) => g?.name && g?.different), 'Add "cloneCheck.closest": the most popular look-alike games you found, each with name, playing and "different" (what a player would actually notice is different).');
+  need(cc.isReskin === false, 'Set "cloneCheck.isReskin": false only if no popular game already plays the same way. If one does, this is a reskin: drop it and pitch something else.');
   const pitch = { id: store.id("p"), title: b.title.trim(), data: b, status: "pending", createdAt: Date.now() };
   store.push("pitches", pitch);
+  // Our own look-alike search, so the owner sees real popular games next to Pulse's claim.
+  searchGames(String(cc.searched[0]), 6)
+    .then((games) => {
+      pitch.lookAlikes = games.map((g) => ({ universeId: g.universeId, name: g.name, playing: g.playing, likePct: g.likePct }));
+      store.save();
+      crew.changed();
+    })
+    .catch(() => {});
   crew.feed("pulse", "owner", `Pitch: ${pitch.title}`);
   crew.changed();
   return pitch;
