@@ -567,16 +567,13 @@ Events are picked from the global clock (`Random.new(floor(os.time() / 1800))` c
 
 1. **Client-decided results:** fish rarity or crop weight in a remote; exploiters print Mythics.
 2. **Multiplicative mutation stacking** making one item worth millions and deflating every price [15].
-3. **Per-server restocks** causing server-hopping and resentment.
-4. **Shared server stock** that the fastest player empties.
-5. **Unreadable rolls:** no kg, no rarity color, mutations invisible on the model.
-6. **Long walks to sell.**
-7. **A minigame that only works with a mouse** or that is too hard on a phone.
-8. **Macro fishing** flooding the economy (no min reel time, no AFK cap).
-9. **Lag from crops:** thousands of detailed unanchored crop parts.
-10. **Lost gardens:** crops not saved on leave; plot assignment tied to plot number.
-11. **Event burnout:** promising weekly events and running out of ideas [14].
-12. **Selling results for Robux:** a "buy Mythic fish" product.
+3. **Per-server or shared-first-come stock:** server-hopping and fights at the NPC.
+4. **Unreadable rolls:** no kg, no rarity color, invisible mutations.
+5. **Mouse-only or too-hard minigames** on phones; **macro fishing** with no minimum reel time.
+6. **Crop lag:** thousands of detailed, unanchored crop parts.
+7. **Lost gardens:** crops not saved on leave, or saved by plot number.
+8. **Event burnout:** promising weekly events and running out of ideas [14].
+9. **Selling results for Robux:** a "buy Mythic fish" product.
 
 ## 14. Pitch checklist: is this genre right for us right now?
 
@@ -594,14 +591,11 @@ Events are picked from the global clock (`Random.new(floor(os.time() / 1800))` c
 - [ ] First harvest or catch within 60 s; first sale within 2 min (phone).
 - [ ] Every result is rolled on the server; no remote carries kg, rarity, mutation, value or price (Reviewer scan).
 - [ ] Two Studio servers show identical stock for the same restock index (screenshot of both).
-- [ ] Per-player stock counts reset at each restock index.
-- [ ] Crops ripen by server `os.time()`, including while offline (rejoin test with a 2-minute crop).
-- [ ] Offline growth is capped at one cycle per crop.
+- [ ] Crops ripen by server `os.time()` while offline, capped at one cycle (rejoin test with a 2-minute crop).
 - [ ] Mutation bonuses add and are capped at +20; the top possible value is in `economy.md`.
 - [ ] Weather events are announced 30 s early and start at the same time in every server.
 - [ ] Cast outside range or outside a FishingZone fails; a ReelResult before `minReelSeconds` fails (forged-call log).
-- [ ] Reel minigame playable with one button on touch, mouse and gamepad.
-- [ ] Plant/Harvest ProximityPrompts work with gamepad; menus selectable, B closes.
+- [ ] Reel minigame and Plant/Harvest prompts work on touch, mouse and gamepad; menus selectable, B closes.
 - [ ] Crop models ≤ 6 parts, anchored, no shadows; 600 crops hold 30 FPS on a phone.
 - [ ] Locked items are never sold by "Sell all".
 - [ ] One `ProcessReceipt`; repeat receipts don't double-grant.
