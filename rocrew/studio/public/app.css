@@ -447,3 +447,6 @@ body.with-remote-bar .app { padding-top: 42px; }
 .ob-extra { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
 .ob-extra small { grid-column: 1; color: var(--muted); }
 .ob-extra .btn, .ob-extra .input { grid-column: 2; grid-row: 1 / span 2; width: 180px; }
+
+.nav-item.quit { width: 100%; background: none; border: 0; color: var(--muted); font: inherit; cursor: pointer; text-align: left; }
+.nav-item.quit:hover { color: #fecdd3; }

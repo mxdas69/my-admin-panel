@@ -20,6 +20,9 @@ import { generateImage, askGemini } from "./lib/gemini.mjs";
 import { RemoteControl } from "./lib/remote.mjs";
 import { RobloxBrowser } from "./lib/robloxBrowser.mjs";
 import { makeStoreArt } from "./lib/storeArt.mjs";
+import { HiddenBlender } from "./lib/blender.mjs";
+
+const blender = new HiddenBlender();
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(process.env.ROCREW_ROOT ?? path.join(HERE, ".."));
@@ -325,6 +328,8 @@ function setBlender(enabled) {
   if (enabled) json.mcpServers.blender = { command: "uvx", args: ["blender-mcp"] };
   else delete json.mcpServers.blender;
   fs.writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`);
+  if (enabled) blender.start();
+  else blender.stop();
 }
 
 async function checkConnections() {
@@ -844,6 +849,13 @@ route("POST", /^\/api\/roblox\/visible$/, async (req) => {
   return robloxBrowser.view();
 });
 
+// Quit everything RoCrew started: agents, Blender, the tunnel, the sign-in window, the app.
+route("POST", /^\/api\/quit$/, (req) => {
+  ownerOnly(req);
+  setTimeout(shutdown, 300);
+  return { ok: true };
+});
+
 // ---------- start with Windows ----------
 
 function startupFile() {
@@ -998,6 +1010,7 @@ server.listen(port, host, () => {
   }
   setInterval(recheck, 6 * 3600000).unref();
   if (process.argv.includes("--open")) openInBrowser(`http://localhost:${port}`);
+  if (blenderEnabled() && !process.env.ROCREW_NO_BLENDER) blender.start();
 });
 server.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
@@ -1035,6 +1048,8 @@ ticker.unref();
 
 function shutdown() {
   remote.stop();
+  blender.stop();
+  robloxBrowser.window?.kill();
   for (const run of crew.running.values()) run.kill("app closed");
   store.flush();
   try {

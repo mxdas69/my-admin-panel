@@ -195,7 +195,7 @@ function renderSidebar(r) {
     </div>
     ${s.usage?.fiveHour || s.usage?.week ? `<div class="side-box usage" title="Your Claude plan's usage, as Claude Code last reported it">${s.usageHold ? `<b style="color:var(--amber)">Waiting for your plan to reset</b>` : `<b>Claude plan usage</b>`}${usageBars(s.usage)}</div>` : ""}
     <div class="side-foot">
-      ${isOwner() ? nav("settings", "settings", "Settings") : `<div class="side-box"><small>${icon("users")} You're in ${esc(s.owner || "your friend")}'s studio as <b>${esc(s.me?.name ?? "a guest")}</b></small></div>`}
+      ${isOwner() ? `${nav("settings", "settings", "Settings")}<button class="nav-item quit" data-act="quit">${icon("x")}<span>Quit RoCrew</span></button>` : `<div class="side-box"><small>${icon("users")} You're in ${esc(s.owner || "your friend")}'s studio as <b>${esc(s.me?.name ?? "a guest")}</b></small></div>`}
       <a class="side-box" href="#/settings" style="display:block;text-decoration:none">
         <small><span class="dot" style="color:${conn.claude?.installed ? "var(--green)" : "var(--red)"}"></span>Claude Code ${conn.claude?.installed ? esc(conn.claude.version ?? "") : conn.claude ? "not found" : "checking…"}</small>
         <small><span class="dot" style="color:${studioOk ? "var(--green)" : "var(--amber)"}"></span>Roblox Studio ${studioOk ? "connected" : conn.studio ? conn.studio.status : "not set up"}</small>
@@ -1277,7 +1277,7 @@ function connectionsHtml() {
       ${c.studio?.status === "connected" ? "" : `<ol class="steps"><li>Open Roblox Studio with your place.</li><li>Open the Assistant, then its settings, then <b>MCP Servers</b>.</li><li>Use quick connect for <b>Claude Code</b> (or copy the command it shows and run it in a terminal).</li><li>Come back and press <b>Check again</b>.</li></ol>`}</div>${ok(c.studio?.status === "connected", c.studio ? c.studio.status : "Not set up")}</div>
     <div class="conn"><span class="tile lg" style="--c:#ff8a3d">${icon("box")}</span><div class="grow"><b>Blender (MCP)</b>
       <div class="muted">For custom models and renders. Needs Blender, the Blender MCP add-on enabled in Blender, and <span class="mono">uv</span> installed (it provides <span class="mono">uvx</span>).</div>
-      <label class="check" style="margin-top:8px"><input type="checkbox" data-change="blender" ${c.blender.enabled ? "checked" : ""}><span>Add Blender to this project's <span class="mono">.mcp.json</span></span></label></div>${ok(c.blender.server?.status === "connected", c.blender.server ? c.blender.server.status : c.blender.enabled ? "Added" : "Off")}</div>
+      <label class="check" style="margin-top:8px"><input type="checkbox" data-change="blender" ${c.blender.enabled ? "checked" : ""}><span>Use Blender (RoCrew opens it hidden in the background and closes it when you quit)</span></label></div>${ok(c.blender.server?.status === "connected", c.blender.server ? c.blender.server.status : c.blender.enabled ? "Added" : "Off")}</div>
     <div class="conn"><span class="tile lg" style="--c:#4aa8ff">${icon("image")}</span><div class="grow"><b>Gemini</b><div class="muted">Images: <span class="mono">${esc(c.gemini.imageModel)}</span> · text: <span class="mono">${esc(c.gemini.textModel)}</span></div></div>${ok(c.gemini.keySet, c.gemini.keySet ? "Key saved" : "No key")}</div>
     <div class="conn"><span class="tile lg" style="--c:#ff5fa2">${icon("upload")}</span><div class="grow"><b>Roblox Open Cloud</b><div class="muted">${c.roblox.keySet ? `Uploads as ${esc(c.roblox.creatorType)} ${esc(c.roblox.creatorId || "(set an id)")}` : "Optional. Lets agents upload images to Roblox."}</div></div>${ok(c.roblox.keySet && c.roblox.creatorId, c.roblox.keySet ? "Key saved" : "Optional")}</div>
     ${c.servers.length ? `<p class="faint" style="font-size:12px">All MCP servers Claude Code knows: ${c.servers.map((s) => `${esc(s.name)} (${esc(s.status)})`).join(", ")}</p>` : ""}
@@ -1471,6 +1471,12 @@ const ACTIONS = {
     await refresh();
   },
   "select-all": (el) => el.select(),
+  quit: async () => {
+    if (!confirm("Quit RoCrew? Running agents stop (their tasks pick up again next time), and Blender, the Roblox sign-in window and Remote Control close.")) return;
+    await api("POST", "/api/quit").catch(() => {});
+    document.body.innerHTML = `<div style="display:grid;place-items:center;height:100vh;font:16px system-ui;color:#ccc;background:#0b0911;text-align:center"><div><h2>RoCrew is closed</h2><p>Start it again with Start RoCrew.bat. You can close this window.</p></div></div>`;
+    setTimeout(() => window.close(), 800);
+  },
   "deep-dive": (el) => deepDive(el.dataset.id),
   "market-open-sort": (el) => {
     S.ui.marketTab = "charts";
