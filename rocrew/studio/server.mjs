@@ -861,7 +861,7 @@ function ownerOnly(req) {
 }
 
 function peopleView() {
-  return (store.data.people ?? []).filter((p) => !p.remote).map((p) => ({ id: p.id, name: p.name, createdAt: p.createdAt, lastSeenAt: p.lastSeenAt ?? null, links: linkFor(p.token), anywhere: friendTunnel.url ? `${friendTunnel.url}/?key=${p.token}` : null, key: p.token }));
+  return (store.data.people ?? []).filter((p) => !p.remote).map((p) => ({ id: p.id, name: p.name, createdAt: p.createdAt, lastSeenAt: p.lastSeenAt ?? null, links: linkFor(p.token), anywhere: friendTunnel.url ? `${friendTunnel.url}/k/${p.token}` : null, key: p.token }));
 }
 
 route("GET", /^\/api\/people$/, (req) => {
@@ -1204,17 +1204,23 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, fs.readFileSync(file), { "content-type": type, "cache-control": "private, max-age=3600" });
     }
 
-    const rel = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
+    // Friend links carry the key in the path (/k/<key>): some link services show a warning page
+    // first and drop "?key=…" on the way through. A cookie remembers it after the first visit.
+    const pathKey = /^\/k\/([a-f0-9]{16,})\/?$/.exec(url.pathname)?.[1];
+    const rel = url.pathname === "/" || pathKey ? "index.html" : url.pathname.slice(1);
     const file = inside(PUBLIC, rel);
     const type = STATIC_TYPES[path.extname(file)];
     if (type && fs.existsSync(file) && !file.endsWith("index.html")) return send(res, 200, fs.readFileSync(file), { "content-type": type });
     // The page carries a token, so anywhere but this computer's own browser it needs a private link.
-    const key = url.searchParams.get("key");
+    const cookieKey = /(?:^|;\s*)rocrew_key=([a-f0-9]+)/.exec(req.headers.cookie ?? "")?.[1];
+    const key = pathKey ?? url.searchParams.get("key") ?? cookieKey;
     const visitor = key ? personFor(key) : null;
     if (!visitor && !isLocalBrowser(req)) {
-      return send(res, 401, "<!doctype html><meta name=viewport content='width=device-width'><body style='background:#0b0911;color:#eee;font:16px system-ui;padding:40px'><h2>RoCrew is locked</h2><p>Open your private link: the owner finds it in Settings → Friends.</p>", { "content-type": STATIC_TYPES[".html"] });
+      return send(res, 401, "<!doctype html><meta name=viewport content='width=device-width'><body style='background:#0b0911;color:#eee;font:16px system-ui;padding:40px'><h2>RoCrew is locked</h2><p>Open your private link: the owner finds it in Settings → Friends.</p><p style='color:#aaa'>Saw a warning page before this? Open your link once more and it will work.</p>", { "content-type": STATIC_TYPES[".html"] });
     }
-    return send(res, 200, injectToken(visitor ? key : TOKEN), { "content-type": STATIC_TYPES[".html"] });
+    const headers = { "content-type": STATIC_TYPES[".html"] };
+    if (visitor && !visitor.owner) headers["set-cookie"] = `rocrew_key=${key}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax${req.headers["x-forwarded-proto"] === "https" || !isLocalBrowser(req) ? "; Secure" : ""}`;
+    return send(res, 200, injectToken(visitor ? key : TOKEN), headers);
   } catch (err) {
     const status = err.status ?? 500;
     if (status === 500) console.error("[rocrew]", err);
