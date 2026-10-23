@@ -55,7 +55,7 @@ function parse(argv) {
 }
 
 function runtime() {
-  const file = path.join(ROOT, ".rocrew", "runtime.json");
+  const file = path.join(process.env.ROCREW_DATA ?? path.join(ROOT, ".rocrew"), "runtime.json");
   if (!fs.existsSync(file)) fail("The RoCrew app isn't running. Start it with: node studio/server.mjs");
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }

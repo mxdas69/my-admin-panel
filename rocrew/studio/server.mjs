@@ -18,7 +18,7 @@ import { generateImage, askGemini } from "./lib/gemini.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(process.env.ROCREW_ROOT ?? path.join(HERE, ".."));
-const DATA = path.join(ROOT, ".rocrew");
+const DATA = path.resolve(process.env.ROCREW_DATA ?? path.join(ROOT, ".rocrew"));
 const MEDIA = path.join(DATA, "media");
 const PUBLIC = path.join(HERE, "public");
 const VAULT = path.join(ROOT, "vault");
@@ -124,7 +124,7 @@ function ingest(fileOrDataUrl, hint = "file") {
 
 function attachImages(text, images = []) {
   if (!images.length) return text;
-  const files = images.slice(0, 6).map((img, i) => path.join(".rocrew", "media", ingest(img, `shot-${i + 1}`)));
+  const files = images.slice(0, 6).map((img, i) => path.join(MEDIA, ingest(img, `shot-${i + 1}`)));
   return `${text}\n\nAttached screenshot(s) — open them with the Read tool:\n${files.map((f) => `- ${f}`).join("\n")}`;
 }
 

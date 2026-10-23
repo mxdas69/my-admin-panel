@@ -6,6 +6,14 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
 const args = process.argv.slice(2);
+if (args[0] === "--version") {
+  console.log("0.0.0 (fake Claude Code for tests)");
+  process.exit(0);
+}
+if (args[0] === "mcp" && args[1] === "list") {
+  console.log("Checking MCP server health...\n\nRoblox_Studio: studio-mcp --stdio - ✓ Connected");
+  process.exit(0);
+}
 const resume = args.includes("--resume") ? args[args.indexOf("--resume") + 1] : null;
 const agent = process.env.ROCREW_AGENT ?? "lead";
 const sessionId = resume ?? randomUUID();

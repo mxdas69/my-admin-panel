@@ -113,7 +113,7 @@ kbd { font: 11px var(--mono); padding: 1px 6px; border-radius: 6px; border: 1px 
 .topbar .spacer { flex: 1; }
 .game-switch { margin-left: 14px; flex-wrap: nowrap; overflow-x: auto; max-width: 46vw; }
 .game-switch button { white-space: nowrap; }
-@media (max-width: 820px) { .game-switch { display: none; } }
+
 .status-pill { display: inline-flex; gap: 8px; align-items: center; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.03); font-size: 13px; color: #d9d3ec; }
 
 /* ---------- buttons & inputs ---------- */
@@ -179,7 +179,7 @@ label.field small { font-weight: 400; color: var(--muted); }
 
 .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin-bottom: 18px; flex-wrap: wrap; }
 .tab { background: none; border: 0; padding: 10px 12px; cursor: pointer; color: var(--muted); font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; gap: 6px; align-items: center; }
-.tab.active { color: #fff; border-image: var(--grad) 1; border-bottom-width: 2px; border-bottom-style: solid; }
+.tab.active { color: #fff; border-bottom-color: #c084fc; }
 .seg { display: inline-flex; padding: 3px; border-radius: 12px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.03); gap: 2px; flex-wrap: wrap; }
 .seg button { border: 0; background: none; padding: 6px 12px; border-radius: 9px; cursor: pointer; color: var(--muted); font-weight: 600; font-size: 13px; }
 .seg button.active { background: rgba(139, 92, 246, 0.3); color: #fff; }
@@ -349,4 +349,18 @@ table.data tr:hover td { background: rgba(255, 255, 255, 0.02); }
   .hello { font-size: 30px; }
 }
 .menu-btn { display: none; }
-@media (max-width: 820px) { .menu-btn { display: inline-flex; } }
+.cols > *, .grow { min-width: 0; }
+@media (max-width: 820px) {
+  .menu-btn { display: inline-flex; }
+  .topbar { gap: 6px; }
+  .topbar h1 { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar .status-pill, .topbar .lbl, .topbar .game-switch { display: none; }
+  .page-head .row > p.grow { flex-basis: 100%; }
+  .ask-bar { flex-wrap: wrap; }
+  .ask-bar input { flex-basis: calc(100% - 50px); }
+  .ask-bar .btn { flex: 1; justify-content: center; }
+  .detail-head { padding: 14px 16px; flex-wrap: wrap; }
+  .detail-head .tile.xl { width: 46px; height: 46px; }
+  .chat, .composer { padding-left: 14px; padding-right: 14px; }
+  .task { flex-wrap: wrap; }
+}

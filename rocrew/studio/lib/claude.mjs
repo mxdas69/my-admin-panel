@@ -5,6 +5,16 @@ import { spawn, execFile } from "node:child_process";
 
 const isWindows = process.platform === "win32";
 
+// If the app itself was started from inside a Claude Code session, these would
+// make every agent join that session instead of starting its own.
+const PARENT_SESSION_VARS = ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_REMOTE_SESSION_ID", "CLAUDE_CODE_SESSION_ATTENDED"];
+
+function childEnv(extra = {}) {
+  const env = { ...process.env, ...extra };
+  for (const key of PARENT_SESSION_VARS) delete env[key];
+  return env;
+}
+
 /** "node test/fake-claude.mjs" -> ["node", "test/fake-claude.mjs"], keeping quoted parts together. */
 export function splitCommand(command) {
   const parts = command.match(/"[^"]*"|'[^']*'|\S+/g) ?? [];
@@ -29,7 +39,8 @@ function spawnCommand(command, args, options) {
  * @param {string} opts.cwd          project root (so CLAUDE.md and .mcp.json apply)
  * @param {string} opts.prompt
  * @param {string|null} opts.sessionId  resume this conversation when set
- * @param {string} opts.permissionMode  "safe" | "autopilot"
+ * @param {string} [opts.agent]     run as this .claude/agents/<id>.md role (`--agent`)
+ * @param {string} opts.permissionMode  "safe" | "auto" | "autopilot"
  * @param {string[]} opts.allowedTools
  * @param {string} [opts.model]
  * @param {Record<string,string>} [opts.env]
@@ -38,18 +49,21 @@ function spawnCommand(command, args, options) {
  */
 export function runClaude(opts) {
   const args = ["-p", "--output-format", "stream-json", "--verbose"];
+  if (opts.agent) args.push("--agent", opts.agent);
   if (opts.sessionId) args.push("--resume", opts.sessionId);
   if (opts.permissionMode === "autopilot") {
     args.push("--permission-mode", "bypassPermissions");
   } else {
-    args.push("--permission-mode", "acceptEdits");
+    // "safe": only the allow-list runs, everything else is refused without a prompt.
+    // "auto": Claude Code's own safety check decides, with the allow-list pre-approved.
+    args.push("--permission-mode", opts.permissionMode === "auto" ? "auto" : "dontAsk");
     if (opts.allowedTools?.length) args.push("--allowedTools", opts.allowedTools.join(","));
   }
   if (opts.model) args.push("--model", opts.model);
 
   const child = spawnCommand(opts.command, args, {
     cwd: opts.cwd,
-    env: { ...process.env, ...opts.env },
+    env: childEnv(opts.env),
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
   });
@@ -164,7 +178,7 @@ function describeFailure(code, stderr) {
 export async function probeClaude(command, cwd) {
   const run = (args) =>
     new Promise((resolve) => {
-      const child = spawnCommand(command, args, { cwd, windowsHide: true });
+      const child = spawnCommand(command, args, { cwd, env: childEnv(), windowsHide: true });
       let out = "";
       child.stdout?.on("data", (d) => (out += d));
       child.stderr?.on("data", (d) => (out += d));

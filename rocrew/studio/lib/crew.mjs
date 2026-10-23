@@ -12,7 +12,7 @@ const TERMINAL = new Set(["done", "failed", "cancelled", "blocked"]);
 const BASE_TOOLS = [
   "Read", "Write", "Edit", "MultiEdit", "Glob", "Grep", "LS", "TodoWrite", "NotebookEdit",
   "WebSearch", "WebFetch",
-  "Bash(node studio/cli.mjs:*)", "Bash(node games/:*)",
+  "Bash(node studio/cli.mjs *)", "Bash(node studio/cli.mjs:*)", "Bash(node games/*)",
 ];
 
 export class Crew extends EventEmitter {
@@ -48,11 +48,11 @@ export class Crew extends EventEmitter {
   // ---------- creating work ----------
 
   addTask({ agent, title, brief = "", game = null, from = "lead", studio, after = [], silent = false, reported = false }) {
-    if (!isAgent(agent)) throw new Error(`Unknown agent "${agent}". Agents: ${AGENTS.map((a) => a.id).join(", ")}`);
-    if (!title?.trim()) throw new Error("A task needs a title.");
-    if (game && !this.db.games.some((g) => g.slug === game)) throw new Error(`Unknown game "${game}". Create it first.`);
+    if (!isAgent(agent)) throw bad(`Unknown agent "${agent}". Agents: ${AGENTS.map((a) => a.id).join(", ")}`);
+    if (!title?.trim()) throw bad("A task needs a title.");
+    if (game && !this.db.games.some((g) => g.slug === game)) throw bad(`Unknown game "${game}". Create it first.`);
     for (const dep of after) {
-      if (!this.db.tasks.some((t) => t.id === dep)) throw new Error(`Unknown task "${dep}" in --after.`);
+      if (!this.db.tasks.some((t) => t.id === dep)) throw bad(`Unknown task "${dep}" in --after.`);
     }
     const task = {
       id: this.store.id("t"),
@@ -92,7 +92,7 @@ export class Crew extends EventEmitter {
 
   cancel(taskId) {
     const task = this.db.tasks.find((t) => t.id === taskId);
-    if (!task) throw new Error("No such task.");
+    if (!task) throw bad("No such task.");
     if (task.status === "queued") {
       task.status = "cancelled";
       task.endedAt = Date.now();
@@ -208,6 +208,7 @@ export class Crew extends EventEmitter {
     this.changed();
 
     const run = this.runner({
+      agent: task.agent,
       command: cfg.claudeCommand,
       cwd: this.root,
       prompt,
@@ -320,7 +321,7 @@ export class Crew extends EventEmitter {
 
   answerAsk(id, { reply = "", done = false }) {
     const ask = this.db.asks.find((a) => a.id === id);
-    if (!ask) throw new Error("No such checkpoint.");
+    if (!ask) throw bad("No such checkpoint.");
     ask.reply = reply || ask.reply;
     if (done) ask.status = "done";
     const text = reply
@@ -333,9 +334,9 @@ export class Crew extends EventEmitter {
 
   decideReview(id, { verdict, note = "" }) {
     const review = this.db.reviews.find((r) => r.id === id);
-    if (!review) throw new Error("No such review item.");
-    if (!["approved", "changes", "rejected"].includes(verdict)) throw new Error("Verdict must be approved, changes or rejected.");
-    if (verdict === "changes" && !note.trim()) throw new Error("Add a note so the agent knows what to change.");
+    if (!review) throw bad("No such review item.");
+    if (!["approved", "changes", "rejected"].includes(verdict)) throw bad("Verdict must be approved, changes or rejected.");
+    if (verdict === "changes" && !note.trim()) throw bad("Add a note so the agent knows what to change.");
     review.status = verdict;
     review.note = note;
     review.decidedAt = Date.now();
@@ -360,7 +361,7 @@ export class Crew extends EventEmitter {
 
   decidePitch(id, { verdict, note = "" }) {
     const pitch = this.db.pitches.find((p) => p.id === id);
-    if (!pitch) throw new Error("No such pitch.");
+    if (!pitch) throw bad("No such pitch.");
     pitch.status = verdict === "approved" ? "approved" : "rejected";
     pitch.note = note;
     pitch.decidedAt = Date.now();
@@ -383,7 +384,7 @@ export class Crew extends EventEmitter {
 
   addGame({ name, slug }) {
     const s = slugify(slug || name);
-    if (!s) throw new Error("A game needs a name.");
+    if (!s) throw bad("A game needs a name.");
     let game = this.db.games.find((g) => g.slug === s);
     if (!game) {
       game = { slug: s, name: name.trim(), version: "v0", whatsNew: [], universeId: null, createdAt: Date.now() };
@@ -396,23 +397,11 @@ export class Crew extends EventEmitter {
 
   // ---------- prompts ----------
 
-  roleText(agent) {
-    const file = path.join(this.root, ".claude", "agents", `${agent}.md`);
-    try {
-      return fs.readFileSync(file, "utf8").replace(/^---[\s\S]*?---\s*/, "").trim();
-    } catch {
-      return `You are ${agentName(agent)} on the RoCrew team.`;
-    }
-  }
-
   buildPrompt(task, fresh) {
     const name = agentName(task.agent);
     const parts = [];
-    if (fresh) {
-      parts.push(`# You are ${name}\n\n${this.roleText(task.agent)}\n\nThe crew rules in CLAUDE.md apply to you. Your agent id is "${task.agent}".`);
-    } else {
-      parts.push(`(You are ${name}. Your role and the crew rules from earlier in this conversation still apply.)`);
-    }
+    // The role itself comes from .claude/agents/<id>.md through `claude --agent`.
+    parts.push(fresh ? `You are ${name} (agent id "${task.agent}") on the RoCrew team. Follow your role and the crew rules in CLAUDE.md.` : `(You are ${name}; your role and the crew rules still apply.)`);
 
     const state = this.store.agent(task.agent);
     if (state.verdicts?.length) {
@@ -472,6 +461,11 @@ export class Crew extends EventEmitter {
       };
     });
   }
+}
+
+/** A mistake in the request (shown to the caller as a 400), not a crash. */
+function bad(message) {
+  return Object.assign(new Error(message), { status: 400 });
 }
 
 export function slugify(text) {

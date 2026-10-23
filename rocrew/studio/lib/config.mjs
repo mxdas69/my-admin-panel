@@ -7,7 +7,8 @@ export const DEFAULTS = {
   ownerName: "",
   claudeCommand: "claude",
   model: "",
-  // "safe": agents may use file tools, the RoCrew CLI and your MCP servers without asking.
+  // "safe": agents may use file tools, the RoCrew CLI and your MCP servers; everything else is refused.
+  // "auto": Claude Code's auto mode decides what's safe, on top of that allow-list.
   // "autopilot": every tool is allowed (Claude Code's bypassPermissions mode).
   permissionMode: "safe",
   extraAllowedTools: [],
@@ -52,7 +53,7 @@ export class Config {
     this.values.maxParallel = clampInt(this.values.maxParallel, 1, 15);
     this.values.taskTimeoutMin = clampInt(this.values.taskTimeoutMin, 5, 600);
     this.values.maxAutoRounds = clampInt(this.values.maxAutoRounds, 1, 200);
-    if (!["safe", "autopilot"].includes(this.values.permissionMode)) this.values.permissionMode = "safe";
+    if (!["safe", "auto", "autopilot"].includes(this.values.permissionMode)) this.values.permissionMode = "safe";
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     fs.writeFileSync(this.file, JSON.stringify(this.values, null, 2));
   }

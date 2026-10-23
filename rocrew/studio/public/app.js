@@ -118,9 +118,10 @@ function render(forceMount = false) {
   const el = document.getElementById("page");
   const key = `${r.page}/${r.arg}`;
   const page = PAGES[r.page];
-  el.className = `page${page.flush ? " flush" : ""}`;
   if (forceMount || key !== mountedKey) {
     mountedKey = key;
+    el.className = `page${page.flush ? " flush" : ""}`;
+    el.removeAttribute("style");
     page.mount(el, r.arg);
   } else {
     page.update?.(el, r.arg);
@@ -185,8 +186,8 @@ function renderTopbar(r) {
     ${s.games.length ? `<div class="seg game-switch">${[["all", "All games"], ...s.games.map((g) => [g.slug, g.name])].map(([slug, name]) => `<button class="${S.ui.game === slug ? "active" : ""}" data-act="pick-game" data-id="${esc(slug)}">${esc(name)}</button>`).join("")}</div>` : ""}
     <span class="spacer"></span>
     ${live}
-    <button class="btn" data-act="refresh">${icon("refresh")}Refresh</button>
-    <button class="btn primary" data-act="new-task">${icon("plus")}New task</button>`;
+    <button class="btn" data-act="refresh" title="Refresh">${icon("refresh")}<span class="lbl">Refresh</span></button>
+    <button class="btn primary" data-act="new-task" title="New task">${icon("plus")}<span class="lbl">New task</span></button>`;
 }
 
 // ---------- chat (Lead and Team) ----------
@@ -196,7 +197,8 @@ function messageHtml(m) {
   if (m.role === "tool" || m.role === "tool-error") return `<div class="msg ${m.role}"><div class="line" title="${esc(m.text)}">${esc(m.text)}</div></div>`;
   if (m.role === "owner") return `<div class="msg owner"><div class="who">You · ${ago(m.at)}</div><div class="bubble md">${renderMarkdown(m.text)}</div></div>`;
   if (m.role === "brief") {
-    return `<div class="msg brief"><div class="who">${icon("arrow")} New task from ${esc(agent(m.from).name)} · ${ago(m.at)}</div><div class="bubble md">${renderMarkdown(m.text)}</div></div>`;
+    const label = m.from === "system" ? "Crew update" : `New task from ${esc(agent(m.from).name)}`;
+    return `<div class="msg brief"><div class="who">${icon("arrow")} ${label} · ${ago(m.at)}</div><div class="bubble md">${renderMarkdown(m.text)}</div></div>`;
   }
   if (m.role === "system") return `<div class="msg system"><div class="bubble">${esc(m.text)}</div></div>`;
   return `<div class="msg"><div class="who">${esc(a.name)} · ${ago(m.at)}</div><div class="bubble md">${renderMarkdown(m.text)}</div></div>`;
@@ -285,7 +287,7 @@ function updateAgentDetail(el, id, list) {
           ${st.queued ? `<span class="pill amber">${st.queued} queued</span>` : ""}
           ${st.hasStudio ? `<span class="pill green">${icon("lock")} has Studio</span>` : ""}
           <span class="faint">${esc(a.blurb)}</span>
-        </div></div>
+        </div>${a.detail ? `<div class="muted" style="font-size:13px;margin-top:6px;max-width:760px"><span class="eyebrow" style="color:${a.color}">A closer look</span> ${esc(a.detail)}</div>` : ""}</div>
       <button class="btn small" data-act="reset-agent" data-id="${id}" title="Start a new conversation with a clean context">${icon("refresh")}Start fresh</button>`;
   }
   if (list) {
@@ -859,7 +861,8 @@ PAGES.library = {
 // ---------- Vault ----------
 
 function vaultHref(title) {
-  const page = S.vault?.find((p) => p.title.toLowerCase() === title.toLowerCase());
+  const t = title.toLowerCase();
+  const page = S.vault?.find((p) => p.title.toLowerCase() === t || p.path.replace(/\.md$/, "").toLowerCase() === t);
   return page ? `#/vault/${encodeURIComponent(page.path)}` : "#/vault";
 }
 
@@ -914,6 +917,7 @@ PAGES.settings = {
           <label class="field">Model <small>Leave empty to use your Claude Code default.</small><input class="input mono" id="set-model" value="${esc(v.model)}" placeholder="default"></label>
           <div class="field">Permissions
             <label class="check"><input type="radio" name="perm" value="safe" ${v.permissionMode === "safe" ? "checked" : ""}><span><b>Safe auto</b><br><small class="muted">Agents may edit files in this folder, use the RoCrew CLI, web search, and your MCP servers (Studio, Blender) without asking. Anything else is refused.</small></span></label>
+            <label class="check" style="margin-top:8px"><input type="radio" name="perm" value="auto" ${v.permissionMode === "auto" ? "checked" : ""}><span><b>Auto</b><br><small class="muted">Claude Code's auto mode: its safety check approves routine actions and blocks risky ones, on top of the safe list. Needs a Claude Code version and plan that offer auto mode.</small></span></label>
             <label class="check" style="margin-top:8px"><input type="radio" name="perm" value="autopilot" ${v.permissionMode === "autopilot" ? "checked" : ""}><span><b>Autopilot</b><br><small class="muted">Every tool is allowed, including any shell command. Fastest for unattended runs; only use it on a machine and project you're happy for the agents to change.</small></span></label></div>
           <label class="field">Extra allowed tools <small>Comma-separated Claude Code permission rules, e.g. <span class="mono">Bash(python:*)</span>.</small><input class="input mono" id="set-extraAllowedTools" value="${esc((v.extraAllowedTools ?? []).join(", "))}"></label>
           <div class="row"><label class="field grow">Agents at once<input class="input" type="number" min="1" max="15" id="set-maxParallel" value="${v.maxParallel}"></label>

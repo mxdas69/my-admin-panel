@@ -46,7 +46,7 @@ Start it with `node studio/server.mjs` and open **http://localhost:4600**.
 
 How the automation works:
 
-1. Each agent runs as its **own Claude Code conversation** (`claude -p`, resumed between tasks), so it remembers its earlier work.
+1. Each agent runs as its **own Claude Code conversation** (`claude -p --agent <role>`, resumed between tasks), so it keeps its role and remembers its earlier work. **Start fresh** on an agent's page clears that memory.
 2. Agents queue work for each other with a small CLI (`node studio/cli.mjs task add …`). Each agent takes one task at a time, and several agents work in parallel.
 3. **Only one agent changes Studio at a time.** The app holds a Studio lock, shown as "Builder has Studio".
 4. When the crew goes quiet, the app wakes the Lead with everyone's handoffs. It plans the next round, so work keeps moving while you sleep, up to a limit you set.
@@ -71,11 +71,11 @@ Steps:
    cd my-admin-panel/rocrew
    ```
 2. **Connect Roblox Studio to Claude Code.** Open your place in Studio, open the Assistant, then its settings, then **MCP Servers**, and use quick connect for **Claude Code**. Check it worked with `claude mcp list`.
-3. **Start the studio.**
+3. **Start the studio.** On Windows, double-click **`Start RoCrew.bat`**. Anywhere else:
    ```
    node studio/server.mjs
    ```
-   Open http://localhost:4600.
+   Then open http://localhost:4600.
 4. **Open Settings.** Add your name, your Gemini key, and optionally your Open Cloud key. Turn on Blender if you use it. Press **Check again** under Connections.
 5. **Go to Home and tell the Lead your idea**, for example: *"Make me a rooftop delivery game with quick rounds and upgrades that keep players coming back."* Or press **Ask Pulse for pitches** and pick one.
 
@@ -86,7 +86,10 @@ Leave Studio and the app running. Check in from your phone: in Settings, turn on
 In **Settings → Permissions**:
 
 - **Safe auto** (default) — agents may edit files in this folder, use the RoCrew CLI, web search, and your MCP servers (Studio, Blender) without asking. Anything else is refused.
+- **Auto** — Claude Code's auto mode. Its safety check approves routine actions and blocks risky ones, on top of the safe list. It needs a Claude Code version and plan that offer auto mode.
 - **Autopilot** — every tool is allowed, including any shell command. It's the fastest way to run unattended, so only use it on a machine and project you're happy for the agents to change.
+
+If an agent says a tool was refused, either switch modes or add that tool under **Extra allowed tools** (for example `Bash(python *)`).
 
 Agents never publish your game. Publishing, prices and Creator Hub products always come to you.
 
