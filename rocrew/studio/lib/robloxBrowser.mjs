@@ -116,10 +116,27 @@ export class RobloxBrowser {
       child.on("exit", () => {
         clearTimeout(timer);
         const who = parseWhoAmI(out);
-        // No answer at all (offline, Roblox down): keep what we knew rather than "signing you out".
-        resolve(this.saveStatus(who ?? { error: "Couldn't reach Roblox to check the sign-in. It'll try again later." }));
+        if (who) return resolve(this.saveStatus(who));
+        // Some browsers (Brave on Windows) print nothing in this mode. Fall back to seeing whether
+        // the profile holds a Roblox sign-in cookie. Only the cookie's name is looked at; its value
+        // is encrypted and never read.
+        const cookie = this.hasRobloxCookie();
+        if (cookie !== null) return resolve(this.saveStatus({ signedIn: cookie, name: cookie ? this.status.name : null, error: null }));
+        resolve(this.saveStatus({ error: "Couldn't reach Roblox to check the sign-in. It'll try again later." }));
       });
     });
+  }
+
+  /** true/false if the profile's cookie store can be read, null if it can't. */
+  hasRobloxCookie() {
+    for (const rel of [["Default", "Network", "Cookies"], ["Default", "Cookies"]]) {
+      const file = path.join(this.profile, ...rel);
+      try {
+        const bytes = fs.readFileSync(file);
+        return bytes.includes(Buffer.from(".ROBLOSECURITY"));
+      } catch {}
+    }
+    return null;
   }
 
   signOut() {

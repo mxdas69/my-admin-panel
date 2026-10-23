@@ -1263,7 +1263,7 @@ function modelGridHtml(v, pick) {
 function robloxCardHtml() {
   const r = S.state.roblox ?? {};
   const status = r.signedIn
-    ? `<span class="pill green">${icon("check")} Signed in as ${esc(r.displayName || r.name || "you")}</span>`
+    ? `<span class="pill green">${icon("check")} Signed in${r.displayName || r.name ? ` as ${esc(r.displayName || r.name)}` : ""}</span>`
     : r.windowOpen
       ? `<span class="pill amber"><span class="spinner"></span> Waiting for you to sign in</span>`
       : `<span class="pill">Not signed in</span>`;
