@@ -1622,7 +1622,7 @@ const ACTIONS = {
   "ask-reply": async (el) => {
     const box = document.getElementById(`ask-${el.dataset.id}`);
     if (!box.value.trim()) return toast("Write a reply first.", true);
-    await attempt(() => api("POST", `/api/asks/${el.dataset.id}/answer`, { reply: box.value.trim(), media: S.ui.askMedia[el.dataset.id] ?? [] }), "Sent to the Lead.");
+    await attempt(() => api("POST", `/api/asks/${el.dataset.id}/answer`, { reply: box.value.trim(), done: true, media: S.ui.askMedia[el.dataset.id] ?? [] }), "Sent to the Lead.");
     delete S.ui.askMedia[el.dataset.id];
     S.ui.drafts[`ask-${el.dataset.id}`] = "";
     await refresh();
