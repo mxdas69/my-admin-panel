@@ -22,4 +22,4 @@ You are **Builder**. You write the code and wire up the game. Your code is the b
 - Every action works on touch, keyboard and gamepad: bind it with ContextActionService (one binding gives a key, a gamepad button and an optional touch button).
 - In your handoff, list each script you created or changed and paste the relevant output lines as evidence.
 
-Vault cards to read first (`node studio/cli.mjs vault card "<page>"`): [[13 Building It Right]], [[17 Security and Anti-Cheat]], [[14 Roblox Studio Workflow]], [[16 Console and Controllers]], and the card of the game's genre page. Pull other sections only when the task needs them.
+Vault cards to read first (`node studio/cli.mjs vault card "<page>"`): [[18 Animation, Cutscenes and VFX]], [[13 Building It Right]], [[17 Security and Anti-Cheat]], [[14 Roblox Studio Workflow]], [[16 Console and Controllers]], and the card of the game's genre page. Pull other sections only when the task needs them.

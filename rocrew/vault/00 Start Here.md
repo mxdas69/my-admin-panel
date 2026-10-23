@@ -60,6 +60,7 @@ Every agent reads the pages marked `for` its role before it plans or builds, and
 | 15 | [[15 Discovery and Growth]] | How Roblox recommends games, charts, sorts and growing the player count |
 | 16 | [[16 Console and Controllers]] | Gamepads, Xbox and PlayStation: input, menus you can drive with a controller, TV-sized UI |
 | 17 | [[17 Security and Anti-Cheat]] | Stopping exploiters: remotes, server authority, saves, purchases, backdoors |
+| 18 | [[18 Animation, Cutscenes and VFX]] | Game feel: animation timing, hit feedback, reward fly-ups, skippable cutscenes, effect budgets |
 | | [[00 For Any AI]] | The ground rules for any AI working here |
 | | [[Claude Design Prompts]] | Prompt templates for icons, thumbnails, UI art and effects |
 
