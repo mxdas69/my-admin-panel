@@ -495,7 +495,7 @@ route("POST", /^\/api\/store-art$/, async (req) => {
   const dir = inside(ROOT, game ? path.join("games", game.slug, "art", `${kind}s-${stamp}`) : path.join(".rocrew", "media", `${kind}s-${stamp}`));
   let set;
   try {
-    set = await makeStoreArt({ apiKey: cfg.apiKey, imageModel: cfg.imageModel, textModel: cfg.textModel, kind, variants: b.variants ?? [], refs: (b.refs ?? []).map((r) => inside(ROOT, r)), dir, text: b.text ?? "", hasFfmpeg });
+    set = await makeStoreArt({ apiKey: cfg.apiKey, imageModel: cfg.imageModel, textModel: cfg.textModel, kind, variants: b.variants ?? [], refs: (b.refs ?? []).map((r) => inside(ROOT, r)), dir, text: b.text ?? "", format: b.format ?? "", hasFfmpeg });
   } catch (err) {
     throw new HttpError(400, err.message);
   }
