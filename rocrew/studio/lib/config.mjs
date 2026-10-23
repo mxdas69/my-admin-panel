@@ -1,0 +1,83 @@
+// Settings live in .rocrew/config.json (git-ignored, so keys never get committed).
+
+import fs from "node:fs";
+import path from "node:path";
+
+export const DEFAULTS = {
+  ownerName: "",
+  claudeCommand: "claude",
+  model: "",
+  // "safe": agents may use file tools, the RoCrew CLI and your MCP servers without asking.
+  // "autopilot": every tool is allowed (Claude Code's bypassPermissions mode).
+  permissionMode: "safe",
+  extraAllowedTools: [],
+  maxParallel: 3,
+  taskTimeoutMin: 60,
+  maxAutoRounds: 12,
+  host: "127.0.0.1",
+  port: 4600,
+  gemini: { apiKey: "", imageModel: "gemini-3.1-flash-image-preview", textModel: "gemini-flash-latest" },
+  roblox: { openCloudKey: "", creatorType: "user", creatorId: "" },
+};
+
+const SECRET_PATHS = [["gemini", "apiKey"], ["roblox", "openCloudKey"]];
+
+export class Config {
+  constructor(file) {
+    this.file = file;
+    this.values = structuredClone(DEFAULTS);
+    if (fs.existsSync(file)) {
+      try {
+        merge(this.values, JSON.parse(fs.readFileSync(file, "utf8")));
+      } catch (err) {
+        console.error(`[rocrew] ignoring unreadable ${file}: ${err.message}`);
+      }
+    }
+    // Environment variables win over the file, so keys can stay out of it entirely.
+    if (process.env.GEMINI_API_KEY) this.values.gemini.apiKey = process.env.GEMINI_API_KEY;
+    if (process.env.ROBLOX_OPEN_CLOUD_KEY) this.values.roblox.openCloudKey = process.env.ROBLOX_OPEN_CLOUD_KEY;
+  }
+
+  get() {
+    return this.values;
+  }
+
+  update(patch) {
+    const clean = structuredClone(patch);
+    // The UI sends "" for secrets it is not changing; keep the stored value then.
+    for (const [group, key] of SECRET_PATHS) {
+      if (clean[group] && (clean[group][key] === undefined || clean[group][key] === "")) delete clean[group][key];
+    }
+    merge(this.values, clean);
+    this.values.maxParallel = clampInt(this.values.maxParallel, 1, 15);
+    this.values.taskTimeoutMin = clampInt(this.values.taskTimeoutMin, 5, 600);
+    this.values.maxAutoRounds = clampInt(this.values.maxAutoRounds, 1, 200);
+    if (!["safe", "autopilot"].includes(this.values.permissionMode)) this.values.permissionMode = "safe";
+    fs.mkdirSync(path.dirname(this.file), { recursive: true });
+    fs.writeFileSync(this.file, JSON.stringify(this.values, null, 2));
+  }
+
+  /** Settings for the browser: secrets are replaced by whether they are set. */
+  public() {
+    const v = structuredClone(this.values);
+    for (const [group, key] of SECRET_PATHS) {
+      const secret = v[group][key];
+      v[group][key] = "";
+      v[group][`${key}Set`] = Boolean(secret);
+      v[group][`${key}Hint`] = secret ? `…${secret.slice(-4)}` : "";
+    }
+    return v;
+  }
+}
+
+function merge(target, source) {
+  for (const [k, v] of Object.entries(source ?? {})) {
+    if (v && typeof v === "object" && !Array.isArray(v) && target[k] && typeof target[k] === "object") merge(target[k], v);
+    else if (k in target) target[k] = v;
+  }
+}
+
+function clampInt(value, min, max) {
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min;
+}

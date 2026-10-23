@@ -1,0 +1,12 @@
+{
+  "name": "rocrew",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A 15-agent Roblox game studio that runs on Claude Code.",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node studio/server.mjs",
+    "test": "node --test test/"
+  }
+}
