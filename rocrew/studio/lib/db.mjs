@@ -1,5 +1,6 @@
-// A small JSON store. The server is the only writer; saves are atomic
-// (write to a temp file, then rename) and batched.
+// A small JSON store. The server is the only writer. Saves are batched, flushed to disk
+// (fsync) before an atomic rename, and the previous good copy is kept as a backup, so a
+// crash or power cut loses at most the last fraction of a second.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -30,13 +31,16 @@ export class Store {
     this.timer = null;
     fs.mkdirSync(path.dirname(file), { recursive: true });
     this.data = EMPTY();
-    if (fs.existsSync(file)) {
+    for (const candidate of [file, `${file}.bak`, `${file}.tmp`]) {
+      if (!fs.existsSync(candidate)) continue;
       try {
-        this.data = { ...EMPTY(), ...JSON.parse(fs.readFileSync(file, "utf8")) };
+        this.data = { ...EMPTY(), ...JSON.parse(fs.readFileSync(candidate, "utf8")) };
+        if (candidate !== file) console.error(`[rocrew] ${path.basename(file)} was missing or damaged; recovered from ${path.basename(candidate)}`);
+        return;
       } catch (err) {
-        const backup = `${file}.broken-${Date.now()}`;
-        fs.copyFileSync(file, backup);
-        console.error(`[rocrew] could not read ${file} (${err.message}); saved a copy to ${backup} and started fresh`);
+        const broken = `${candidate}.broken-${Date.now()}`;
+        fs.copyFileSync(candidate, broken);
+        console.error(`[rocrew] could not read ${candidate} (${err.message}); kept a copy at ${broken}`);
       }
     }
   }
@@ -69,7 +73,14 @@ export class Store {
     clearTimeout(this.timer);
     this.timer = null;
     const tmp = `${this.file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(this.data, null, 1));
+    const fd = fs.openSync(tmp, "w");
+    try {
+      fs.writeSync(fd, JSON.stringify(this.data, null, 1));
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    if (fs.existsSync(this.file)) fs.renameSync(this.file, `${this.file}.bak`);
     fs.renameSync(tmp, this.file);
   }
 }

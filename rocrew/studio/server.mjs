@@ -637,16 +637,42 @@ route("DELETE", /^\/api\/people\/([\w]+)$/, (req, url, [id]) => {
   return { people: peopleView() };
 });
 
+// ---------- start with Windows ----------
+
+function startupFile() {
+  if (process.platform !== "win32" || !process.env.APPDATA) return null;
+  return path.join(process.env.APPDATA, "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "RoCrew.cmd");
+}
+
+function autostartView() {
+  const file = startupFile();
+  return { supported: Boolean(file), enabled: Boolean(file && fs.existsSync(file)) };
+}
+
+route("POST", /^\/api\/autostart$/, async (req) => {
+  ownerOnly(req);
+  const { enabled } = await readJson(req);
+  const file = startupFile();
+  need(file, "Starting with your computer is only set up for Windows.");
+  if (enabled) {
+    const bat = path.join(ROOT, "Start RoCrew.bat");
+    fs.writeFileSync(file, `@echo off\r\nrem Starts RoCrew when you sign in to Windows. Turn it off in RoCrew Settings.\r\nstart "RoCrew studio" /min cmd /c ""${bat}" nobrowser"\r\n`);
+  } else if (fs.existsSync(file)) {
+    fs.unlinkSync(file);
+  }
+  return autostartView();
+});
+
 route("GET", /^\/api\/settings$/, (req) => {
   ownerOnly(req);
-  return { ...config.public(), phoneUrl: phoneUrl(), presets: presetTable() };
+  return { ...config.public(), phoneUrl: phoneUrl(), presets: presetTable(), autostart: autostartView() };
 });
 route("POST", /^\/api\/settings$/, async (req) => {
   ownerOnly(req);
   config.update(await readJson(req));
   crew.changed();
   setImmediate(() => crew.tick());
-  return { ...config.public(), phoneUrl: phoneUrl(), presets: presetTable() };
+  return { ...config.public(), phoneUrl: phoneUrl(), presets: presetTable(), autostart: autostartView() };
 });
 route("GET", /^\/api\/connections$/, () => connectionsView());
 route("POST", /^\/api\/connections\/check$/, () => checkConnections());
@@ -724,7 +750,32 @@ server.listen(port, host, () => {
   console.log(`\n  RoCrew agent studio is running → http://${shown}:${port}\n  Project: ${ROOT}\n  Stop with Ctrl+C.\n`);
   crew.tick();
   checkConnections().catch(() => {});
+  if (process.argv.includes("--open")) openInBrowser(`http://localhost:${port}`);
 });
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.log(`\n  RoCrew is already running on port ${port}. Opening it…\n`);
+    if (process.argv.includes("--open")) openInBrowser(`http://localhost:${port}`);
+    setTimeout(() => process.exit(0), 500);
+    return;
+  }
+  throw err;
+});
+
+function openInBrowser(url) {
+  const [cmd, args] = process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];
+  execFile(cmd, args, { windowsHide: true }, () => {});
+}
+
+// Never lose state on a crash: save, then exit with an error so "Start RoCrew.bat" restarts the app.
+process.on("uncaughtException", (err) => {
+  console.error("[rocrew] crashed:", err);
+  try {
+    store.flush();
+  } catch {}
+  process.exit(1);
+});
+process.on("unhandledRejection", (err) => console.error("[rocrew] unhandled error:", err));
 
 const ticker = setInterval(() => crew.tick(), 5000);
 ticker.unref();

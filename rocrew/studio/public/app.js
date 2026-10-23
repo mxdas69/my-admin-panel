@@ -1060,6 +1060,8 @@ PAGES.settings = {
           <label class="field">API key <small>${v.roblox.openCloudKeySet ? `Saved (${esc(v.roblox.openCloudKeyHint)}).` : "Creator Hub → Open Cloud → API Keys, with Assets read + write. Lets agents upload images as decals."}</small><input class="input mono" type="password" id="set-roblox-openCloudKey" placeholder="${v.roblox.openCloudKeySet ? "••••••••" : "paste key"}"></label>
           <div class="row"><label class="field">Upload as<select class="input" id="set-roblox-creatorType"><option value="user" ${v.roblox.creatorType === "user" ? "selected" : ""}>My user</option><option value="group" ${v.roblox.creatorType === "group" ? "selected" : ""}>A group</option></select></label>
           <label class="field grow">User or group id<input class="input mono" id="set-roblox-creatorId" value="${esc(v.roblox.creatorId)}"></label></div></div>
+        ${v.autostart?.supported ? `<div class="card"><h3 class="section-title">${icon("refresh")} Keep it running</h3>
+          <label class="check"><input type="checkbox" data-change="autostart" ${v.autostart.enabled ? "checked" : ""}><span><b>Start RoCrew when I turn on my PC</b><br><small class="muted">After a crash, a restart or a power cut, the crew picks up exactly where it stopped. If the app itself stops unexpectedly, it restarts on its own.</small></span></label></div>` : ""}
         <div class="card"><h3 class="section-title">${icon("plug")} Network</h3>
           <label class="check"><input type="checkbox" id="set-lan" ${v.host === "0.0.0.0" ? "checked" : ""}><span><b>Open on my phone too</b><br><small class="muted">Listen on your home network so you can open the app from your phone. Restart the app after saving. The page then only opens through a private link, shown here.</small></span></label>
           ${v.phoneUrl ? `<div class="banner blue" style="margin:12px 0 0"><b>Your private phone link</b><span class="mono" style="word-break:break-all">${esc(v.phoneUrl)}</span><br><small>Open it on your phone while it's on the same Wi-Fi. Anyone with this link can control your studio, so keep it to yourself.</small></div>` : ""}</div>
@@ -1477,6 +1479,10 @@ const ACTIONS = {
 };
 
 const CHANGES = {
+  autostart: async (el) => {
+    const res = await attempt(() => api("POST", "/api/autostart", { enabled: el.checked }), el.checked ? "RoCrew will start with your PC." : "RoCrew won't start with your PC.");
+    if (!res) el.checked = !el.checked;
+  },
   preset: (el) => {
     for (const x of document.querySelectorAll("[data-model-agent]")) (S.settings.agentModels ??= {})[x.dataset.modelAgent] = x.value;
     document.getElementById("model-grid").innerHTML = modelGridHtml(S.settings, el.value);

@@ -2,6 +2,8 @@
 // Studio lock (one agent drives Studio at a time), and Lead wake-ups so the
 // team keeps going while you're away.
 
+import os from "node:os";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { EventEmitter } from "node:events";
@@ -27,11 +29,16 @@ export class Crew extends EventEmitter {
     this.studioHolder = null; // taskId
     this.ticking = false;
 
-    // Anything marked working when the app last stopped did not finish.
+    // Anything marked working when the app last stopped did not finish. Stop any agent
+    // process that outlived the app (so two copies never edit at once), then queue the task
+    // again; it resumes the same Claude conversation, so the agent knows what it already did.
     for (const t of this.db.tasks) {
       if (t.status === "working") {
+        if (t.pid) killLeftover(t.pid, t.startedAt);
         t.status = "queued";
-        t.note = "Restarted after the app closed mid-task.";
+        t.pid = null;
+        t.interrupted = (t.interrupted ?? 0) + 1;
+        t.note = "Picked up again after the app stopped mid-task.";
       }
     }
     this.store.save();
@@ -269,6 +276,8 @@ export class Crew extends EventEmitter {
       onEvent: (e) => this.onRunEvent(task, e),
     });
     this.running.set(task.id, run);
+    task.pid = run.pid ?? null;
+    this.store.flush();
 
     run.done.then((res) => this.finish(task, res));
   }
@@ -297,6 +306,7 @@ export class Crew extends EventEmitter {
 
   finish(task, res) {
     this.running.delete(task.id);
+    task.pid = null;
     if (this.studioHolder === task.id) this.studioHolder = null;
     const state = this.store.agent(task.agent);
     if (res.sessionId) state.sessionId = res.sessionId;
@@ -490,6 +500,9 @@ export class Crew extends EventEmitter {
 
     const game = task.game ? this.db.games.find((g) => g.slug === task.game) : null;
     const meta = [`Task id: ${task.id}`];
+    if (task.interrupted) {
+      meta.push("Note: this task was cut off when the RoCrew app stopped (a crash, restart or power cut). Before doing anything, check what you already did (files, Studio, your earlier messages) and carry on from there. Don't redo finished steps or duplicate anything in Studio.");
+    }
     if (game) meta.push(`Game: ${game.name} (folder games/${game.slug}/)`);
     meta.push(
       task.studio
@@ -586,4 +599,27 @@ function describeTool(name, input = {}) {
     return `${server} › ${tool}${first !== undefined ? `: ${short(first)}` : ""}`;
   }
   return `${name}${Object.keys(input).length ? `: ${short(input)}` : ""}`;
+}
+
+/**
+ * Stop an agent process left over from before a crash. Only if the computer hasn't restarted
+ * since (process ids get reused after a reboot) and the process is still a Claude Code run.
+ */
+function killLeftover(pid, startedAt) {
+  try {
+    const bootedAt = Date.now() - os.uptime() * 1000;
+    if (!startedAt || startedAt < bootedAt) return;
+    if (process.platform === "win32") {
+      const row = execFileSync("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], { encoding: "utf8", windowsHide: true });
+      if (!/^"(cmd|node|claude)\.exe"/i.test(row.trim())) return;
+      execFileSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+    } else {
+      const cmd = fs.readFileSync(`/proc/${pid}/cmdline`, "utf8");
+      if (!/claude|node/.test(cmd)) return;
+      process.kill(pid, "SIGTERM");
+    }
+    console.log(`[rocrew] stopped an agent run (pid ${pid}) left over from before the app stopped`);
+  } catch {
+    // Already gone, or not ours.
+  }
 }

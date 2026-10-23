@@ -167,7 +167,7 @@ export function runClaude(opts) {
     child.on("close", finish);
   });
 
-  return { done, kill };
+  return { done, kill, pid: child.pid };
 }
 
 function describeFailure(code, stderr) {

@@ -54,8 +54,12 @@ before(async () => {
   cli("game", "add", "--name", "Test Game", "--slug", GAME);
 });
 
-after(() => {
-  server?.kill();
+after(async () => {
+  if (server && server.exitCode === null) {
+    const exited = new Promise((r) => server.once("exit", r));
+    server.kill();
+    await exited;
+  }
   fs.rmSync(path.join(ROOT, "games", GAME), { recursive: true, force: true });
   fs.rmSync(DATA, { recursive: true, force: true });
 });
@@ -239,4 +243,31 @@ test("near the plan's limit only messages to the Lead start", async () => {
   assert.deepEqual(started, ["lead"]);
   crew.recordUsage({ status: "allowed", unifiedWindows: { five_hour: { utilization: 0.2, resetsAt: Math.floor(Date.now() / 1000) + 1800 } } });
   assert.equal(crew.usageHold(), null);
+});
+
+test("a damaged save file is recovered from the backup copy", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rocrew-store-"));
+  const file = path.join(dir, "state.json");
+  const a = new Store(file);
+  a.data.games.push({ slug: "first" });
+  a.flush();
+  a.data.games.push({ slug: "second" });
+  a.flush();
+  fs.writeFileSync(file, '{"games": [ half-written'); // as if the PC lost power mid-save
+  const b = new Store(file);
+  assert.deepEqual(b.data.games.map((g) => g.slug), ["first"]);
+});
+
+test("after a crash, leftover agent runs are stopped and their tasks resume", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rocrew-crash-"));
+  const store = new Store(path.join(dir, "state.json"));
+  const orphan = spawn("node", ["-e", "setTimeout(() => {}, 60000)"], { stdio: "ignore" });
+  store.data.tasks.push({ id: "t1", agent: "builder", title: "Build", status: "working", startedAt: Date.now(), pid: orphan.pid, after: [] });
+  const exited = new Promise((r) => orphan.once("exit", r));
+  const config = { get: () => ({ maxParallel: 3, usageCeilingPct: 90 }) };
+  new Crew({ store, config, root: ROOT, runner: () => ({ done: new Promise(() => {}), kill() {} }) });
+  await exited;
+  const t = store.data.tasks[0];
+  assert.equal(t.status, "queued");
+  assert.equal(t.interrupted, 1);
 });
