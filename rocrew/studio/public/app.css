@@ -40,7 +40,9 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .app { display: grid; grid-template-columns: 264px 1fr; height: 100vh; }
 .main { display: flex; flex-direction: column; min-width: 0; height: 100vh; }
 .page { flex: 1; overflow: auto; padding: 28px 36px 60px; }
-.page.flush { padding: 0; overflow: hidden; display: flex; }
+.page.flush { padding: 0; overflow: hidden; display: flex; min-height: 0; }
+.page { min-height: 0; }
+.detail { display: flex; flex-direction: column; min-width: 0; height: 100%; min-height: 0; }
 
 /* ---------- sidebar ---------- */
 .sidebar {
