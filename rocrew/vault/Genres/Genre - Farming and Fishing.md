@@ -128,7 +128,7 @@ Read this page before pitching or planning any farming, gardening, fishing or ha
 ## 3. Top games in the genre
 
 ### Grow a Garden
-**What it does:** A garden sim: buy seeds at a shop whose limited stock refreshes every five minutes, plant on your plot, water, harvest and sell; sprinklers and gear improve size and weight [7]. Heavier produce sells for more and Gold/Rainbow variants are worth more than base crops; multi-harvest crops regrow [8]. Weather events add mutations (Wet from rain, Shocked from lightning; guides disagree on multipliers, e.g. ×50 vs ×100) and pets can enable mutations [11][12]. It was built in about three days and passed 5M concurrent players on May 17, 2025 [1][2]; it ran weekly Saturday updates [13] and later moved toward deeper features such as cooking because weekly events were hard to keep fresh [14]. The shop shows a grey "NO STOCK" button when sold out [22].
+**What it does:** A garden sim: buy seeds at a shop whose limited stock refreshes every five minutes, plant on your plot, water, harvest and sell; sprinklers and gear improve size and weight [7]. Heavier produce sells for more and Gold/Rainbow variants are worth more than base crops; multi-harvest crops regrow [8]. Weather events add mutations (Wet from rain, Shocked from lightning; guides disagree on multipliers, e.g. ×50 vs ×100) and pets can enable mutations [11][12]. It ran weekly Saturday updates [13], later shifting toward depth such as cooking [14]. The shop shows a grey "NO STOCK" button when sold out [22].
 **Steal:** The five-minute global restock as a heartbeat; weight as a continuous roll; weather events as server-wide moments; plots everyone can see; tiered gear [18][23].
 **Avoid:** Uncapped multiplicative mutation stacking (rule 7). Its art, crop names and pet roster.
 
@@ -163,17 +163,7 @@ Its sequel, Grow a Garden 2, has fan sites publishing per-shop restock cadences 
 | 120-240 s | Plants tomatoes (60 s grow); first one may roll "Big" (+40% weight) by design (tuned high in the first hour). | Early luck. |
 | 240-300 s | Harvests, sells; a banner: "Rain in 30 s! Crops may get Wet (×2)". | First server event within 5 min (forced on a fresh server's first player). |
 
-**Fishing:**
-
-| Time | What the player sees and does | Build note |
-|---|---|---|
-| 0-5 s | Spawns on a starter dock holding a Starter Rod; "Hold to cast" button pulses. | Rod equipped on spawn. |
-| 5-10 s | Holds; power bar fills; releases at the green zone ("Perfect!"). Bobber lands. | Cast aim shows a landing ring. |
-| 10-15 s | Bite after 3 s: "!" and a bobber dunk; taps Reel within 1.5 s. | First bite fixed at 3 s. |
-| 15-30 s | Easy tension bar (wide zone, slow fish): holds to keep the fish inside; progress fills in ~8 s. | Teach the minigame on a Common. |
-| 30-40 s | Catch card: "Pond Perch 1.2 kg — NEW!" Bestiary page 1/8. | First bestiary entry. |
-| 40-180 s | Two more catches (one Uncommon by design); sells at the hut; the rod shop shows the next rod at a price reachable in ~10 min. | Clear next goal. |
-| 180-300 s | 5 free Worms ("Luck +10%"); a night-fish silhouette in the bestiary. | Return hook. |
+**Fishing:** 0-5 s spawn on a starter dock with the rod equipped and a pulsing "Hold to cast" button; 5-10 s charge and release in the green band ("Perfect!"), the bobber lands on a shown ring; 10-15 s a fixed 3 s bite ("!", bobber dunk), tap Reel within 1.5 s; 15-30 s an easy tension bar on a Common (wide zone, ~8 s); 30-40 s catch card "Pond Perch 1.2 kg — NEW!", bestiary 1/8; 40-180 s two more catches (one Uncommon by design), a sale, and the next rod priced ~10 minutes away; 180-300 s 5 free Worms ("Luck +10%") and a night-fish silhouette as the return hook.
 
 Opening rules:
 1. **No shop or reward modals before the first sale.**
@@ -266,8 +256,7 @@ Cozy games still need fast, legible UI. See [[05 UI and HUD]], [[08 Mobile]], [[
 | Cast power bar | above character (BillboardGui) | 160×18 | Green "Perfect" band |
 | Reel minigame | (0.5, 0, 0.75, 0) / (0.5, 0.5) | 520×64 horizontal | Fish icon, catch zone, progress ring |
 | Catch / harvest card | (0.5, 0, 0.35, 0) / (0.5, 0.5) | 420×180 | Name, kg, rarity, mutations, value, NEW |
-| Bestiary | centered panel | 900×600 | Pages per location, silhouettes |
-| Inventory / Sell | centered panel | 900×600 | Sort by value, lock favorites, Sell all |
+| Bestiary, Inventory / Sell | centered panel | 900×600 | Pages per location; sort, lock, Sell all |
 
 Rules:
 1. **Crop progress over each crop** as a small BillboardGui ring (only within 30 studs, max 40 visible) so phones aren't flooded.
@@ -482,7 +471,15 @@ local sessions: { [Player]: Session } = {}
 local lastCast: { [Player]: number } = {}
 local rng = Random.new()
 
--- zoneAt(p): the FishingZone part whose box contains p (PointToObjectSpace vs Size / 2), or nil
+local function zoneAt(p: Vector3): BasePart? -- the FishingZone box that contains p
+	for _, z in CollectionService:GetTagged("FishingZone") do
+		local part = z :: BasePart
+		local rel, h = part.CFrame:PointToObjectSpace(p), part.Size / 2
+		if math.abs(rel.X) <= h.X and math.abs(rel.Y) <= h.Y + 2 and math.abs(rel.Z) <= h.Z then return part end
+	end
+	return nil
+end
+
 local function rollFish(pool: { { id: string, rarity: number, weight: number, night: boolean? } }, luck: number): (string, number)
 	local night = Clock.gameHour() >= 19 or Clock.gameHour() < 5
 	local total, list = 0, {}
@@ -558,10 +555,9 @@ Events are picked from the global clock (`Random.new(floor(os.time() / 1800))` c
 3. **Farm + fish + decorate** cozy hybrid with a home to show.
 4. **Boats** to reach far fishing zones (see [[Genre - Racing and Vehicles]] for ownership and guard rules).
 5. **Seasons:** a monthly season changes crops in stock, weather types and fish pools.
-6. **Co-op garden:** friends share one bigger plot with shared harvests split by planter.
-7. **Monster fishing:** bosses in deep zones that the whole server reels in together (a shared progress bar).
-8. **Tower-defense garden:** crops that defend the plot at night ([[Genre - Tower Defense]]).
-9. **Contests and showcases:** an hourly "heaviest pumpkin" contest; an aquarium or greenhouse to display rares.
+6. **Monster fishing:** bosses in deep zones that the whole server reels in together (a shared progress bar).
+7. **Tower-defense garden:** crops that defend the plot at night ([[Genre - Tower Defense]]).
+8. **Contests and showcases:** an hourly "heaviest pumpkin" contest; an aquarium or greenhouse to display rares.
 
 ## 13. Failure modes
 
