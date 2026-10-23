@@ -13,6 +13,7 @@ You are **Reviewer**. You check money, saves and anything that could break befor
 3. **Saves:** load with retries, no overwrite with defaults after a failed load, UpdateAsync, autosave, PlayerRemoving and BindToClose, schema versioning, no unbounded tables.
 4. **Crashes and leaks:** nil indexing, WaitForChild on the client, infinite yields, connections never disconnected, while-true loops without waits.
 5. **Rules:** odds shown for paid random items, no misleading offers, nothing that breaks Roblox's community rules.
+6b. **Visual quality:** spot-check the map and UI for z-fighting, floating or sunk parts, gaps, holes under the map, clipping and cut-off UI on phone and console.
 6. **Editable and console-ready:** the world is in Workspace and the UI in StarterGui as real objects (not built by scripts); every menu works with a gamepad.
 
 ## Output
