@@ -8,8 +8,8 @@ import { spawn, execFileSync } from "node:child_process";
 import { waitUntilReachable } from "./tunnel.mjs";
 
 const SERVICES = [
-  { name: "localhost.run", args: (port) => ["-R", `80:localhost:${port}`, "nokey@localhost.run"], url: /https:\/\/[a-z0-9-]+\.lhr\.life/ },
-  { name: "Pinggy", args: (port) => ["-p", "443", `-R0:localhost:${port}`, "free.pinggy.io"], url: /https:\/\/[a-z0-9-]+\.[a-z]\.free\.pinggy\.link/ },
+  { name: "localhost.run", args: (port) => ["-R", `80:localhost:${port}`, "nokey@localhost.run"], url: /https:\/\/[a-z0-9-]+\.lhr\.(?:life|pro)/ },
+  { name: "Pinggy", args: (port) => ["-p", "443", `-R0:localhost:${port}`, "free.pinggy.io"], url: /https:\/\/[a-z0-9.-]+\.pinggy\.(?:link|online)/ },
 ];
 
 export class SshTunnel {
@@ -35,17 +35,21 @@ export class SshTunnel {
   /** Start (or reuse) the tunnel and resolve with an address that already answers. */
   async start(port) {
     if (this.child && this.url) return this.url;
+    // Pressing the button twice waits for the same attempt.
+    this.starting ??= this.open(port).finally(() => (this.starting = null));
+    return this.starting;
+  }
+
+  async open(port) {
     const ssh = this.find();
     if (!ssh) throw new Error("This PC has no SSH client. On Windows: Settings → System → Optional features → add \"OpenSSH Client\", then try again.");
-    const errors = [];
-    for (const service of SERVICES) {
-      try {
-        return await this.tryService(ssh, service, port);
-      } catch (err) {
-        errors.push(`${service.name}: ${err.message}`);
-      }
+    // Both services at once; the first address that answers wins and the other is stopped.
+    try {
+      return await Promise.any(SERVICES.map((service) => this.tryService(ssh, service, port)));
+    } catch (err) {
+      const reasons = (err.errors ?? [err]).map((e, i) => `${SERVICES[i]?.name ?? "tunnel"}: ${e.message}`);
+      throw new Error(`Couldn't make a link. ${reasons.join(" · ")}`);
     }
-    throw new Error(`Couldn't make a link (${errors.join("; ")}). Check your internet and try again.`);
   }
 
   tryService(ssh, service, port) {
@@ -55,26 +59,30 @@ export class SshTunnel {
       const child = spawn(ssh, args, { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
       let log = "";
       let settled = false;
+      let found = null;
       const fail = (msg) => {
         if (settled) return;
         settled = true;
-        this.url = null;
         child.intentional = true;
         child.kill();
         reject(new Error(msg));
       };
-      const timer = setTimeout(() => fail("no answer within 40 seconds"), 40000);
+      const timer = setTimeout(() => fail(`no address within 25 seconds${lastLine() ? ` (last said: ${lastLine()})` : ""}`), 25000);
+      const lastLine = () => log.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(-1)[0]?.slice(0, 160) ?? "";
       const onData = (chunk) => {
         log = (log + chunk.toString()).slice(-4000);
         const m = service.url.exec(log);
-        if (m && !settled && !this.url) {
-          this.url = m[0];
-          waitUntilReachable(this.url, 10).then((ok) => {
+        if (m && !settled && !found) {
+          found = m[0];
+          console.log(`[rocrew] friend link from ${service.name}: ${found} (checking it answers)`);
+          waitUntilReachable(found, 8).then((ok) => {
             clearTimeout(timer);
             if (!ok) return fail("the address never answered");
+            if (this.child) return fail("the other service was faster");
             settled = true;
             this.child = child;
-            resolve(this.url);
+            this.url = found;
+            resolve(found);
           });
         }
       };
@@ -83,10 +91,7 @@ export class SshTunnel {
       child.on("error", (err) => fail(err.message));
       child.on("exit", (code) => {
         clearTimeout(timer);
-        if (!settled) {
-          this.url = null;
-          return fail(`stopped (exit ${code}) ${log.split("\n").filter(Boolean).slice(-1)[0] ?? ""}`.trim());
-        }
+        if (!settled) return fail(`stopped (exit ${code})${lastLine() ? `: ${lastLine()}` : ""}`);
         if (this.child !== child) return;
         this.child = null;
         this.url = null;
