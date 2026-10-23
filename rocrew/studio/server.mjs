@@ -497,8 +497,6 @@ for (const t of store.data.tasks) if (t.plain && /permission|denied|couldn't rea
 let explaining = false;
 async function explainWaiting() {
   if (explaining || process.env.ROCREW_NO_EXPLAIN) return;
-  // Near the plan's limit, only explain with Gemini's free text model, never with Claude.
-  if (crew.usageHold() && !config.get().gemini.apiKey) return;
   explaining = true;
   try {
     for (;;) {
