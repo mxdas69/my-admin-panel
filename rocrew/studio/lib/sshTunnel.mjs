@@ -7,19 +7,13 @@ import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 import { waitUntilReachable } from "./tunnel.mjs";
 
+// Each pattern finds the address host (with or without "https://"; localhost.run's JSON has none).
 const SERVICES = [
   // "--output json" asks localhost.run for a plain line with the address instead of a QR code.
-  { name: "localhost.run", args: (port) => ["-R", `80:localhost:${port}`, "nokey@localhost.run", "--", "--output", "json"], url: /https:\/\/[a-z0-9-]+\.lhr\.(?:life|pro)/ },
-  { name: "Pinggy", args: (port) => ["-p", "443", `-R0:localhost:${port}`, "free.pinggy.io"], url: /https:\/\/[a-z0-9.-]+\.pinggy\.(?:link|online)/ },
-  { name: "Serveo", args: (port) => ["-R", `80:localhost:${port}`, "serveo.net"], url: /https:\/\/[a-z0-9-]+\.serveo(?:usercontent)?\.(?:net|com)/ },
+  { name: "localhost.run", args: (port) => ["-R", `80:localhost:${port}`, "nokey@localhost.run", "--", "--output", "json"], host: /\b([a-z0-9-]+\.lhr\.(?:life|pro))\b/ },
+  { name: "Pinggy", args: (port) => ["-p", "443", `-R0:localhost:${port}`, "free.pinggy.io"], host: /https:\/\/([a-z0-9.-]+\.pinggy\.(?:link|online))/ },
+  { name: "Serveo", args: (port) => ["-R", `80:localhost:${port}`, "serveo.net"], host: /Forwarding HTTP traffic from https?:\/\/([a-z0-9.-]+)/i },
 ];
-
-/** Any https address the service printed that isn't one of its own help or account pages. */
-function anyAddress(log, service) {
-  const skip = /localhost\.run|pinggy\.io|twitter|x\.com|github|discord|docs|dashboard|admin/i;
-  for (const m of log.matchAll(/https:\/\/[a-z0-9.-]+\.[a-z]{2,}\/?/gi)) if (!skip.test(m[0])) return [m[0]];
-  return null;
-}
 
 export class SshTunnel {
   constructor() {
@@ -76,15 +70,15 @@ export class SshTunnel {
         child.kill();
         reject(new Error(msg));
       };
-      const timer = setTimeout(() => fail(`no address within 25 seconds${lastLine() ? ` (last said: ${lastLine()})` : ""}`), 25000);
+      const timer = setTimeout(() => fail(`no address within 45 seconds${lastLine() ? ` (last said: ${lastLine()})` : ""}`), 45000);
       // The last line with words in it (not QR code blocks).
       const lastLine = () => log.split(/\r?\n/).map((l) => l.trim()).filter((l) => /[a-z]{3}/i.test(l)).slice(-1)[0]?.slice(0, 160) ?? "";
       const onData = (chunk) => {
         // Strip colour codes (the QR code these services draw) before looking for the address.
         log = (log + chunk.toString().replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").replace(/\[[0-9;]*m/g, "")).slice(-8000);
-        const m = service.url.exec(log) ?? anyAddress(log, service);
+        const m = service.host.exec(log);
         if (m && !settled && !found) {
-          found = m[0].replace(/\/$/, "");
+          found = `https://${m[1]}`;
           console.log(`[rocrew] friend link from ${service.name}: ${found} (checking it answers)`);
           waitUntilReachable(found, 8).then((ok) => {
             clearTimeout(timer);
