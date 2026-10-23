@@ -126,14 +126,18 @@ function untilText(ts) {
   return `${Math.round(m / 1440)}d`;
 }
 
-function usageBars(u) {
+function usageBars(u, footer = true) {
   if (!u || (!u.fiveHour && !u.week)) return "";
   const ceiling = S.state.usageCeilingPct ?? 90;
   // A window whose reset time has passed is back to 0, even if no run has reported it yet.
   const fresh = (w) => (w && w.resetsAt && Date.now() >= w.resetsAt ? { pct: 0, resetsAt: null } : w);
   const bar = (label, raw, w = fresh(raw)) =>
     w ? `<div class="usage-row"><span>${label}</span><span class="meter"><span style="width:${Math.min(100, w.pct)}%;background:${w.pct >= ceiling ? "var(--red)" : w.pct >= 70 ? "var(--amber)" : "var(--green)"}"></span></span><b>${w.pct}%</b>${w.resetsAt ? `<small class="faint">resets in ${untilText(w.resetsAt)}</small>` : ""}</div>` : "";
-  return bar("5-hour", u.fiveHour) + bar("Week", u.week) + (u.at ? `<div class="usage-at"><small class="faint">Updated ${ago(u.at)}</small>${isOwner() ? `<button class="link-btn" data-act="usage-refresh" title="Check now (a tiny Haiku run, almost no usage)">${icon("refresh")}</button>` : ""}</div>` : "");
+  return bar("5-hour", u.fiveHour) + bar("Week", u.week) + (footer ? usageFooter(u.at) : "");
+}
+
+function usageFooter(at) {
+  return at ? `<div class="usage-at"><small class="faint">Updated ${ago(at)}</small>${isOwner() ? `<button class="link-btn" data-act="usage-refresh" title="Check now (a tiny Haiku run, almost no usage)">${icon("refresh")}</button>` : ""}</div>` : "";
 }
 
 const counts = () => {
@@ -215,7 +219,7 @@ function renderSidebar(r) {
       <small>${holder ? `${icon("lock")} ${esc(holder)} has Studio` : c.queued ? `${c.queued} task(s) queued` : "Nothing running"}</small>
     </div>
     ${s.update?.available ? `<div class="side-box update-box"><b>${icon("upload")} Update ready</b><small>${esc(s.update.latest?.message ?? "A new version of RoCrew")}</small><button class="btn primary small" data-act="update-now">Update now</button></div>` : ""}
-    ${s.usage?.fiveHour || s.usage?.week ? `<div class="side-box usage" title="Your Claude plan's usage, as Claude Code last reported it">${s.usageHold ? `<b style="color:var(--amber)">Waiting for your plan to reset</b>` : `<b>Claude plan usage</b>`}${usageBars(s.usage)}</div>` : ""}
+    ${s.usage?.fiveHour || s.usage?.week ? `<div class="side-box usage" title="Your Claude plan's usage, as Claude Code last reported it">${s.usageHold ? `<b style="color:var(--amber)">Waiting for your plan to reset</b>` : `<b>Claude plan usage</b>`}${s.accounts ? s.accounts.map((a) => `<div class="usage-acc"><small class="faint">${esc(a.name)}${a.waiting ? " · resting" : ""}</small>${usageBars(a.usage, false)}</div>`).join("") + usageFooter(Math.max(...s.accounts.map((a) => a.usage?.at ?? 0)) || null) : usageBars(s.usage)}</div>` : ""}
     <div class="side-foot">
       ${isOwner() ? `<button class="nav-item quit" data-act="update-check">${icon("refresh")}<span>Check for updates</span></button>${nav("settings", "settings", "Settings")}<button class="nav-item quit" data-act="quit">${icon("x")}<span>Quit RoCrew</span></button>` : `<div class="side-box"><small>${icon("users")} You're in ${esc(s.owner || "your friend")}'s studio as <b>${esc(s.me?.name ?? "a guest")}</b></small></div>`}
       <a class="side-box" href="#/settings" style="display:block;text-decoration:none">
@@ -1206,6 +1210,7 @@ PAGES.settings = {
         <div class="card"><h3 class="section-title">You</h3>
           <label class="field">Your name <small>For the greeting on Home.</small><input class="input" id="set-ownerName" value="${esc(v.ownerName)}"></label></div>
         <div class="card"><h3 class="section-title">${icon("sparkle")} Claude Code</h3>
+          ${accountsHtml(v)}
           <label class="field">Command <small>How to start Claude Code on this computer. Usually just <span class="mono">claude</span>.</small><input class="input mono" id="set-claudeCommand" value="${esc(v.claudeCommand)}"></label>
           <div class="field">Permissions
             <label class="check"><input type="radio" name="perm" value="safe" ${v.permissionMode === "safe" ? "checked" : ""}><span><b>Safe auto</b><br><small class="muted">Agents may edit files in this folder, use the RoCrew CLI, web search, and your MCP servers (Studio, Blender) without asking. Anything else is refused.</small></span></label>
@@ -1350,6 +1355,20 @@ function renderRemoteLayer() {
   }
   const waiting = r.invite && !S.ui.dismissed?.[r.invite.session];
   document.title = waiting ? `(!) ${r.invite.name} wants you in · RoCrew` : "RoCrew Studio";
+}
+
+/** Claude plans the crew can use. Work goes to whichever one has room. */
+function accountsHtml(v) {
+  const usage = Object.fromEntries((S.state.accounts ?? []).map((a) => [a.id, a]));
+  const all = [{ id: "main", name: "Account 1", hint: "Claude Code's normal sign-in" }, ...(v.claudeAccounts ?? [])];
+  return `<div class="field"><b>Claude accounts</b> <small>Got more than one Claude plan? Add it and the crew uses both: each agent stays on one account until it runs low, then moves to the one with the most left.</small>
+    ${all.map((a) => {
+      const u = usage[a.id];
+      return `<div class="friend"><div class="row"><span class="tile sm" style="--c:#a78bfa">${icon("sparkle")}</span><b class="grow">${esc(a.name)}${a.hint ? ` <small class="faint">${esc(a.hint)}</small>` : ""}</b>
+        ${a.id === "main" ? "" : `<button class="btn small" data-act="account-sign-in" data-id="${a.id}">Sign in</button><button class="btn small" data-act="account-check" data-id="${a.id}">Check</button><button class="btn ghost small" data-act="account-remove" data-id="${a.id}" data-name="${esc(a.name)}" title="Stop using this account">${icon("trash")}</button>`}</div>
+        ${u?.usage ? usageBars(u.usage, false) : a.id === "main" ? "" : `<small class="faint">Press <b>Sign in</b>, log in with that account in the window that opens, close it, then press <b>Check</b>.</small>`}</div>`;
+    }).join("")}
+    <button class="btn" style="margin-top:8px" data-act="account-add">${icon("plus")}Add another Claude account</button></div>`;
 }
 
 function peopleHtml() {
@@ -1635,6 +1654,28 @@ const ACTIONS = {
     const ids = [...document.querySelectorAll("[data-propose]")].map((b) => b.dataset.propose);
     document.querySelector(".approve-list")?.closest(".card")?.remove();
     if (await attempt(() => api("POST", "/api/tasks/decide", { ids, approve: false }), "Skipped. The Lead will be told.")) await refresh();
+  },
+  "account-add": async () => {
+    const r = await attempt(() => api("POST", "/api/accounts"));
+    if (!r) return;
+    toast(r.manual ?? `A window opened: sign in with your other Claude account there, close it, then press Check next to ${r.name}.`);
+    await refresh();
+    render(true);
+  },
+  "account-sign-in": async (el) => {
+    const r = await attempt(() => api("POST", `/api/accounts/${el.dataset.id}/sign-in`));
+    if (r) toast(r.manual ?? "A window opened: sign in there, close it, then press Check.");
+  },
+  "account-check": async (el) => {
+    el.disabled = true;
+    el.textContent = "Checking…";
+    if (await attempt(() => api("POST", `/api/accounts/${el.dataset.id}/check`), "Signed in and ready. The crew will use it.")) await refresh();
+    render(true);
+  },
+  "account-remove": async (el) => {
+    if (!confirm(`Stop using ${el.dataset.name}? Its sign-in stays on this PC; add it again any time.`)) return;
+    if (await attempt(() => api("DELETE", `/api/accounts/${el.dataset.id}`))) await refresh();
+    render(true);
   },
   "usage-refresh": async (el) => {
     el.disabled = true;

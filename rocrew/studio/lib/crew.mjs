@@ -3,6 +3,7 @@
 // team keeps going while you're away.
 
 import os from "node:os";
+import { listAccounts, accountEnv, MAIN } from "./accounts.mjs";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -169,7 +170,36 @@ export class Crew extends EventEmitter {
 
   // ---------- plan usage ----------
 
-  recordUsage(info) {
+  /** Every Claude account (Account 1 = the normal sign-in). Set dataDir to enable extra accounts. */
+  accounts() {
+    return this.dataDir ? listAccounts(this.config.get(), this.dataDir) : [{ id: MAIN, name: "Account 1", dir: null }];
+  }
+
+  usageOf(accountId = MAIN) {
+    return accountId === MAIN ? this.db.usage : this.db.accountUsage?.[accountId];
+  }
+
+  /**
+   * The account to run on: the agent's current one while it has room (keeps its conversation),
+   * else the one with the most room left this week. null when every account must wait.
+   */
+  pickAccount(state) {
+    const free = this.accounts().filter((a) => !this.usageHold(a.id));
+    if (!free.length) return null;
+    const current = free.find((a) => a.id === (state?.sessionAccount ?? MAIN));
+    if (current) return current;
+    return free.sort((a, b) => (this.usageOf(a.id)?.week?.pct ?? 0) - (this.usageOf(b.id)?.week?.pct ?? 0))[0];
+  }
+
+  recordUsage(info, accountId = MAIN) {
+    if (accountId !== MAIN) {
+      const keep = this.db.usage;
+      this.db.usage = this.db.accountUsage?.[accountId];
+      this.recordUsage(info, MAIN);
+      this.db.accountUsage = { ...(this.db.accountUsage ?? {}), [accountId]: this.db.usage };
+      this.db.usage = keep;
+      return;
+    }
     const win = (w) => (w ? { pct: Math.round((w.utilization ?? 0) > 1 ? w.utilization : (w.utilization ?? 0) * 100), resetsAt: w.resetsAt ? w.resetsAt * 1000 : null } : null);
     const u = info.unifiedWindows ?? {};
     const fallback = info.rateLimitType && info.utilization !== undefined ? { utilization: info.utilization, resetsAt: info.resetsAt } : null;
@@ -184,8 +214,14 @@ export class Crew extends EventEmitter {
   }
 
   /** Why new work must wait for the plan to reset, or null if it can run. */
-  usageHold() {
-    const u = this.db.usage;
+  usageHold(accountId) {
+    // No account given: the crew waits only when every account must wait.
+    if (accountId === undefined) {
+      const holds = this.accounts().map((a) => this.usageHold(a.id));
+      if (holds.some((h) => !h)) return null;
+      return holds.sort((a, b) => (a.resetsAt ?? Infinity) - (b.resetsAt ?? Infinity))[0];
+    }
+    const u = this.usageOf(accountId);
     if (!u) return null;
     const cfg = this.config.get();
     const ceiling = cfg.usageCeilingPct;
@@ -287,6 +323,15 @@ export class Crew extends EventEmitter {
     const state = this.store.agent(task.agent);
     // Long conversations get expensive: every turn re-reads the whole history. After a few tasks,
     // start the agent fresh and hand it a short note of where it left off instead.
+    // Conversations live in one account's sign-in: switching accounts starts a fresh one,
+    // with the same "where you left off" note.
+    const account = this.pickAccount(state) ?? this.accounts()[0];
+    if (state.sessionId && (state.sessionAccount ?? MAIN) !== account.id) {
+      state.sessionId = null;
+      state.tasksInSession = 0;
+    }
+    state.sessionAccount = account.id;
+    task.account = account.id;
     if (state.sessionId && (state.tasksInSession ?? 0) >= SESSION_TASKS) {
       state.sessionId = null;
       state.tasksInSession = 0;
@@ -325,7 +370,7 @@ export class Crew extends EventEmitter {
       effort: choice.effort,
       fallbackModel: choice.model === "opus" ? "sonnet" : undefined,
       timeoutMs: cfg.taskTimeoutMin * 60000,
-      env: { ROCREW_AGENT: task.agent, ROCREW_TASK: task.id, ROCREW_GAME: task.game ?? "" },
+      env: { ROCREW_AGENT: task.agent, ROCREW_TASK: task.id, ROCREW_GAME: task.game ?? "", ...accountEnv(account) },
       onEvent: (e) => this.onRunEvent(task, e),
     });
     this.running.set(task.id, run);
@@ -347,7 +392,7 @@ export class Crew extends EventEmitter {
         this.message(task.agent, "system", `Roblox Studio MCP is ${studio.status}. Open Studio and check the MCP connection.`);
       }
     } else if (e.type === "usage") {
-      this.recordUsage(e.info);
+      this.recordUsage(e.info, task.account ?? MAIN);
     } else if (e.type === "text") {
       this.message(task.agent, "agent", e.text, { taskId: task.id });
     } else if (e.type === "tool") {
@@ -377,7 +422,7 @@ export class Crew extends EventEmitter {
     } else if (res.ok) {
       task.status = "done";
       task.result = res.text?.trim() || "(finished without a summary)";
-    } else if ((this.db.usage?.status === "rejected" && Date.now() - this.db.usage.at < 10 * 60000) || /usage limit|limit reached|rate.?limit/i.test(res.error ?? "")) {
+    } else if ((this.usageOf(task.account ?? MAIN)?.status === "rejected" && Date.now() - this.usageOf(task.account ?? MAIN).at < 10 * 60000) || /usage limit|limit reached|rate.?limit/i.test(res.error ?? "")) {
       // The plan ran out mid-task: put it back in line; it starts again after the reset.
       task.status = "queued";
       task.startedAt = null;

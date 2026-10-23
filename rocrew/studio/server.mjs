@@ -22,6 +22,7 @@ import { RobloxBrowser } from "./lib/robloxBrowser.mjs";
 import { makeStoreArt } from "./lib/storeArt.mjs";
 import { HiddenBlender } from "./lib/blender.mjs";
 import { Updater } from "./lib/updater.mjs";
+import { listAccounts, accountEnv, syncMcpServers, openSignIn } from "./lib/accounts.mjs";
 
 const blender = new HiddenBlender();
 
@@ -36,6 +37,9 @@ fs.mkdirSync(MEDIA, { recursive: true });
 const config = new Config(path.join(DATA, "config.json"));
 const store = new Store(path.join(DATA, "db.json"));
 const crew = new Crew({ store, config, root: ROOT });
+crew.dataDir = DATA;
+// Extra Claude accounts get the same MCP servers (Roblox Studio…) as the normal sign-in.
+for (const a of listAccounts(config.get(), DATA)) syncMcpServers(a, ROOT);
 if (!fs.existsSync(store.marketFile)) store.saveMarket(); // move market data out of db.json once
 // A stable secret, so a phone bookmark of the private link keeps working across restarts.
 const TOKEN_FILE = path.join(DATA, "token");
@@ -378,6 +382,7 @@ function stateView(req) {
     lastChangeAt: lastChangeAt,
     permissionMode: config.get().permissionMode,
     usage: db.usage ?? null,
+    accounts: crew.accounts().length > 1 ? crew.accounts().map((a) => ({ id: a.id, name: a.name, usage: crew.usageOf(a.id) ?? null, waiting: Boolean(crew.usageHold(a.id)) })) : null,
     usageHold: crew.usageHold(),
     usageCeilingPct: config.get().usageCeilingPct,
     update: me?.owner ? updater.view() : null,
@@ -904,12 +909,64 @@ route("DELETE", /^\/api\/people\/([\w]+)$/, (req, url, [id]) => {
 // Claude Code only reports plan usage while it runs, so the meter freezes when the crew is idle.
 const usageEvent = (e) => e.type === "usage" && crew.recordUsage(e.info);
 let usageRefresh = null;
+/** The smallest possible run (Haiku, no tools, a one-word reply) just to read one account's live numbers. */
+function pingAccount(a) {
+  return runClaude({ command: config.get().claudeCommand, cwd: os.tmpdir(), prompt: "Reply with OK.", model: "haiku", effort: "low", permissionMode: "safe", allowedTools: [], timeoutMs: 60000, env: accountEnv(a), onEvent: (e) => e.type === "usage" && crew.recordUsage(e.info, a.id) }).done;
+}
 route("POST", /^\/api\/usage\/refresh$/, async (req) => {
   ownerOnly(req);
-  // The smallest possible run (Haiku, no tools, a one-word reply) just to read the live numbers.
-  usageRefresh ??= runClaude({ command: config.get().claudeCommand, cwd: os.tmpdir(), prompt: "Reply with OK.", model: "haiku", effort: "low", permissionMode: "safe", allowedTools: [], timeoutMs: 60000, onEvent: usageEvent }).done.finally(() => (usageRefresh = null));
+  usageRefresh ??= Promise.all(crew.accounts().map(pingAccount)).finally(() => (usageRefresh = null));
   await usageRefresh;
+  crew.changed();
   return { usage: store.data.usage ?? null };
+});
+
+// ---------- extra Claude accounts ----------
+
+route("POST", /^\/api\/accounts$/, async (req) => {
+  ownerOnly(req);
+  const list = config.get().claudeAccounts ?? [];
+  const id = `acc${list.length + 2}${randomBytes(2).toString("hex")}`;
+  const name = `Account ${list.length + 2}`;
+  config.update({ claudeAccounts: [...list, { id, name }] });
+  const a = listAccounts(config.get(), DATA).find((x) => x.id === id);
+  syncMcpServers(a, ROOT);
+  try {
+    openSignIn(a, config.get().claudeCommand);
+  } catch (err) {
+    return { id, name, manual: err.message };
+  }
+  crew.changed();
+  return { id, name };
+});
+route("POST", /^\/api\/accounts\/([\w]+)\/sign-in$/, async (req, url, [id]) => {
+  ownerOnly(req);
+  const a = crew.accounts().find((x) => x.id === id && x.dir);
+  need(a, "No such account.");
+  syncMcpServers(a, ROOT);
+  try {
+    openSignIn(a, config.get().claudeCommand);
+  } catch (err) {
+    return { manual: err.message };
+  }
+  return { ok: true };
+});
+route("POST", /^\/api\/accounts\/([\w]+)\/check$/, async (req, url, [id]) => {
+  ownerOnly(req);
+  const a = crew.accounts().find((x) => x.id === id);
+  need(a, "No such account.");
+  const res = await pingAccount(a);
+  crew.changed();
+  if (!res.ok) throw new HttpError(400, /log ?in|auth|credential|api key/i.test(res.error ?? "") ? `${a.name} isn't signed in yet. Press Sign in and log in with that account.` : `${a.name} didn't answer: ${res.error}`);
+  return { ok: true, usage: crew.usageOf(a.id) ?? null };
+});
+route("DELETE", /^\/api\/accounts\/([\w]+)$/, (req, url, [id]) => {
+  ownerOnly(req);
+  config.update({ claudeAccounts: (config.get().claudeAccounts ?? []).filter((a) => a.id !== id) });
+  for (const st of Object.values(store.data.agents ?? {})) if (st.sessionAccount === id) Object.assign(st, { sessionId: null, sessionAccount: null, tasksInSession: 0 });
+  crew.changed();
+  crew.tick();
+  return { ok: true };
 });
 
 // ---------- Remote Control ----------
