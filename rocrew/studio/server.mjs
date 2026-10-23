@@ -15,7 +15,7 @@ import { Crew, slugify } from "./lib/crew.mjs";
 import { AGENTS, isAgent } from "./lib/agents.mjs";
 import { probeClaude } from "./lib/claude.mjs";
 import { presetTable } from "./lib/models.mjs";
-import { fetchCharts, fetchDetails, velocity, breakouts, openings, gameDeepDive, topStoreArt, liveNumbers, uploadDecal } from "./lib/roblox.mjs";
+import { fetchCharts, fetchDetails, velocity, breakouts, openings, gameDeepDive, topStoreArt, searchGames, liveNumbers, uploadDecal } from "./lib/roblox.mjs";
 import { generateImage, askGemini } from "./lib/gemini.mjs";
 import { RemoteControl } from "./lib/remote.mjs";
 import { RobloxBrowser } from "./lib/robloxBrowser.mjs";
@@ -681,6 +681,13 @@ route("POST", /^\/api\/upload$/, async (req) => {
 
 route("GET", /^\/api\/market$/, () => marketView());
 route("POST", /^\/api\/market\/refresh$/, () => refreshMarket());
+route("GET", /^\/api\/market\/search$/, async (req, url) => {
+  try {
+    return await searchGames(url.searchParams.get("q") ?? "");
+  } catch (err) {
+    throw new HttpError(502, `Roblox search didn't answer (${err.message}). It allows about one search a minute; try again shortly.`);
+  }
+});
 route("GET", /^\/api\/market\/game\/(\d+)$/, async (req, url, [id]) => {
   try {
     return await gameDeepDive(id);

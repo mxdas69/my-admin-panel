@@ -72,6 +72,7 @@ Generators and intel
   gemini --prompt "…" [--image a.png,…]    Ask Gemini for a second opinion
   market [--refresh] [--json]              Openings by genre, breakouts, rank moves, top charts (compact)
   market --sort <chart>                    One full chart, e.g. --sort trending-in-survival
+  market search "<words>"                 Top games for a keyword or format ("+1 speed", "climb"), biggest first
   market game <universeId|placeId>         Deep dive: numbers, like ratio, pass and product prices,
                                            badge activity, similar games, 14 days of player counts
 
@@ -355,6 +356,14 @@ switch (cmd) {
   }
 
   case "market": {
+    if (sub === "search") {
+      const q = o._.slice(2).join(" ");
+      if (!q) fail('Usage: market search "+1 speed"');
+      const list = await api("GET", `/api/market/search?q=${encodeURIComponent(q)}`);
+      for (const g of list) console.log(`${String(g.playing).padStart(7)} playing  ${String(g.likePct ?? "-").padStart(4)}% liked  ${String(g.ageDays ?? "?").padStart(4)}d old  ${g.name}  [u${g.universeId}]`);
+      if (!list.length) console.log("No games found.");
+      break;
+    }
     if (sub === "game") {
       const id = o._[2];
       if (!id) fail("Usage: market game <universeId or placeId>");

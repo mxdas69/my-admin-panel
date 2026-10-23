@@ -255,6 +255,19 @@ export async function topStoreArt({ snapshot, sortId = "top-trending", kind = "t
   return { chart: sort.name, refs: out };
 }
 
+/** Search Roblox games by keyword ("+1 speed", "climb"), biggest first, with numbers. */
+export async function searchGames(query, limit = 15) {
+  const url = `https://apis.roblox.com/search-api/omni-search?searchQuery=${encodeURIComponent(query)}&sessionId=${randomUUID()}&pageType=all`;
+  const json = await getJson(url);
+  const ids = [];
+  for (const group of json.searchResults ?? []) for (const c of group.contents ?? []) if (c.universeId) ids.push(c.universeId);
+  const details = await fetchDetails(ids.slice(0, 50));
+  return Object.values(details)
+    .map((g) => ({ ...g, likePct: g.up + g.down ? Math.round((g.up / (g.up + g.down)) * 1000) / 10 : null, ageDays: g.created ? Math.round((Date.now() - Date.parse(g.created)) / 86400000) : null }))
+    .sort((a, b) => b.playing - a.playing)
+    .slice(0, limit);
+}
+
 /** Live numbers for one of your own games. */
 export async function liveNumbers(universeId) {
   const d = await fetchDetails([universeId]);
