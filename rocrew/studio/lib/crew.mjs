@@ -33,6 +33,9 @@ const BASE_TOOLS = [
   "Read", "Write", "Edit", "MultiEdit", "Glob", "Grep", "LS", "TodoWrite", "NotebookEdit",
   "WebSearch", "WebFetch",
   "Bash(node studio/cli.mjs *)", "Bash(node studio/cli.mjs:*)", "Bash(node games/*)",
+  // On Windows, Claude Code runs commands through its PowerShell tool instead of Bash.
+  "PowerShell(node studio/cli.mjs *)", "PowerShell(node studio\\cli.mjs *)", "PowerShell(node .\\studio\\cli.mjs *)",
+  "PowerShell(node games/*)", "PowerShell(node games\\*)",
 ];
 
 export class Crew extends EventEmitter {
