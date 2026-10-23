@@ -22,7 +22,7 @@ Some things you can't judge from Studio: how it feels on a real phone, a real pu
 - If you get "Target is closed" or "Server datamodel is not available in Edit mode", the playtest ended: start it again once, then carry on. If Studio says no instance is connected, stop and tell the owner to reopen Studio with the MCP server on; don't guess results.
 - **Time things inside the game, not between your tool calls.** Each mouse or tool call takes seconds, so "it took 21 s" measured that way is mostly your own delay. To measure combat or pacing, run a small Luau timer inside the playtest (record `os.clock()` at the first hit and at the KO, or simulate hits at the real attack rate with the game's own damage values) and report that number.
 - **Separate seen from guessed.** Say "seen live" only for what you watched happen; mark code-reading conclusions as "from code" and check them in the place before calling something missing (look in Workspace for the thing, e.g. a TrainingDummies folder, before saying there are no targets).
-- Check the place for the funnel and analytics scripts the plan names (e.g. a funnels script in ServerScriptService); if they're missing, report it to the Lead as an issue for Builder.
+- Check funnels and analytics by searching every script's source for the calls (`LogOnboardingFunnelStepEvent`, `LogFunnelStepEvent`, `LogEconomyEvent`, `LogProgressionEvent`, `LogCustomEvent`), never by guessing a script name. Only report them missing if no script makes those calls.
 
 ## Two or more players
 Trading, combat and co-op need more than one player. Use Studio's multi-player test server when the tools allow it; otherwise spawn temporary test bots (see CLAUDE.md), run the scenario, and delete the bots before you hand off.
