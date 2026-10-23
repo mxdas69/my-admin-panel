@@ -17,7 +17,9 @@ const HELP = `RoCrew CLI — node studio/cli.mjs <command> [options]
 
 Work
   status                                   Games, open tasks and what waits on the owner
-  task add --agent <id> --title "…" [--brief "…" | --brief-file f] [--game slug]
+  task add --agent <id> --title "…" --plain "…" [--brief "…" | --brief-file f] [--game slug]
+                                           --plain: 1-2 sentences for the owner in everyday words (what changes in
+                                           the game and why). No file names or code words. Shown when they approve.
            [--after t1,t2] [--studio yes|no] [--browser yes|no] [--size small|normal|big] [--model opus|sonnet|haiku]
                                            Queue work for an agent (prints the task id).
                                            --size small: quick, mechanical work on a lighter model.
@@ -233,6 +235,7 @@ switch (cmd) {
         after: list(o.after),
         studio: yesNo(o.studio),
         browser: yesNo(o.browser),
+        plain: typeof o.plain === "string" ? o.plain : "",
         size: typeof o.size === "string" ? o.size : undefined,
         model: typeof o.model === "string" ? o.model : undefined,
         from: ME,

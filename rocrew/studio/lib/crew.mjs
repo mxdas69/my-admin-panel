@@ -75,7 +75,7 @@ export class Crew extends EventEmitter {
 
   // ---------- creating work ----------
 
-  addTask({ agent, title, brief = "", game = null, from = "lead", studio, browser, after = [], silent = false, reported = false, size = "normal", model = null }) {
+  addTask({ agent, title, brief = "", plain = "", game = null, from = "lead", studio, browser, after = [], silent = false, reported = false, size = "normal", model = null }) {
     if (!isAgent(agent)) throw bad(`Unknown agent "${agent}". Agents: ${AGENTS.map((a) => a.id).join(", ")}`);
     if (!title?.trim()) throw bad("A task needs a title.");
     if (game && !this.db.games.some((g) => g.slug === game)) throw bad(`Unknown game "${game}". Create it first.`);
@@ -89,6 +89,7 @@ export class Crew extends EventEmitter {
       agent,
       title: title.trim().slice(0, 140),
       brief: String(brief ?? ""),
+      plain: String(plain ?? "").slice(0, 400),
       game,
       from,
       studio: studio ?? AGENT_BY_ID.get(agent).studio,

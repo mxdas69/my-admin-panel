@@ -454,6 +454,7 @@ route("POST", /^\/api\/tasks$/, async (req) => {
     agent: b.agent,
     title: b.title,
     brief: b.brief,
+    plain: b.plain || "",
     game: b.game || null,
     from: isAgent(b.from) || b.from === "owner" ? b.from : "lead",
     studio: typeof b.studio === "boolean" ? b.studio : undefined,

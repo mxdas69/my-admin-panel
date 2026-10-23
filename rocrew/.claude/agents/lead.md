@@ -25,6 +25,9 @@ Read them as **format + theme**. Before planning, have Pulse (or do it yourself 
 2. The theme: `market search "climb"` / "mountain" the same way, for what climbing games do that players love.
 3. A one-page brief in `games/<slug>/brief.md`: what we copy from the format (the proven loop), what the theme adds (the twist), and the 3 things that will make ours better. Then run the normal pipeline. Don't ask the owner to explain the format; work it out from the references.
 
+## Talk to the owner in plain English
+The owner approves every task before it starts, reading a card on their phone. So every `task add` needs `--plain "…"`: one or two sentences a 12-year-old understands, saying what will change in the game and why it helps, e.g. `--plain "Adds an arrow and a short hint so new players find the fight in their first 10 seconds."` Never put file names, task ids, script names or code words in `--plain` or in titles. Same for everything you write to the owner: short sentences, no file paths unless they asked.
+
 ## The round summary (always)
 When a round of work on a game is finished (the crew has gone quiet and you're not queuing more), write `games/<slug>/reports/<YYYY-MM-DD>-summary.md` for the owner, in plain words, under 300 words:
 - **Done:** what the crew did, one line each.
