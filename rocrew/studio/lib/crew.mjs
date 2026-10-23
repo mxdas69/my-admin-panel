@@ -7,6 +7,7 @@ import path from "node:path";
 import { EventEmitter } from "node:events";
 import { AGENTS, AGENT_BY_ID, agentName, isAgent } from "./agents.mjs";
 import { runClaude } from "./claude.mjs";
+import { pickModel } from "./models.mjs";
 
 const TERMINAL = new Set(["done", "failed", "cancelled", "blocked"]);
 const BASE_TOOLS = [
@@ -47,10 +48,12 @@ export class Crew extends EventEmitter {
 
   // ---------- creating work ----------
 
-  addTask({ agent, title, brief = "", game = null, from = "lead", studio, after = [], silent = false, reported = false }) {
+  addTask({ agent, title, brief = "", game = null, from = "lead", studio, after = [], silent = false, reported = false, size = "normal", model = null }) {
     if (!isAgent(agent)) throw bad(`Unknown agent "${agent}". Agents: ${AGENTS.map((a) => a.id).join(", ")}`);
     if (!title?.trim()) throw bad("A task needs a title.");
     if (game && !this.db.games.some((g) => g.slug === game)) throw bad(`Unknown game "${game}". Create it first.`);
+    if (!["small", "normal", "big"].includes(size)) throw bad('size must be "small", "normal" or "big".');
+    if (model && !/^[a-z0-9][a-z0-9.\-[\]]*$/i.test(model)) throw bad("That model name doesn't look right.");
     for (const dep of after) {
       if (!this.db.tasks.some((t) => t.id === dep)) throw bad(`Unknown task "${dep}" in --after.`);
     }
@@ -63,6 +66,8 @@ export class Crew extends EventEmitter {
       from,
       studio: studio ?? AGENT_BY_ID.get(agent).studio,
       after,
+      size,
+      model: model || null,
       status: "queued",
       createdAt: Date.now(),
       startedAt: null,
@@ -80,14 +85,17 @@ export class Crew extends EventEmitter {
     return task;
   }
 
-  ownerToLead(text) {
+  /** `by` is "owner" or a friend's name; friends' messages are labelled so agents know who's talking. */
+  ownerToLead(text, by = "owner") {
     this.db.autoRounds = 0;
-    return this.addTask({ agent: "lead", title: firstLine(text), brief: text, from: "owner" });
+    const brief = by === "owner" ? text : `(From ${by}, who co-owns this studio)\n\n${text}`;
+    return Object.assign(this.addTask({ agent: "lead", title: firstLine(text), brief, from: "owner" }), { by });
   }
 
-  ownerToAgent(agent, text) {
+  ownerToAgent(agent, text, by = "owner") {
     // A direct chat goes back to you in the agent's chat, not into the Lead's digest.
-    return this.addTask({ agent, title: firstLine(text), brief: text, from: "owner", reported: true });
+    const brief = by === "owner" ? text : `(From ${by}, who co-owns this studio)\n\n${text}`;
+    return Object.assign(this.addTask({ agent, title: firstLine(text), brief, from: "owner", reported: true }), { by });
   }
 
   cancel(taskId) {
@@ -127,6 +135,38 @@ export class Crew extends EventEmitter {
     return msg;
   }
 
+  // ---------- plan usage ----------
+
+  recordUsage(info) {
+    const win = (w) => (w ? { pct: Math.round((w.utilization ?? 0) * 100), resetsAt: w.resetsAt ? w.resetsAt * 1000 : null } : null);
+    const u = info.unifiedWindows ?? {};
+    const fallback = info.rateLimitType && info.utilization !== undefined ? { utilization: info.utilization, resetsAt: info.resetsAt } : null;
+    const prev = this.db.usage ?? {};
+    this.db.usage = {
+      at: Date.now(),
+      status: info.status ?? null,
+      fiveHour: win(u.five_hour) ?? (info.rateLimitType === "five_hour" ? win(fallback) : prev.fiveHour ?? null),
+      week: win(u.seven_day) ?? (info.rateLimitType === "seven_day" ? win(fallback) : prev.week ?? null),
+    };
+    this.changed("usage");
+  }
+
+  /** Why new work must wait for the plan to reset, or null if it can run. */
+  usageHold() {
+    const u = this.db.usage;
+    if (!u) return null;
+    const ceiling = this.config.get().usageCeilingPct;
+    const now = Date.now();
+    for (const [label, w] of [["5-hour", u.fiveHour], ["weekly", u.week]]) {
+      if (!w) continue;
+      const stale = w.resetsAt && now >= w.resetsAt;
+      if (!stale && (w.pct >= ceiling || (u.status === "rejected" && w.pct >= 99))) {
+        return { window: label, pct: w.pct, resetsAt: w.resetsAt, ceiling };
+      }
+    }
+    return null;
+  }
+
   // ---------- scheduling ----------
 
   depsState(task) {
@@ -160,12 +200,15 @@ export class Crew extends EventEmitter {
         }
       }
       if (this.db.paused) return;
+      const hold = this.usageHold();
 
       let workers = [...this.running.keys()].filter((id) => this.task(id)?.agent !== "lead").length;
       for (const task of queued) {
         if (task.status !== "queued" || this.agentBusy(task.agent)) continue;
         if (this.depsState(task) !== "ready") continue;
         const isLead = task.agent === "lead";
+        // Near the plan limit only your own messages to the Lead still run.
+        if (hold && !(isLead && task.from === "owner")) continue;
         if (!isLead && workers >= cfg.maxParallel) continue;
         if (task.studio && this.studioHolder) continue;
         this.launch(task);
@@ -196,14 +239,17 @@ export class Crew extends EventEmitter {
     const fresh = !state.sessionId;
     const prompt = this.buildPrompt(task, fresh);
 
+    const choice = pickModel(task, cfg);
     task.status = "working";
     task.startedAt = Date.now();
+    task.ran = { model: choice.model, effort: choice.effort ?? null };
     task.error = null;
     if (task.studio) this.studioHolder = task.id;
     state.lastActiveAt = Date.now();
     this.message(task.agent, task.from === "owner" ? "owner" : "brief", task.from === "owner" ? task.brief : `${task.title}${task.brief ? `\n\n${task.brief}` : ""}`, {
       taskId: task.id,
       from: task.from,
+      by: task.by ?? null,
     });
     this.changed();
 
@@ -215,7 +261,9 @@ export class Crew extends EventEmitter {
       sessionId: state.sessionId,
       permissionMode: cfg.permissionMode,
       allowedTools: this.allowedTools(),
-      model: cfg.model || undefined,
+      model: choice.model,
+      effort: choice.effort,
+      fallbackModel: choice.model === "opus" ? "sonnet" : undefined,
       timeoutMs: cfg.taskTimeoutMin * 60000,
       env: { ROCREW_AGENT: task.agent, ROCREW_TASK: task.id, ROCREW_GAME: task.game ?? "" },
       onEvent: (e) => this.onRunEvent(task, e),
@@ -236,6 +284,8 @@ export class Crew extends EventEmitter {
       if (task.studio && studio && studio.status !== "connected") {
         this.message(task.agent, "system", `Roblox Studio MCP is ${studio.status}. Open Studio and check the MCP connection.`);
       }
+    } else if (e.type === "usage") {
+      this.recordUsage(e.info);
     } else if (e.type === "text") {
       this.message(task.agent, "agent", e.text, { taskId: task.id });
     } else if (e.type === "tool") {
@@ -260,6 +310,13 @@ export class Crew extends EventEmitter {
     } else if (res.ok) {
       task.status = "done";
       task.result = res.text?.trim() || "(finished without a summary)";
+    } else if ((this.db.usage?.status === "rejected" && Date.now() - this.db.usage.at < 10 * 60000) || /usage limit|limit reached|rate.?limit/i.test(res.error ?? "")) {
+      // The plan ran out mid-task: put it back in line; it starts again after the reset.
+      task.status = "queued";
+      task.startedAt = null;
+      task.endedAt = null;
+      task.note = "Waiting for your Claude plan's usage to reset.";
+      this.message(task.agent, "system", "Paused: your Claude plan hit its usage limit. This task restarts when it resets.", { taskId: task.id });
     } else {
       task.status = "failed";
       task.error = res.error;
@@ -268,7 +325,7 @@ export class Crew extends EventEmitter {
       // A broken session id (deleted transcript, new machine) should not wedge the agent forever.
       if (/session|resume/i.test(res.error ?? "")) state.sessionId = null;
     }
-    if (task.agent !== "lead" && task.status !== "cancelled") {
+    if (task.agent !== "lead" && (task.status === "done" || task.status === "failed")) {
       this.feed(task.agent, task.from, task.status === "done" ? summarize(task.result) : `Couldn't finish "${task.title}": ${task.error}`, task.id);
     }
     if (task.agent === "lead") task.reported = true;
@@ -311,28 +368,49 @@ export class Crew extends EventEmitter {
     });
   }
 
-  addAsk({ from, title, body = "", game = null }) {
-    const ask = { id: this.store.id("a"), from, title, body, game, status: "open", reply: null, createdAt: Date.now() };
+  addAsk({ from, title, body = "", game = null, kind = "question", steps = [], media = [] }) {
+    const ask = {
+      id: this.store.id("a"),
+      from,
+      title,
+      body,
+      game,
+      kind: kind === "test" ? "test" : "question",
+      steps: steps.map((x) => String(x).trim()).filter(Boolean).slice(0, 20),
+      media,
+      status: "open",
+      reply: null,
+      result: null,
+      replies: [],
+      createdAt: Date.now(),
+    };
     this.db.asks.push(ask);
     this.feed(from, "owner", title);
     this.changed();
     return ask;
   }
 
-  answerAsk(id, { reply = "", done = false }) {
+  answerAsk(id, { reply = "", done = false, result = null, attachments = [], by = "owner" }) {
     const ask = this.db.asks.find((a) => a.id === id);
     if (!ask) throw bad("No such checkpoint.");
+    if (result && !["works", "broken"].includes(result)) throw bad('result must be "works" or "broken".');
+    if (result === "broken" && !reply.trim() && !attachments.length) throw bad("Say what went wrong (or attach a photo or video) so the crew can fix it.");
     ask.reply = reply || ask.reply;
-    if (done) ask.status = "done";
-    const text = reply
-      ? `The owner replied to "${ask.title}" (asked by ${agentName(ask.from)}):\n\n${reply}${done ? "\n\nThey marked it done." : ""}`
-      : `The owner marked "${ask.title}" (asked by ${agentName(ask.from)}) as done.`;
+    if (result) ask.result = result;
+    if (done || result) ask.status = "done";
+    ask.replies = [...(ask.replies ?? []), { at: Date.now(), by, reply, result, attachments: attachments.map((a) => a.media) }];
+    const who = by === "owner" ? "The owner" : by;
+    const verdict = result === "works" ? " reports it WORKS" : result === "broken" ? " reports something is WRONG" : " replied";
+    const files = attachments.length
+      ? `\n\nThey attached (open images with the Read tool${attachments.some((a) => a.frames) ? "; videos come with a frame sheet you can read" : ""}):\n${attachments.map((a) => `- ${a.path}${a.frames ? `  (frames: ${a.frames})` : ""}`).join("\n")}`
+      : "";
+    const text = `${who}${verdict} on "${ask.title}" (asked by ${agentName(ask.from)}).${reply ? `\n\n${reply}` : ""}${files}${ask.status === "done" && !result ? "\n\nThey marked it done." : ""}${result === "broken" ? "\n\nRoute the fix to the right agent, then ask the owner to test again." : ""}`;
     this.db.autoRounds = 0;
     this.addTask({ agent: "lead", title: `Owner: ${ask.title}`, brief: text, from: "owner", game: ask.game });
     return ask;
   }
 
-  decideReview(id, { verdict, note = "" }) {
+  decideReview(id, { verdict, note = "", by = "owner" }) {
     const review = this.db.reviews.find((r) => r.id === id);
     if (!review) throw bad("No such review item.");
     if (!["approved", "changes", "rejected"].includes(verdict)) throw bad("Verdict must be approved, changes or rejected.");
@@ -340,6 +418,7 @@ export class Crew extends EventEmitter {
     review.status = verdict;
     review.note = note;
     review.decidedAt = Date.now();
+    review.decidedBy = by;
     const label = { approved: "Approved", changes: "Changes asked", rejected: "Rejected" }[verdict];
     const line = `${label}: "${review.title}"${note ? ` — ${note}` : ""}`;
     const agent = isAgent(review.agent) ? review.agent : "lead";
@@ -359,12 +438,13 @@ export class Crew extends EventEmitter {
     return review;
   }
 
-  decidePitch(id, { verdict, note = "" }) {
+  decidePitch(id, { verdict, note = "", by = "owner" }) {
     const pitch = this.db.pitches.find((p) => p.id === id);
     if (!pitch) throw bad("No such pitch.");
     pitch.status = verdict === "approved" ? "approved" : "rejected";
     pitch.note = note;
     pitch.decidedAt = Date.now();
+    pitch.decidedBy = by;
     if (pitch.status === "approved") {
       const game = this.addGame({ name: pitch.title });
       this.db.autoRounds = 0;

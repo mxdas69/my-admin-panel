@@ -6,6 +6,10 @@ import path from "node:path";
 export const DEFAULTS = {
   ownerName: "",
   claudeCommand: "claude",
+  // Which Claude model each agent uses. "balanced" keeps Opus on the work that decides quality
+  // and moves checking and research to Sonnet. "model" forces one model for everyone.
+  modelPreset: "balanced",
+  agentModels: {},
   model: "",
   // "safe": agents may use file tools, the RoCrew CLI and your MCP servers; everything else is refused.
   // "auto": Claude Code's auto mode decides what's safe, on top of that allow-list.
@@ -15,6 +19,8 @@ export const DEFAULTS = {
   maxParallel: 3,
   taskTimeoutMin: 60,
   maxAutoRounds: 12,
+  // Stop starting new work when either plan window (5-hour or weekly) passes this, until it resets.
+  usageCeilingPct: 90,
   host: "127.0.0.1",
   port: 4600,
   gemini: { apiKey: "", imageModel: "gemini-3.1-flash-image-preview", textModel: "gemini-flash-latest" },
@@ -53,7 +59,9 @@ export class Config {
     this.values.maxParallel = clampInt(this.values.maxParallel, 1, 15);
     this.values.taskTimeoutMin = clampInt(this.values.taskTimeoutMin, 5, 600);
     this.values.maxAutoRounds = clampInt(this.values.maxAutoRounds, 1, 200);
+    this.values.usageCeilingPct = clampInt(this.values.usageCeilingPct, 10, 100);
     if (!["safe", "auto", "autopilot"].includes(this.values.permissionMode)) this.values.permissionMode = "safe";
+    if (!["quality", "balanced", "saver", "custom"].includes(this.values.modelPreset)) this.values.modelPreset = "balanced";
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     fs.writeFileSync(this.file, JSON.stringify(this.values, null, 2));
   }
@@ -71,9 +79,14 @@ export class Config {
   }
 }
 
+// Maps whose keys aren't known ahead of time (agent id -> model) are replaced, not merged.
+const OPEN_MAPS = new Set(["agentModels"]);
+
 function merge(target, source) {
   for (const [k, v] of Object.entries(source ?? {})) {
-    if (v && typeof v === "object" && !Array.isArray(v) && target[k] && typeof target[k] === "object") merge(target[k], v);
+    if (OPEN_MAPS.has(k)) {
+      if (v && typeof v === "object" && !Array.isArray(v)) target[k] = Object.fromEntries(Object.entries(v).filter(([, m]) => typeof m === "string" && m));
+    } else if (v && typeof v === "object" && !Array.isArray(v) && target[k] && typeof target[k] === "object") merge(target[k], v);
     else if (k in target) target[k] = v;
   }
 }

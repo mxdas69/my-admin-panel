@@ -24,6 +24,8 @@ const out = (o) => process.stdout.write(`${JSON.stringify(o)}\n`);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 out({ type: "system", subtype: "init", session_id: sessionId, tools: ["Bash", "Read"], mcp_servers: [{ name: "Roblox_Studio", status: "connected" }] });
+// Report plan usage the way Claude Code does, so the app's meter has something to show.
+out({ type: "rate_limit_event", rate_limit_info: { status: "allowed", unifiedWindows: { five_hour: { utilization: 0.05, resetsAt: Math.floor(Date.now() / 1000) + 3600 } } } });
 await wait(Number(process.env.FAKE_DELAY ?? 150));
 
 if (prompt.includes("PLEASE FAIL")) {

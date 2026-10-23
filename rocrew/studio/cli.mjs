@@ -3,7 +3,9 @@
 // Run `node studio/cli.mjs help` for the commands.
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(process.env.ROCREW_ROOT ?? path.join(path.dirname(fileURLToPath(import.meta.url)), ".."));
@@ -15,12 +17,21 @@ const HELP = `RoCrew CLI — node studio/cli.mjs <command> [options]
 Work
   status                                   Games, open tasks and what waits on the owner
   task add --agent <id> --title "…" [--brief "…" | --brief-file f] [--game slug]
-           [--after t1,t2] [--studio yes|no]   Queue work for an agent (prints the task id)
+           [--after t1,t2] [--studio yes|no] [--size small|normal|big] [--model opus|sonnet|haiku]
+                                           Queue work for an agent (prints the task id).
+                                           --size small: quick, mechanical work on a lighter model.
+                                           --size big: hard design or code on Opus with more thinking.
   task list [--game slug] [--all]          Open tasks (or every task with --all)
   say --to <id> "…"                         Post a handoff note on the team feed
 
 The owner
-  ask --title "…" [--body "…"] [--game slug]            Add a "Needs you" checkpoint
+  ask --title "…" [--body "…"] [--game slug]            Add a "Needs you" checkpoint (a question or a decision)
+  test --title "Try the shop on your phone" --steps "Open the game|Tap Shop|Buy the small pack"
+       [--media shot1.png,shot2.png | --media clip.mp4] [--body "…"]
+                                                         Ask the owner to test something. Steps are split on "|".
+                                                         Always show them: screenshots of each step, or a clip.
+  clip --images a.png,b.png,c.png --out games/<slug>/media/how-to-test.mp4 [--seconds 2.5]
+                                                         Turn screenshots into a short video (needs ffmpeg)
   review --file <path> --question "…" [--title "…"] [--group "…"] [--game slug]
                                                          Put an image or video in the owner's Review queue
   pitch --file <pitch.json>                              Submit a game pitch (Pulse)
@@ -124,8 +135,18 @@ switch (cmd) {
     if (sub === "add") {
       if (!o.agent || !o.title) fail('Usage: task add --agent <id> --title "…" [--brief "…"]');
       const brief = o["brief-file"] ? fs.readFileSync(path.resolve(ROOT, o["brief-file"]), "utf8") : o.brief === true ? "" : o.brief ?? "";
-      const t = await api("POST", "/api/tasks", { agent: o.agent, title: o.title, brief, game, after: list(o.after), studio: yesNo(o.studio), from: ME });
-      console.log(`${t.id} queued for ${t.agent}${t.studio ? " (needs Studio)" : ""}${t.after.length ? ` after ${t.after.join(", ")}` : ""}`);
+      const t = await api("POST", "/api/tasks", {
+        agent: o.agent,
+        title: o.title,
+        brief,
+        game,
+        after: list(o.after),
+        studio: yesNo(o.studio),
+        size: typeof o.size === "string" ? o.size : undefined,
+        model: typeof o.model === "string" ? o.model : undefined,
+        from: ME,
+      });
+      console.log(`${t.id} queued for ${t.agent}${t.studio ? " (needs Studio)" : ""}${t.size !== "normal" ? ` [${t.size}]` : ""}${t.after.length ? ` after ${t.after.join(", ")}` : ""}`);
     } else if (sub === "list") {
       const s = await api("GET", "/api/state");
       const tasks = s.tasks.filter((t) => (o.all || t.status === "working" || t.status === "queued") && (!o.game || t.game === o.game));
@@ -142,10 +163,41 @@ switch (cmd) {
     break;
   }
 
-  case "ask": {
-    if (!o.title) fail('Usage: ask --title "…" [--body "…"]');
-    const a = await api("POST", "/api/asks", { from: ME, title: o.title, body: o.body === true ? "" : o.body ?? "", game });
-    console.log(`${a.id} added to the owner's "Needs you" list. Their reply comes back to the Lead.`);
+  case "ask":
+  case "test": {
+    if (!o.title) fail(`Usage: ${cmd} --title "…" [--body "…"]${cmd === "test" ? ' --steps "step 1|step 2"' : ""}`);
+    const steps = o["steps-file"]
+      ? fs.readFileSync(path.resolve(ROOT, o["steps-file"]), "utf8").split("\n")
+      : typeof o.steps === "string"
+        ? o.steps.split("|")
+        : [];
+    if (cmd === "test" && !steps.length) fail('A test needs --steps "first step|second step|…" so the owner knows exactly what to do.');
+    const media = [...list(o.media), ...(typeof o.video === "string" ? [o.video] : [])];
+    const a = await api("POST", "/api/asks", { from: ME, title: o.title, body: o.body === true ? "" : o.body ?? "", game, kind: cmd === "test" || o.test ? "test" : "question", steps, media });
+    console.log(`${a.id} added to the owner's "Needs you" list${a.kind === "test" ? ` as a test with ${a.steps.length} step(s) and ${a.media.length} picture(s)/clip(s)` : ""}. Their answer comes back to the Lead.`);
+    break;
+  }
+
+  case "clip": {
+    const images = list(o.images);
+    if (!images.length || typeof o.out !== "string") fail("Usage: clip --images a.png,b.png --out <file.mp4> [--seconds 2.5]");
+    try {
+      execFileSync("ffmpeg", ["-version"], { stdio: "ignore" });
+    } catch {
+      console.log("ffmpeg isn't installed, so no video was made. Attach the screenshots with --media instead: the app plays them as a step-by-step slideshow.");
+      break;
+    }
+    const seconds = Math.min(10, Math.max(0.5, Number(o.seconds) || 2.5));
+    const listFile = path.join(os.tmpdir(), `rocrew-clip-${process.pid}.txt`);
+    const esc = (f) => path.resolve(ROOT, f).split(path.sep).join("/").replace(/'/g, "'\\''");
+    const lines = images.flatMap((f) => [`file '${esc(f)}'`, `duration ${seconds}`]);
+    lines.push(`file '${esc(images.at(-1))}'`);
+    fs.writeFileSync(listFile, lines.join("\n"));
+    const out = path.resolve(ROOT, o.out);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listFile, "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=0x0b0911,format=yuv420p", "-r", "30", out]);
+    fs.rmSync(listFile, { force: true });
+    console.log(path.relative(ROOT, out));
     break;
   }
 

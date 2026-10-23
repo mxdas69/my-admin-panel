@@ -24,6 +24,8 @@ const S = {
     pitchTab: "pending",
     drafts: {},
     attachments: {},
+    checks: {},
+    askMedia: {},
     busy: {},
   },
 };
@@ -88,6 +90,32 @@ function statusPill(s) {
   const map = { working: "green", queued: "blue", done: "purple", failed: "red", blocked: "amber", cancelled: "", pending: "amber", approved: "green", changes: "amber", rejected: "red", open: "amber", idle: "" };
   const label = { working: "Working now", changes: "Changes asked" }[s] ?? s[0].toUpperCase() + s.slice(1);
   return `<span class="pill ${map[s] ?? ""}">${s === "working" ? '<span class="dot live"></span>' : ""}${esc(label)}</span>`;
+}
+
+/** "You" for whoever is looking, otherwise the person's name. */
+function personLabel(by) {
+  const me = S.state?.me;
+  const who = !by || by === "owner" ? "owner" : by;
+  if (me && (me.owner ? who === "owner" : who === me.name)) return "You";
+  return who === "owner" ? S.state?.owner || "Owner" : who;
+}
+
+const isOwner = () => S.state?.me?.owner !== false;
+
+function untilText(ts) {
+  if (!ts) return "";
+  const m = Math.max(0, Math.round((ts - Date.now()) / 60000));
+  if (m < 60) return `${m}m`;
+  if (m < 48 * 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
+  return `${Math.round(m / 1440)}d`;
+}
+
+function usageBars(u) {
+  if (!u || (!u.fiveHour && !u.week)) return "";
+  const ceiling = S.state.usageCeilingPct ?? 90;
+  const bar = (label, w) =>
+    w ? `<div class="usage-row"><span>${label}</span><span class="meter"><span style="width:${Math.min(100, w.pct)}%;background:${w.pct >= ceiling ? "var(--red)" : w.pct >= 70 ? "var(--amber)" : "var(--green)"}"></span></span><b>${w.pct}%</b>${w.resetsAt ? `<small class="faint">resets in ${untilText(w.resetsAt)}</small>` : ""}</div>` : "";
+  return bar("5-hour", u.fiveHour) + bar("Week", u.week);
 }
 
 const counts = () => {
@@ -164,8 +192,9 @@ function renderSidebar(r) {
       <b>${s.paused ? "Crew paused" : c.working ? `${c.working} agent${c.working > 1 ? "s" : ""} working` : "Crew is idle"}</b>
       <small>${holder ? `${icon("lock")} ${esc(holder)} has Studio` : c.queued ? `${c.queued} task(s) queued` : "Nothing running"}</small>
     </div>
+    ${s.usage?.fiveHour || s.usage?.week ? `<div class="side-box usage" title="Your Claude plan's usage, as Claude Code last reported it">${s.usageHold ? `<b style="color:var(--amber)">Waiting for your plan to reset</b>` : `<b>Claude plan usage</b>`}${usageBars(s.usage)}</div>` : ""}
     <div class="side-foot">
-      ${nav("settings", "settings", "Settings")}
+      ${isOwner() ? nav("settings", "settings", "Settings") : `<div class="side-box"><small>${icon("users")} You're in ${esc(s.owner || "your friend")}'s studio as <b>${esc(s.me?.name ?? "a guest")}</b></small></div>`}
       <a class="side-box" href="#/settings" style="display:block;text-decoration:none">
         <small><span class="dot" style="color:${conn.claude?.installed ? "var(--green)" : "var(--red)"}"></span>Claude Code ${conn.claude?.installed ? esc(conn.claude.version ?? "") : conn.claude ? "not found" : "checking…"}</small>
         <small><span class="dot" style="color:${studioOk ? "var(--green)" : "var(--amber)"}"></span>Roblox Studio ${studioOk ? "connected" : conn.studio ? conn.studio.status : "not set up"}</small>
@@ -195,7 +224,10 @@ function renderTopbar(r) {
 function messageHtml(m) {
   const a = agent(m.agent);
   if (m.role === "tool" || m.role === "tool-error") return `<div class="msg ${m.role}"><div class="line" title="${esc(m.text)}">${esc(m.text)}</div></div>`;
-  if (m.role === "owner") return `<div class="msg owner"><div class="who">You · ${ago(m.at)}</div><div class="bubble md">${renderMarkdown(m.text)}</div></div>`;
+  if (m.role === "owner") {
+    const text = m.by && m.by !== "owner" ? m.text.replace(/^\(From .+?, who co-owns this studio\)\s*/, "") : m.text;
+    return `<div class="msg owner"><div class="who">${esc(personLabel(m.by))} · ${ago(m.at)}</div><div class="bubble md">${renderMarkdown(text)}</div></div>`;
+  }
   if (m.role === "brief") {
     const label = m.from === "system" ? "Crew update" : `New task from ${esc(agent(m.from).name)}`;
     return `<div class="msg brief"><div class="who">${icon("arrow")} ${label} · ${ago(m.at)}</div><div class="bubble md">${renderMarkdown(m.text)}</div></div>`;
@@ -336,7 +368,7 @@ PAGES.home = {
     const now = new Date();
     const hour = now.getHours();
     const hello = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-    const name = S.state.owner || "there";
+    const name = isOwner() ? S.state.owner || "there" : S.state.me?.name ?? "there";
     el.innerHTML = `
       <div class="hero-date">${now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })} · ${now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</div>
       <h1 class="hello">${hello}, <span class="name">${esc(name)}</span></h1>
@@ -348,8 +380,9 @@ PAGES.home = {
         <button class="btn" data-act="new-task">${icon("tasks")}New task</button>
         <button class="btn" data-act="pause" id="pause-btn"></button>
       </div>
+      <div id="home-banner"></div>
       <div class="cols">
-        <div><h2 class="section-title">Needs you <span id="needs-count"></span></h2><div id="needs"></div>
+        <div><div id="setup"></div><h2 class="section-title">Needs you <span id="needs-count"></span></h2><div id="needs"></div>
           <h2 class="section-title" style="margin-top:26px">Team feed</h2><div id="feed"></div></div>
         <div class="card"><h2 class="section-title"><span class="dot live" style="color:var(--green)"></span>Live now</h2><div id="live"></div></div>
       </div>`;
@@ -368,25 +401,27 @@ PAGES.home = {
 
     const cards = [];
     const conn = s.connections;
-    if (conn.claude && !conn.claude.installed) {
-      cards.push(card("plug", "Setup", "Claude Code wasn't found", "The crew runs on Claude Code. Install it, sign in, then check again in Settings.", `<a class="btn" href="#/settings">Open Settings</a>`));
-    } else if (conn.checkedAt && conn.studio?.status !== "connected") {
-      cards.push(card("plug", "Setup", "Roblox Studio isn't connected", "Agents that build need the Roblox Studio MCP server. Settings shows how to connect it.", `<a class="btn" href="#/settings">How to connect</a>`));
+    el.querySelector("#home-banner").innerHTML = s.usageHold
+      ? `<div class="banner amber"><b>${icon("pause")} New work is waiting for your Claude plan.</b> Your ${esc(s.usageHold.window)} usage is at ${s.usageHold.pct}% (the limit you set is ${s.usageHold.ceiling}%). The crew picks up again ${s.usageHold.resetsAt ? `in about ${untilText(s.usageHold.resetsAt)}` : "when it resets"}. Messages you send the Lead still go through.${isOwner() ? ` <a href="#/settings">Change the limit</a>` : ""}</div>`
+      : "";
+    const setup = setupHtml();
+    const box = el.querySelector("#setup");
+    if (box.dataset.sig !== setup) {
+      box.dataset.sig = setup;
+      box.innerHTML = setup;
     }
     if (c.reviews) cards.push(card("review", "Review", `${c.reviews} new item${c.reviews > 1 ? "s" : ""} from the agents`, "", `<a class="btn" href="#/review">Review them</a>`));
-    if (c.pitches) cards.push(card("bulb", "Pitches", `${c.pitches} pitch${c.pitches > 1 ? "es" : ""} need your decision`, "Nothing gets built until you approve one.", `<a class="btn" href="#/pitches">Open pitches</a>`));
-    for (const a of s.asks.filter((x) => x.status === "open")) {
-      cards.push(`<div class="card glow"><div class="card-head">${tile(a.from, "lg")}<div class="grow">
-        <div class="eyebrow">From ${esc(agent(a.from).name)}${a.game ? ` · ${esc(gameName(a.game))}` : ""} · ${ago(a.createdAt)}</div>
-        <h3>${esc(a.title)}</h3>${a.body ? `<div class="md muted">${renderMarkdown(a.body)}</div>` : ""}
-        ${a.reply ? `<p class="faint">Your last reply: ${esc(a.reply)}</p>` : ""}
-        <textarea class="input" rows="2" id="ask-${a.id}" placeholder="Reply…" style="margin-top:10px">${esc(S.ui.drafts[`ask-${a.id}`] ?? "")}</textarea>
-        <div class="row" style="margin-top:8px"><button class="btn" data-act="ask-reply" data-id="${a.id}">${icon("send")}Reply</button><button class="btn green" data-act="ask-done" data-id="${a.id}">${icon("check")}Done</button></div>
-      </div></div></div>`);
+    if (c.pitches) cards.push(card("bulb", "Pitches", `${c.pitches} pitch${c.pitches > 1 ? "es need" : " needs"} your decision`, "Nothing gets built until you approve one.", `<a class="btn" href="#/pitches">Open pitches</a>`));
+    for (const a of s.asks.filter((x) => x.status === "open")) cards.push(askCard(a));
+    const html = cards.join("") || `<div class="empty">Nothing needs you right now. The crew will add checkpoints here.</div>`;
+    // Re-render only when something changed, so videos and slideshows don't restart on every update.
+    const sig = `${html.length}:${s.asks.map((a) => a.id + a.status + (a.reply ?? "")).join()}:${c.reviews}:${c.pitches}:${conn.studio?.status}:${JSON.stringify(S.ui.askMedia)}`;
+    if (el.dataset.needsSig !== sig) {
+      el.dataset.needsSig = sig;
+      keepDrafts(el, () => {
+        el.querySelector("#needs").innerHTML = html;
+      });
     }
-    keepDrafts(el, () => {
-      el.querySelector("#needs").innerHTML = cards.join("") || `<div class="empty">Nothing needs you right now. The crew will add checkpoints here.</div>`;
-    });
 
     el.querySelector("#feed").innerHTML =
       s.feed
@@ -407,6 +442,84 @@ PAGES.home = {
       .join("");
   },
 };
+
+/** The first-run checklist. It disappears once the must-haves are done and a game exists. */
+function setupHtml() {
+  const s = S.state;
+  const conn = s.connections;
+  if (!isOwner() || S.ui.hideSetup) return "";
+  const steps = [
+    [conn.claude?.installed, "Install Claude Code and sign in", "Run <span class=\"mono\">claude</span> once in a terminal and sign in with your plan. The crew uses it for every agent.", "#/settings"],
+    [conn.studio?.status === "connected", "Connect Roblox Studio", "In Studio: Assistant → settings → MCP Servers → quick connect for Claude Code. Then press Check again in Settings.", "#/settings"],
+    [Boolean(s.owner), "Add your name", "So the crew knows who it's working for.", "#/settings"],
+    [conn.gemini?.keySet, "Add a Gemini key (optional)", "For icons, thumbnails and UI art. Free from Google AI Studio.", "#/settings", true],
+    [s.games.length > 0 || s.tasks.length > 0, "Give the Lead your first idea", "Type it in the box above, or ask Pulse for pitches.", "#/pitches"],
+  ];
+  const must = steps.filter((x) => !x[4]);
+  if (must.every((x) => x[0]) && s.games.length) return "";
+  const done = steps.filter((x) => x[0]).length;
+  return `<div class="card setup"><div class="row"><h3 class="section-title grow" style="margin:0">${icon("sparkle")} Get set up <span class="faint" style="font-weight:500">${done} of ${steps.length}</span></h3><button class="btn ghost small" data-act="hide-setup" title="Hide">${icon("x")}</button></div>
+    <span class="meter" style="margin:10px 0 6px"><span style="width:${Math.round((done / steps.length) * 100)}%"></span></span>
+    ${steps.map(([ok, title, how, href, optional]) => `<a class="setup-step ${ok ? "ok" : ""}" href="${href}"><span class="box">${ok ? icon("check") : ""}</span><span class="grow"><b>${title}</b>${ok ? "" : `<small>${how}</small>`}</span>${ok ? "" : optional ? `<span class="pill">optional</span>` : icon("right")}</a>`).join("")}
+  </div>`;
+}
+
+function askCard(a) {
+  const files = a.media ?? [];
+  const steps = a.steps ?? [];
+  const checks = S.ui.checks[a.id] ?? [];
+  const attached = S.ui.askMedia[a.id] ?? [];
+  const video = files.find((m) => /\.(mp4|webm|mov|m4v)$/i.test(m));
+  const images = files.filter((m) => /\.(png|jpe?g|webp|gif)$/i.test(m));
+  const isTest = a.kind === "test";
+  const player = video
+    ? `<video class="howto" src="${media(video)}" controls playsinline muted loop autoplay></video>`
+    : images.length
+      ? `<div class="howto slides" data-ask="${a.id}" data-i="0">${images.map((m, i) => `<img src="${media(m)}" alt="Step ${i + 1}" class="${i === 0 ? "on" : ""}">`).join("")}<span class="slide-n">1 / ${images.length}</span></div>`
+      : "";
+  return `<div class="card glow ask ${isTest ? "test" : ""}"><div class="card-head">${tile(a.from, "lg")}<div class="grow">
+    <div class="eyebrow">${isTest ? "Try it" : "Question"} · from ${esc(agent(a.from).name)}${a.game ? ` · ${esc(gameName(a.game))}` : ""} · ${ago(a.createdAt)}</div>
+    <h3>${esc(a.title)}</h3>${a.body ? `<div class="md muted">${renderMarkdown(a.body)}</div>` : ""}
+    ${player}
+    ${steps.length ? `<ol class="steps-list">${steps.map((st, i) => `<li class="${checks.includes(i) ? "checked" : ""}" data-act="check-step" data-id="${a.id}" data-i="${i}"><span class="box">${checks.includes(i) ? icon("check") : i + 1}</span><span>${esc(st)}</span></li>`).join("")}</ol>` : ""}
+    ${a.reply ? `<p class="faint">Last reply: ${esc(a.reply)}</p>` : ""}
+    <textarea class="input" rows="2" id="ask-${a.id}" placeholder="${isTest ? "What happened? (needed if something's wrong)" : "Your answer…"}" style="margin-top:10px">${esc(S.ui.drafts[`ask-${a.id}`] ?? "")}</textarea>
+    ${attached.length ? `<div class="thumbs" style="margin-top:8px">${attached.map((m) => (/\.(mp4|webm|mov|m4v)$/i.test(m) ? `<span class="pill">${icon("play")} video</span>` : `<img src="${media(m)}" alt="">`)).join("")}</div>` : ""}
+    <div class="row" style="margin-top:10px">
+      ${isTest
+        ? `<button class="btn green" data-act="ask-result" data-id="${a.id}" data-result="works">${icon("check")}It works</button>
+           <button class="btn red" data-act="ask-result" data-id="${a.id}" data-result="broken">${icon("x")}Something's wrong</button>`
+        : `<button class="btn primary" data-act="ask-reply" data-id="${a.id}">${icon("send")}Send answer</button>
+           <button class="btn green" data-act="ask-done" data-id="${a.id}">${icon("check")}Done</button>`}
+      <label class="btn" title="Attach a photo or video, from your phone's camera too">${icon("clip")}Photo / video<input type="file" accept="image/*,video/*" multiple hidden data-ask-upload="${a.id}"></label>
+    </div>
+  </div></div></div>`;
+}
+
+async function uploadMedia(file) {
+  const res = await fetch(`/api/media?name=${encodeURIComponent(file.name || "upload.png")}`, {
+    method: "POST",
+    headers: { "x-rocrew-token": TOKEN, "content-type": "application/octet-stream" },
+    body: file,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error ?? `Upload failed (${res.status})`);
+  return json.media;
+}
+
+// Step-by-step slideshows advance on their own, like a short video.
+setInterval(() => {
+  for (const show of document.querySelectorAll(".slides")) {
+    const imgs = show.querySelectorAll("img");
+    if (imgs.length < 2) continue;
+    const i = (Number(show.dataset.i) + 1) % imgs.length;
+    show.dataset.i = i;
+    imgs.forEach((im, n) => im.classList.toggle("on", n === i));
+    show.querySelector(".slide-n").textContent = `${i + 1} / ${imgs.length}`;
+    const steps = show.closest(".card")?.querySelectorAll(".steps-list li");
+    steps?.forEach((li, n) => li.classList.toggle("now", n === i));
+  }
+}, 2600);
 
 function card(ic, eyebrow, title, body, actions) {
   return `<div class="card glow"><div class="card-head"><span class="tile lg" style="--c:#7c5cff">${icon(ic)}</span><div class="grow"><div class="eyebrow">${esc(eyebrow)}</div><h3>${esc(title)}</h3>${body ? `<p class="muted" style="margin:2px 0 8px">${esc(body)}</p>` : ""}<div class="row">${actions}</div></div></div></div>`;
@@ -457,13 +570,21 @@ PAGES.tasks = {
   },
 };
 
+function modelBadge(t) {
+  const m = t.ran?.model ?? t.model;
+  const size = t.size && t.size !== "normal" ? t.size : "";
+  if (!m && !size) return "";
+  const color = { opus: "purple", sonnet: "blue", haiku: "green" }[m] ?? "";
+  return ` <span class="pill ${color} model-pill" title="${esc(`${m ?? "model picked when it starts"}${t.ran?.effort ? `, ${t.ran.effort} effort` : ""}${size ? `, ${size} task` : ""}`)}">${esc([m, size].filter(Boolean).join(" · "))}</span>`;
+}
+
 function taskRow(t, open = new Set()) {
   const a = agent(t.agent);
   const when = t.status === "working" ? `started ${ago(t.startedAt)}` : t.endedAt ? `${t.status} ${ago(t.endedAt)}` : `queued ${ago(t.createdAt)}`;
   const deps = t.after?.length ? ` · after ${t.after.join(", ")}` : "";
   const body = [t.brief && `Brief:\n${t.brief}`, t.result && `Result:\n${t.result}`, t.error && `Problem:\n${t.error}`].filter(Boolean).join("\n\n");
   return `<div class="task ${t.status}" style="flex-wrap:wrap">${tile(t.agent, "lg")}
-    <div class="grow"><b>${esc(t.title)}</b><small>${esc(a.name)} · from ${esc(agent(t.from === "system" ? "lead" : t.from).name)}${t.game ? ` · ${esc(gameName(t.game))}` : ""} · ${when}${t.studio ? " · needs Studio" : ""}${esc(deps)} · <span class="mono">${t.id}</span></small></div>
+    <div class="grow"><b>${esc(t.title)}</b>${modelBadge(t)}<small>${esc(a.name)} · from ${esc(t.from === "owner" ? personLabel(t.by) : agent(t.from === "system" ? "lead" : t.from).name)}${t.game ? ` · ${esc(gameName(t.game))}` : ""} · ${when}${t.studio ? " · needs Studio" : ""}${esc(deps)} · <span class="mono">${t.id}</span></small></div>
     ${t.status === "working" ? '<span class="spinner"></span>' : ""}${statusPill(t.status)}
     ${["queued", "working"].includes(t.status) ? `<button class="btn small" data-act="cancel-task" data-id="${t.id}">${t.status === "working" ? "Stop" : "Cancel"}</button>` : ""}
     <a class="btn small" href="#/team/${t.agent}">Chat</a>
@@ -897,8 +1018,12 @@ PAGES.vault = {
 PAGES.settings = {
   title: () => "Settings",
   async mount(el) {
+    if (!isOwner()) {
+      el.innerHTML = `<div class="page-head"><h2>Settings</h2></div><div class="empty">Only ${esc(S.state.owner || "the studio owner")} can change settings. You can do everything else: talk to the Lead and the team, review work, test builds and approve pitches.</div>`;
+      return;
+    }
     el.innerHTML = `<div class="page-head"><h2>Settings</h2><p>How the crew runs, and what it's connected to. Keys are stored only in <span class="mono">.rocrew/config.json</span> on this computer.</p></div><div id="settings-body">Loading…</div>`;
-    S.settings = await attempt(() => api("GET", "/api/settings"));
+    [S.settings, S.people] = await Promise.all([attempt(() => api("GET", "/api/settings")), attempt(() => api("GET", "/api/people"))]);
     if (S.settings) this.draw(el);
   },
   update(el) {
@@ -914,7 +1039,6 @@ PAGES.settings = {
           <label class="field">Your name <small>For the greeting on Home.</small><input class="input" id="set-ownerName" value="${esc(v.ownerName)}"></label></div>
         <div class="card"><h3 class="section-title">${icon("sparkle")} Claude Code</h3>
           <label class="field">Command <small>How to start Claude Code on this computer. Usually just <span class="mono">claude</span>.</small><input class="input mono" id="set-claudeCommand" value="${esc(v.claudeCommand)}"></label>
-          <label class="field">Model <small>Leave empty to use your Claude Code default.</small><input class="input mono" id="set-model" value="${esc(v.model)}" placeholder="default"></label>
           <div class="field">Permissions
             <label class="check"><input type="radio" name="perm" value="safe" ${v.permissionMode === "safe" ? "checked" : ""}><span><b>Safe auto</b><br><small class="muted">Agents may edit files in this folder, use the RoCrew CLI, web search, and your MCP servers (Studio, Blender) without asking. Anything else is refused.</small></span></label>
             <label class="check" style="margin-top:8px"><input type="radio" name="perm" value="auto" ${v.permissionMode === "auto" ? "checked" : ""}><span><b>Auto</b><br><small class="muted">Claude Code's auto mode: its safety check approves routine actions and blocks risky ones, on top of the safe list. Needs a Claude Code version and plan that offer auto mode.</small></span></label>
@@ -924,6 +1048,7 @@ PAGES.settings = {
           <label class="field grow">Task time limit (min)<input class="input" type="number" min="5" id="set-taskTimeoutMin" value="${v.taskTimeoutMin}"></label>
           <label class="field grow">Rounds on their own<input class="input" type="number" min="1" id="set-maxAutoRounds" value="${v.maxAutoRounds}"></label></div>
           <p class="faint" style="margin:0;font-size:12px">Every agent run uses your Claude Code plan's usage. More agents at once finishes sooner but uses it faster.</p></div>
+        ${modelsCardHtml(v)}
         <div class="card"><h3 class="section-title">${icon("image")} Gemini</h3>
           <label class="field">API key <small>${v.gemini.apiKeySet ? `Saved (${esc(v.gemini.apiKeyHint)}). Paste a new one to replace it.` : "From Google AI Studio. Used for icons, thumbnails, UI art and second opinions."}</small><input class="input mono" type="password" id="set-gemini-apiKey" placeholder="${v.gemini.apiKeySet ? "••••••••" : "AIza…"}"></label>
           <div class="row"><label class="field grow">Image model<input class="input mono" id="set-gemini-imageModel" value="${esc(v.gemini.imageModel)}"></label><label class="field grow">Text model<input class="input mono" id="set-gemini-textModel" value="${esc(v.gemini.textModel)}"></label></div></div>
@@ -936,10 +1061,65 @@ PAGES.settings = {
           ${v.phoneUrl ? `<div class="banner blue" style="margin:12px 0 0"><b>Your private phone link</b><span class="mono" style="word-break:break-all">${esc(v.phoneUrl)}</span><br><small>Open it on your phone while it's on the same Wi-Fi. Anyone with this link can control your studio, so keep it to yourself.</small></div>` : ""}</div>
         <div class="row" style="margin-top:14px"><button class="btn primary" data-act="save-settings">${icon("check")}Save settings</button></div>
       </div>
-      <div><div class="card"><div class="row"><h3 class="section-title grow" style="margin:0">Connections</h3><button class="btn small" data-act="check-connections">${icon("refresh")}Check again</button></div><div id="connections">${connectionsHtml()}</div></div></div>
+      <div><div class="card"><div class="row"><h3 class="section-title grow" style="margin:0">Connections</h3><button class="btn small" data-act="check-connections">${icon("refresh")}Check again</button></div><div id="connections">${connectionsHtml()}</div></div>
+        <div class="card" id="people">${peopleHtml()}</div></div>
       </div>`;
   },
 };
+
+const TIER_LABEL = { opus: "Opus", sonnet: "Sonnet", haiku: "Haiku" };
+
+function modelsCardHtml(v) {
+  const presets = v.presets ?? {};
+  const pick = v.modelPreset ?? "balanced";
+  const u = S.state.usage;
+  return `<div class="card"><h3 class="section-title">${icon("scale")} Models and usage</h3>
+    <p class="muted" style="margin-top:0">Opus does the work that decides quality. Sonnet and Haiku take the lighter jobs, so your plan lasts longer. The Lead can also mark a task <b>small</b> (one tier lighter) or <b>big</b> (Opus, extra thinking).</p>
+    <div class="field">${[...Object.entries(presets), ["custom", { label: "Pick per agent", blurb: "Choose the model for each agent yourself." }]]
+      .map(([key, p]) => `<label class="check" style="margin-top:8px"><input type="radio" name="preset" value="${key}" ${pick === key ? "checked" : ""} data-change="preset"><span><b>${esc(p.label)}</b>${key === "balanced" ? ' <span class="pill purple">recommended</span>' : ""}<br><small class="muted">${esc(p.blurb)}</small></span></label>`)
+      .join("")}</div>
+    <div class="model-grid" id="model-grid">${modelGridHtml(v, pick)}</div>
+    <label class="field" style="margin-top:12px">Force one model for everyone <small>Optional. Overrides the table, for example <span class="mono">sonnet</span> or a full model id. Leave empty to use the table.</small><input class="input mono" id="set-model" value="${esc(v.model)}" placeholder="use the table"></label>
+    <label class="field">Stop new work at <small>When your 5-hour or weekly plan usage passes this, agents wait until it resets. What you send the Lead still runs.</small>
+      <span class="row"><input class="input" type="number" min="10" max="100" id="set-usageCeilingPct" value="${v.usageCeilingPct}" style="width:90px"><span>%</span></span></label>
+    ${u ? `<div class="usage-box">${usageBars(u)}<small class="faint">Last reported by Claude Code ${ago(u.at)}.</small></div>` : `<p class="faint" style="font-size:12px;margin:0">Usage shows here after the first agent run.</p>`}
+  </div>`;
+}
+
+function modelGridHtml(v, pick) {
+  const presets = v.presets ?? {};
+  return agents()
+    .map((a) => {
+      const tier = pick === "custom" ? v.agentModels?.[a.id] ?? presets.balanced?.tiers[a.id] ?? "opus" : presets[pick]?.tiers[a.id] ?? "opus";
+      return `<label class="model-cell"><span class="dot" style="color:${a.color}"></span><span class="grow">${esc(a.name)}</span>${
+        pick === "custom"
+          ? `<select class="input small" data-model-agent="${a.id}">${["opus", "sonnet", "haiku"].map((t) => `<option value="${t}" ${tier === t ? "selected" : ""}>${TIER_LABEL[t]}</option>`).join("")}</select>`
+          : `<span class="pill ${{ opus: "purple", sonnet: "blue", haiku: "green" }[tier]}">${TIER_LABEL[tier]}</span>`
+      }</label>`;
+    })
+    .join("");
+}
+
+function peopleHtml() {
+  const p = S.people;
+  if (!p) return `<h3 class="section-title">${icon("users")} Friends</h3><div class="empty">Loading…</div>`;
+  const local = `http://localhost:${location.port || 4600}`;
+  return `<h3 class="section-title">${icon("users")} Friends</h3>
+    <p class="muted" style="margin-top:0">Make games together. Each friend gets their own private link: they can talk to the Lead and the team, review work, test builds and approve pitches. Only you can change Settings. Everything they do shows their name, and the crew runs on your Claude plan.</p>
+    <div class="row"><input class="input grow" id="invite-name" placeholder="Friend's name, e.g. Sam" maxlength="40"><button class="btn primary" data-act="invite">${icon("plus")}Invite</button></div>
+    ${p.people.length ? p.people.map((f) => `<div class="friend"><div class="row"><span class="tile sm" style="--c:#4aa8ff">${icon("users")}</span><b class="grow">${esc(f.name)}</b><small class="faint">${f.lastSeenAt ? `here ${ago(f.lastSeenAt)}` : "hasn't opened it yet"}</small><button class="btn ghost small" data-act="remove-friend" data-id="${f.id}" data-name="${esc(f.name)}" title="Remove their access">${icon("trash")}</button></div>
+      ${(f.links ?? []).map((l) => `<label class="field" style="margin:8px 0 0">${esc(l.kind === "tailscale" ? "Over Tailscale (any Wi-Fi)" : l.kind === "home network" ? "On your Wi-Fi" : l.kind)}<input class="input mono small" readonly value="${esc(l.url)}" data-act="select-all"></label>`).join("")}
+      ${f.links?.length ? "" : `<p class="faint" style="font-size:12px;margin:8px 0 0">No link yet: turn on <b>Open on my phone too</b> and restart, or use a tunnel (below).</p>`}
+      <label class="field" style="margin:8px 0 0">Their key <small>Add <span class="mono">?key=…</span> to any address that reaches this app, like a tunnel.</small><input class="input mono small" readonly value="${esc(f.key)}" data-act="select-all"></label></div>`).join("") : `<div class="empty" style="margin-top:10px">No friends invited yet.</div>`}
+    <details class="how" ${p.people.length ? "" : "open"}><summary><b>How your friend reaches it</b></summary>
+      <ol class="steps">
+        <li><b>Same house or Wi-Fi:</b> turn on <b>Open on my phone too</b> (left), save, restart the app. Their link appears above.</li>
+        <li><b>Different houses, easiest:</b> both install <a href="https://tailscale.com/download" target="_blank" rel="noopener">Tailscale</a> (free) and sign in to the same tailnet, or share this computer with them. Turn on <b>Open on my phone too</b>. Their Tailscale link appears above.</li>
+        <li><b>Different houses, no installs for them:</b> on this computer run <span class="mono">cloudflared tunnel --url ${esc(local)}</span>. It prints a <span class="mono">https://….trycloudflare.com</span> address. Send them that address with <span class="mono">/?key=</span> and their key on the end. The address changes each time you start the tunnel.</li>
+        <li><b>Building in the same place:</b> in Roblox Studio turn on <b>Team Create</b> (File → Game Settings → Permissions, or the Collaborate button) and add your friend, so you can both open the place while the crew works in it.</li>
+      </ol>
+      <p class="faint" style="font-size:12px">Anyone with a link can direct your crew and use your Claude plan, so only share it with people you trust. Remove someone here and their link stops working right away.</p></details>`;
+}
 
 function connectionsHtml() {
   const c = S.state.connections;
@@ -964,6 +1144,9 @@ async function saveSettings() {
     ownerName: val("set-ownerName"),
     claudeCommand: val("set-claudeCommand") || "claude",
     model: val("set-model").trim(),
+    modelPreset: document.querySelector('input[name="preset"]:checked')?.value ?? "balanced",
+    agentModels: Object.fromEntries([...document.querySelectorAll("[data-model-agent]")].map((x) => [x.dataset.modelAgent, x.value])),
+    usageCeilingPct: val("set-usageCeilingPct"),
     permissionMode: document.querySelector('input[name="perm"]:checked')?.value ?? "safe",
     extraAllowedTools: val("set-extraAllowedTools").split(",").map((s) => s.trim()).filter(Boolean),
     maxParallel: val("set-maxParallel"),
@@ -997,6 +1180,7 @@ function newTaskModal(preset = {}) {
     <label class="field">Details <small>Goal, where to look, and what "done" means.</small><textarea class="input" id="nt-brief" rows="5">${esc(preset.brief ?? "")}</textarea></label>
     <div class="row"><label class="field grow">Game<select class="input" id="nt-game"><option value="">No game</option>${s.games.map((g) => `<option value="${esc(g.slug)}" ${preset.game === g.slug ? "selected" : ""}>${esc(g.name)}</option>`).join("")}</select></label>
     <label class="field grow">After tasks <small>optional, e.g. t3,t7</small><input class="input mono" id="nt-after"></label></div>
+    <label class="field">Size <small>Small runs on a lighter model to save usage; big gets Opus with extra thinking.</small><select class="input" id="nt-size"><option value="normal">Normal</option><option value="small">Small (quick, routine)</option><option value="big">Big (hard, important)</option></select></label>
     <label class="check"><input type="checkbox" id="nt-studio" ${agent(first).studio ? "checked" : ""}><span>Needs Studio <small class="muted">(waits for the Studio lock so only one agent edits the place at a time)</small></span></label>
     <div class="row end" style="margin-top:16px"><button class="btn" data-act="close-overlay">Cancel</button><button class="btn primary" data-act="create-task">${icon("plus")}Queue task</button></div>`);
   document.getElementById("nt-agent").addEventListener("change", (e) => {
@@ -1014,6 +1198,7 @@ async function createTask() {
       game: val("nt-game"),
       after: val("nt-after"),
       studio: document.getElementById("nt-studio").checked,
+      size: val("nt-size"),
       from: "owner",
     }),
   );
@@ -1139,10 +1324,58 @@ const ACTIONS = {
     await attempt(() => api("POST", `/api/tasks/${el.dataset.id}/cancel`));
     await refresh();
   },
+  "select-all": (el) => el.select(),
+  invite: async () => {
+    const box = document.getElementById("invite-name");
+    const name = box.value.trim();
+    if (!name) return box.focus();
+    const res = await attempt(() => api("POST", "/api/people", { name }), `Invited ${name}. Send them their link.`);
+    if (res) {
+      S.people = res;
+      box.value = "";
+      S.ui.drafts["invite-name"] = "";
+      document.getElementById("people").innerHTML = peopleHtml();
+    }
+  },
+  "remove-friend": async (el) => {
+    if (!confirm(`Remove ${el.dataset.name}? Their link stops working right away.`)) return;
+    const res = await attempt(() => api("DELETE", `/api/people/${el.dataset.id}`), `${el.dataset.name} removed.`);
+    if (res) {
+      S.people = { ...S.people, people: res.people };
+      document.getElementById("people").innerHTML = peopleHtml();
+    }
+  },
+  "hide-setup": () => {
+    S.ui.hideSetup = true;
+    render();
+  },
+  "check-step": (el) => {
+    const list = (S.ui.checks[el.dataset.id] ??= []);
+    const i = Number(el.dataset.i);
+    S.ui.checks[el.dataset.id] = list.includes(i) ? list.filter((x) => x !== i) : [...list, i];
+    el.classList.toggle("checked");
+    el.querySelector(".box").innerHTML = el.classList.contains("checked") ? icon("check") : String(i + 1);
+  },
+  "ask-result": async (el) => {
+    const id = el.dataset.id;
+    const reply = document.getElementById(`ask-${id}`)?.value.trim() ?? "";
+    const result = el.dataset.result;
+    if (result === "broken" && !reply && !(S.ui.askMedia[id] ?? []).length) {
+      document.getElementById(`ask-${id}`)?.focus();
+      return toast("Say what went wrong, or attach a photo or video, so the crew can fix it.", true);
+    }
+    const ok = await attempt(() => api("POST", `/api/asks/${id}/answer`, { result, reply, media: S.ui.askMedia[id] ?? [] }), result === "works" ? "Nice. Told the Lead it works." : "Sent to the Lead to get it fixed.");
+    if (ok) {
+      S.ui.drafts[`ask-${id}`] = "";
+      delete S.ui.askMedia[id];
+      await refresh();
+    }
+  },
   "ask-reply": async (el) => {
     const box = document.getElementById(`ask-${el.dataset.id}`);
     if (!box.value.trim()) return toast("Write a reply first.", true);
-    await attempt(() => api("POST", `/api/asks/${el.dataset.id}/answer`, { reply: box.value.trim() }), "Sent to the Lead.");
+    await attempt(() => api("POST", `/api/asks/${el.dataset.id}/answer`, { reply: box.value.trim(), media: S.ui.askMedia[el.dataset.id] ?? [] }), "Sent to the Lead.");
+    delete S.ui.askMedia[el.dataset.id];
     S.ui.drafts[`ask-${el.dataset.id}`] = "";
     await refresh();
   },
@@ -1240,6 +1473,10 @@ const ACTIONS = {
 };
 
 const CHANGES = {
+  preset: (el) => {
+    for (const x of document.querySelectorAll("[data-model-agent]")) (S.settings.agentModels ??= {})[x.dataset.modelAgent] = x.value;
+    document.getElementById("model-grid").innerHTML = modelGridHtml(S.settings, el.value);
+  },
   "review-agent": (el) => {
     S.ui.reviewAgent = el.value;
     render(true);
@@ -1263,6 +1500,17 @@ document.addEventListener("change", (e) => {
   const el = e.target;
   if (el.dataset.change) CHANGES[el.dataset.change]?.(el);
   if (el.dataset.attach) for (const f of el.files) addAttachment(el.dataset.attach, f);
+  if (el.dataset.askUpload) {
+    const id = el.dataset.askUpload;
+    (async () => {
+      for (const f of el.files) {
+        toast(`Uploading ${f.name}…`);
+        const name = await attempt(() => uploadMedia(f));
+        if (name) (S.ui.askMedia[id] ??= []).push(name);
+      }
+      render();
+    })();
+  }
 });
 document.addEventListener("input", (e) => {
   const id = e.target.id ?? "";

@@ -60,6 +60,8 @@ export function runClaude(opts) {
     if (opts.allowedTools?.length) args.push("--allowedTools", opts.allowedTools.join(","));
   }
   if (opts.model) args.push("--model", opts.model);
+  if (opts.effort) args.push("--effort", opts.effort);
+  if (opts.fallbackModel && opts.fallbackModel !== opts.model) args.push("--fallback-model", opts.fallbackModel);
 
   const child = spawnCommand(opts.command, args, {
     cwd: opts.cwd,
@@ -106,6 +108,8 @@ export function runClaude(opts) {
           emit({ type: "tool_error", text: text.slice(0, 500) });
         }
       }
+    } else if (ev.type === "rate_limit_event" && ev.rate_limit_info) {
+      emit({ type: "usage", info: ev.rate_limit_info });
     } else if (ev.type === "result") {
       result = {
         ok: !ev.is_error && ev.subtype === "success",

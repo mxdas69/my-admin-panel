@@ -6,6 +6,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { execFile } from "node:child_process";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { Store } from "./lib/db.mjs";
@@ -13,6 +14,7 @@ import { Config } from "./lib/config.mjs";
 import { Crew, slugify } from "./lib/crew.mjs";
 import { AGENTS, isAgent } from "./lib/agents.mjs";
 import { probeClaude } from "./lib/claude.mjs";
+import { presetTable } from "./lib/models.mjs";
 import { fetchCharts, fetchDetails, velocity, breakouts, liveNumbers, uploadDecal } from "./lib/roblox.mjs";
 import { generateImage, askGemini } from "./lib/gemini.mjs";
 
@@ -70,32 +72,75 @@ async function readJson(req, limit = 1_000_000) {
   }
 }
 
+function same(a, b) {
+  const x = Buffer.from(String(a ?? ""));
+  const y = Buffer.from(String(b ?? ""));
+  return x.length === y.length && timingSafeEqual(x, y);
+}
+
+/** Who a token belongs to: the owner, an invited person, or nobody. */
+function personFor(token) {
+  if (!token) return null;
+  if (same(token, TOKEN)) return { id: "owner", name: config.get().ownerName || "You", owner: true };
+  const p = (store.data.people ?? []).find((x) => same(token, x.token));
+  return p ? { id: p.id, name: p.name, owner: false } : null;
+}
+
+function requestToken(req, url) {
+  return req.headers["x-rocrew-token"] ?? url.searchParams.get("token") ?? "";
+}
+
 function tokenOk(req, url) {
-  const given = req.headers["x-rocrew-token"] ?? url.searchParams.get("token") ?? "";
-  const a = Buffer.from(String(given));
-  const b = Buffer.from(TOKEN);
-  return a.length === b.length && timingSafeEqual(a, b);
+  const person = personFor(requestToken(req, url));
+  if (person && !person.owner) {
+    const p = store.data.people.find((x) => x.id === person.id);
+    if (p && Date.now() - (p.lastSeenAt ?? 0) > 60000) p.lastSeenAt = Date.now();
+  }
+  return Boolean(person);
+}
+
+/** The name to credit for an action ("owner" for you, a friend's name for them). */
+function personName(req) {
+  const person = personFor(requestToken(req, new URL(req.url, "http://x")));
+  return !person || person.owner ? "owner" : person.name;
 }
 
 // Whether the running server listens beyond this computer (settings changes apply after a restart).
 const lanMode = () => !["127.0.0.1", "localhost"].includes(host);
 
-function hostOk(req) {
-  if (lanMode()) return true; // On the home network the private link (token) guards everything, page included.
-  const host = String(req.headers.host ?? "").replace(/:\d+$/, "");
-  return ["localhost", "127.0.0.1", "[::1]"].includes(host);
+// Every API call needs a token, so any Host is fine (this is what makes tunnels work);
+// only a browser on this computer, at localhost, is handed the owner's token without a link.
+function hostOk() {
+  return true;
 }
 
-function lanAddress() {
-  for (const list of Object.values(os.networkInterfaces())) {
-    for (const a of list ?? []) if (a.family === "IPv4" && !a.internal) return a.address;
+function isLocalBrowser(req) {
+  const loopback = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress);
+  const hostName = String(req.headers.host ?? "").replace(/:\d+$/, "");
+  return loopback && ["localhost", "127.0.0.1", "[::1]"].includes(hostName) && !req.headers["x-forwarded-for"] && !req.headers["cf-connecting-ip"];
+}
+
+/** Addresses this computer can be reached on: home network, and Tailscale if it's installed. */
+function networkAddresses() {
+  const out = [];
+  for (const [iface, list] of Object.entries(os.networkInterfaces())) {
+    for (const a of list ?? []) {
+      if (a.family !== "IPv4" || a.internal) continue;
+      const [x, y] = a.address.split(".").map(Number);
+      const kind = x === 100 && y >= 64 && y <= 127 ? "tailscale" : "home network";
+      out.push({ address: a.address, kind, iface });
+    }
   }
-  return null;
+  return out.sort((a, b) => (a.kind === "tailscale" ? -1 : 1) - (b.kind === "tailscale" ? -1 : 1));
+}
+
+function linkFor(token) {
+  if (!lanMode()) return null;
+  return networkAddresses().map((n) => ({ ...n, url: `http://${n.address}:${port}/?key=${token}` }));
 }
 
 function phoneUrl() {
-  const ip = lanAddress();
-  return lanMode() && ip ? `http://${ip}:${port}/?key=${TOKEN}` : null;
+  return linkFor(TOKEN)?.find((l) => l.kind === "home network")?.url ?? linkFor(TOKEN)?.[0]?.url ?? null;
 }
 
 /** Resolve `rel` inside `base`, refusing anything that escapes it. */
@@ -120,6 +165,33 @@ function ingest(fileOrDataUrl, hint = "file") {
   const name = `${stamp}-${path.basename(src).replace(/[^a-zA-Z0-9._-]/g, "_")}`;
   fs.copyFileSync(src, path.join(MEDIA, name));
   return name;
+}
+
+const VIDEO_EXT = /\.(mp4|webm|mov|m4v)$/i;
+let ffmpegOk = null;
+function hasFfmpeg() {
+  if (ffmpegOk !== null) return Promise.resolve(ffmpegOk);
+  return new Promise((resolve) => execFile("ffmpeg", ["-version"], { windowsHide: true }, (err) => resolve((ffmpegOk = !err))));
+}
+
+/** For a video, write a 3x2 sheet of frames next to it so agents (who can read images, not video) can see it. */
+async function frameSheet(mediaName) {
+  if (!VIDEO_EXT.test(mediaName) || !(await hasFfmpeg())) return null;
+  const src = path.join(MEDIA, mediaName);
+  const out = path.join(MEDIA, `${mediaName}.frames.jpg`);
+  return new Promise((resolve) => {
+    execFile("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", src], { windowsHide: true }, (err, stdout) => {
+      const dur = Math.max(1, Number.parseFloat(stdout) || 6);
+      const args = ["-y", "-loglevel", "error", "-i", src, "-vf", `fps=6/${dur.toFixed(2)},scale=480:-1,tile=3x2`, "-frames:v", "1", out];
+      execFile("ffmpeg", args, { windowsHide: true, timeout: 60000 }, (e) => resolve(e ? null : out));
+    });
+  });
+}
+
+async function describeMedia(names) {
+  const out = [];
+  for (const name of names) out.push({ media: name, path: path.join(MEDIA, name), frames: await frameSheet(name) });
+  return out;
 }
 
 function attachImages(text, images = []) {
@@ -229,10 +301,13 @@ function connectionsView() {
   };
 }
 
-function stateView() {
+function stateView(req) {
   const db = store.data;
+  const me = personFor(requestToken(req, new URL(req.url, "http://x")));
   return {
     owner: config.get().ownerName,
+    me: me ? { name: me.name, owner: me.owner } : null,
+    people: (db.people ?? []).map((p) => ({ name: p.name, lastSeenAt: p.lastSeenAt ?? null })),
     paused: db.paused,
     agents: AGENTS,
     statuses: crew.agentStatuses(),
@@ -246,6 +321,9 @@ function stateView() {
     library: db.library,
     lastChangeAt: lastChangeAt,
     permissionMode: config.get().permissionMode,
+    usage: db.usage ?? null,
+    usageHold: crew.usageHold(),
+    usageCeilingPct: config.get().usageCeilingPct,
     connections: connectionsView(),
   };
 }
@@ -271,7 +349,7 @@ const need = (cond, msg) => {
   if (!cond) throw new HttpError(400, msg);
 };
 
-route("GET", /^\/api\/state$/, () => stateView());
+route("GET", /^\/api\/state$/, (req) => stateView(req));
 route("GET", /^\/api\/agents\/([\w-]+)\/messages$/, (req, url, [id]) => {
   need(isAgent(id), "Unknown agent.");
   return store.data.messages.filter((m) => m.agent === id).slice(-300);
@@ -279,13 +357,14 @@ route("GET", /^\/api\/agents\/([\w-]+)\/messages$/, (req, url, [id]) => {
 route("POST", /^\/api\/lead\/message$/, async (req) => {
   const { text, images } = await readJson(req, 25_000_000);
   need(text?.trim(), "Say something to the Lead.");
-  return crew.ownerToLead(attachImages(text.trim(), images));
+  return crew.ownerToLead(attachImages(text.trim(), images), personName(req));
 });
 route("POST", /^\/api\/agents\/([\w-]+)\/message$/, async (req, url, [id]) => {
   need(isAgent(id), "Unknown agent.");
   const { text, images } = await readJson(req, 25_000_000);
   need(text?.trim(), "Write a message first.");
-  return id === "lead" ? crew.ownerToLead(attachImages(text.trim(), images)) : crew.ownerToAgent(id, attachImages(text.trim(), images));
+  const by = personName(req);
+  return id === "lead" ? crew.ownerToLead(attachImages(text.trim(), images), by) : crew.ownerToAgent(id, attachImages(text.trim(), images), by);
 });
 route("POST", /^\/api\/agents\/([\w-]+)\/reset$/, (req, url, [id]) => {
   need(isAgent(id), "Unknown agent.");
@@ -295,7 +374,17 @@ route("POST", /^\/api\/agents\/([\w-]+)\/reset$/, (req, url, [id]) => {
 route("POST", /^\/api\/tasks$/, async (req) => {
   const b = await readJson(req);
   const after = Array.isArray(b.after) ? b.after : String(b.after ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  return crew.addTask({ agent: b.agent, title: b.title, brief: b.brief, game: b.game || null, from: isAgent(b.from) || b.from === "owner" ? b.from : "lead", studio: typeof b.studio === "boolean" ? b.studio : undefined, after });
+  return crew.addTask({
+    agent: b.agent,
+    title: b.title,
+    brief: b.brief,
+    game: b.game || null,
+    from: isAgent(b.from) || b.from === "owner" ? b.from : "lead",
+    studio: typeof b.studio === "boolean" ? b.studio : undefined,
+    after,
+    size: b.size || "normal",
+    model: b.model || null,
+  });
 });
 route("POST", /^\/api\/tasks\/([\w]+)\/cancel$/, (req, url, [id]) => crew.cancel(id));
 route("POST", /^\/api\/pause$/, async (req) => {
@@ -327,14 +416,49 @@ route("POST", /^\/api\/reviews$/, async (req) => {
   crew.changed();
   return review;
 });
-route("POST", /^\/api\/reviews\/([\w]+)\/decision$/, async (req, url, [id]) => crew.decideReview(id, await readJson(req)));
+route("POST", /^\/api\/reviews\/([\w]+)\/decision$/, async (req, url, [id]) => crew.decideReview(id, { ...(await readJson(req)), by: personName(req) }));
 
 route("POST", /^\/api\/asks$/, async (req) => {
   const b = await readJson(req);
   need(b.title?.trim(), "A checkpoint needs a title.");
-  return crew.addAsk({ from: isAgent(b.from) ? b.from : "lead", title: b.title.trim().slice(0, 140), body: b.body ?? "", game: b.game || null });
+  const media = (b.media ?? []).slice(0, 12).map((f) => ingest(f, b.title));
+  return crew.addAsk({
+    from: isAgent(b.from) ? b.from : "lead",
+    title: b.title.trim().slice(0, 140),
+    body: b.body ?? "",
+    game: b.game || null,
+    kind: b.kind,
+    steps: Array.isArray(b.steps) ? b.steps : String(b.steps ?? "").split("|"),
+    media,
+  });
 });
-route("POST", /^\/api\/asks\/([\w]+)\/answer$/, async (req, url, [id]) => crew.answerAsk(id, await readJson(req)));
+route("POST", /^\/api\/asks\/([\w]+)\/answer$/, async (req, url, [id]) => {
+  const b = await readJson(req);
+  const names = (b.media ?? []).filter((n) => typeof n === "string" && fs.existsSync(path.join(MEDIA, path.basename(n)))).map((n) => path.basename(n));
+  return crew.answerAsk(id, { reply: b.reply ?? "", done: Boolean(b.done), result: b.result ?? null, attachments: await describeMedia(names), by: personName(req) });
+});
+
+// Photos and videos from the browser (your phone included), sent as the raw file body.
+route("POST", /^\/api\/media$/, async (req, url) => {
+  const name = path.basename(url.searchParams.get("name") ?? "upload").replace(/[^a-zA-Z0-9._-]/g, "_");
+  const type = MEDIA_TYPES[path.extname(name).toLowerCase()];
+  need(type, "Upload a png, jpg, webp, gif, mp4, webm or mov file.");
+  const stored = `${Date.now().toString(36)}-${randomBytes(3).toString("hex")}-${name}`;
+  const file = path.join(MEDIA, stored);
+  let size = 0;
+  const outStream = fs.createWriteStream(file);
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > 300_000_000) {
+      outStream.destroy();
+      fs.rmSync(file, { force: true });
+      throw new HttpError(413, "That file is over 300 MB.");
+    }
+    if (!outStream.write(chunk)) await new Promise((r) => outStream.once("drain", r));
+  }
+  await new Promise((r) => outStream.end(r));
+  return { media: stored, kind: VIDEO_EXT.test(stored) ? "video" : "image" };
+});
 
 route("POST", /^\/api\/pitches$/, async (req) => {
   const b = await readJson(req);
@@ -345,7 +469,7 @@ route("POST", /^\/api\/pitches$/, async (req) => {
   crew.changed();
   return pitch;
 });
-route("POST", /^\/api\/pitches\/([\w]+)\/decision$/, async (req, url, [id]) => crew.decidePitch(id, await readJson(req)));
+route("POST", /^\/api\/pitches\/([\w]+)\/decision$/, async (req, url, [id]) => crew.decidePitch(id, { ...(await readJson(req)), by: personName(req) }));
 
 route("POST", /^\/api\/games$/, async (req) => crew.addGame(await readJson(req)));
 route("PATCH", /^\/api\/games\/([\w-]+)$/, async (req, url, [slug]) => {
@@ -481,16 +605,51 @@ route("GET", /^\/api\/vault\/page$/, (req, url) => {
   return { path: url.searchParams.get("path"), text: fs.readFileSync(file, "utf8") };
 });
 
-route("GET", /^\/api\/settings$/, () => ({ ...config.public(), phoneUrl: phoneUrl() }));
+// ---------- people (friends who share this studio) ----------
+
+function ownerOnly(req) {
+  if (personName(req) !== "owner") throw new HttpError(403, "Only the studio owner can change this.");
+}
+
+function peopleView() {
+  return (store.data.people ?? []).map((p) => ({ id: p.id, name: p.name, createdAt: p.createdAt, lastSeenAt: p.lastSeenAt ?? null, links: linkFor(p.token), key: p.token }));
+}
+
+route("GET", /^\/api\/people$/, (req) => {
+  ownerOnly(req);
+  return { people: peopleView(), lan: lanMode(), addresses: networkAddresses(), port };
+});
+route("POST", /^\/api\/people$/, async (req) => {
+  ownerOnly(req);
+  const { name } = await readJson(req);
+  need(name?.trim(), "Give your friend a name.");
+  store.data.people ??= [];
+  store.data.people.push({ id: store.id("u"), name: String(name).trim().slice(0, 40), token: randomBytes(24).toString("hex"), createdAt: Date.now() });
+  crew.changed();
+  return { people: peopleView(), lan: lanMode(), addresses: networkAddresses(), port };
+});
+route("DELETE", /^\/api\/people\/([\w]+)$/, (req, url, [id]) => {
+  ownerOnly(req);
+  store.data.people = (store.data.people ?? []).filter((p) => p.id !== id);
+  crew.changed();
+  return { people: peopleView() };
+});
+
+route("GET", /^\/api\/settings$/, (req) => {
+  ownerOnly(req);
+  return { ...config.public(), phoneUrl: phoneUrl(), presets: presetTable() };
+});
 route("POST", /^\/api\/settings$/, async (req) => {
+  ownerOnly(req);
   config.update(await readJson(req));
   crew.changed();
   setImmediate(() => crew.tick());
-  return { ...config.public(), phoneUrl: phoneUrl() };
+  return { ...config.public(), phoneUrl: phoneUrl(), presets: presetTable() };
 });
 route("GET", /^\/api\/connections$/, () => connectionsView());
 route("POST", /^\/api\/connections\/check$/, () => checkConnections());
 route("POST", /^\/api\/connections\/blender$/, async (req) => {
+  ownerOnly(req);
   setBlender(Boolean((await readJson(req)).enabled));
   return checkConnections();
 });
@@ -535,12 +694,13 @@ const server = http.createServer(async (req, res) => {
     const file = inside(PUBLIC, rel);
     const type = STATIC_TYPES[path.extname(file)];
     if (type && fs.existsSync(file) && !file.endsWith("index.html")) return send(res, 200, fs.readFileSync(file), { "content-type": type });
-    // The page itself carries the token, so off this computer it needs the private link.
-    const local = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress);
-    if (lanMode() && !local && url.searchParams.get("key") !== TOKEN) {
-      return send(res, 401, "<!doctype html><meta name=viewport content='width=device-width'><body style='background:#0b0911;color:#eee;font:16px system-ui;padding:40px'><h2>RoCrew is locked</h2><p>Open the private phone link shown in Settings on your computer.</p>", { "content-type": STATIC_TYPES[".html"] });
+    // The page carries a token, so anywhere but this computer's own browser it needs a private link.
+    const key = url.searchParams.get("key");
+    const visitor = key ? personFor(key) : null;
+    if (!visitor && !isLocalBrowser(req)) {
+      return send(res, 401, "<!doctype html><meta name=viewport content='width=device-width'><body style='background:#0b0911;color:#eee;font:16px system-ui;padding:40px'><h2>RoCrew is locked</h2><p>Open your private link: the owner finds it in Settings → Friends.</p>", { "content-type": STATIC_TYPES[".html"] });
     }
-    return send(res, 200, injectToken(), { "content-type": STATIC_TYPES[".html"] });
+    return send(res, 200, injectToken(visitor ? key : TOKEN), { "content-type": STATIC_TYPES[".html"] });
   } catch (err) {
     const status = err.status ?? 500;
     if (status === 500) console.error("[rocrew]", err);
@@ -548,15 +708,15 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-function injectToken() {
-  return fs.readFileSync(path.join(PUBLIC, "index.html"), "utf8").replace("__ROCREW_TOKEN__", TOKEN);
+function injectToken(token) {
+  return fs.readFileSync(path.join(PUBLIC, "index.html"), "utf8").replace("__ROCREW_TOKEN__", token);
 }
 
 const cfg = config.get();
 const port = Number(process.env.PORT ?? cfg.port);
 const host = process.env.HOST ?? cfg.host;
 server.listen(port, host, () => {
-  if (phoneUrl()) console.log(`\n  On your phone (same Wi-Fi): ${phoneUrl()}\n  Keep that link private: it opens your studio.`);
+  if (phoneUrl()) console.log(`\n  On your phone (same Wi-Fi): ${phoneUrl()}\n  Keep that link private: it opens your studio. Friends get their own links in Settings → Friends.`);
   fs.writeFileSync(path.join(DATA, "runtime.json"), JSON.stringify({ port, host, token: TOKEN, pid: process.pid }, null, 2));
   const shown = host === "0.0.0.0" ? "localhost" : host;
   console.log(`\n  RoCrew agent studio is running → http://${shown}:${port}\n  Project: ${ROOT}\n  Stop with Ctrl+C.\n`);

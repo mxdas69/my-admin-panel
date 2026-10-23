@@ -38,8 +38,11 @@ Everything goes through the CLI. Run it from the project root:
 
 ```
 node studio/cli.mjs status                                   # games, open tasks, what waits on the owner
-node studio/cli.mjs task add --agent builder --title "…" --brief "…" --game <slug> [--after t3,t4]
-node studio/cli.mjs ask --title "…" --body "…"                # a "Needs you" checkpoint for the owner
+node studio/cli.mjs task add --agent builder --title "…" --brief "…" --game <slug> [--after t3,t4] [--size small|big]
+node studio/cli.mjs ask --title "…" --body "…"                # a "Needs you" question for the owner
+node studio/cli.mjs test --title "Try the shop on your phone" --steps "Open the game|Tap Shop|Buy the small pack" --media s1.png,s2.png,s3.png
+                                                             # ask the owner to try something (see "Asking the owner to test")
+node studio/cli.mjs clip --images s1.png,s2.png,s3.png --out games/<slug>/media/how-to-test.mp4   # turn step screenshots into a short video
 node studio/cli.mjs review --file <png|jpg|mp4> --question "…" --title "…"
 node studio/cli.mjs image --prompt "…" --out games/<slug>/art/icon.png --aspect 1:1 --review "Use this icon?"
 node studio/cli.mjs gemini --prompt "…" [--image a.png]       # second opinion from Gemini
@@ -51,6 +54,13 @@ node studio/cli.mjs help
 ```
 
 Your agent id and the current game are already in the environment (`ROCREW_AGENT`, `ROCREW_GAME`), so you rarely need `--from` or `--game`.
+
+## The vault
+
+`vault/` is the studio's playbook. Your role file lists the chapters you must read; each chapter starts with numbered **Rules**, then step-by-step procedures, recipes, examples from top games, a per-genre section, a checklist and references. Genre pages live in `vault/Genres/`.
+- Before a task, read the Rules and the sections that apply to it, plus the genre page for the game. Don't skim past the numbers: they're the spec.
+- You keep your memory between tasks, so don't re-read a page you already read in this conversation unless it changed.
+- If you learn something the vault gets wrong or is missing, say so in your handoff so the Lead can get it fixed.
 
 ## Roblox Studio
 
@@ -88,6 +98,14 @@ vault/            the knowledge vault — read the pages your role lists before 
 - Ask the owner (`cli.mjs ask`) only for things only they can do or decide: publishing, Robux prices, creating game passes or products on the Creator Hub, turning on API access, spending money, or a direction change.
 - Send anything visual the owner should judge (UI, thumbnails, maps) to Review with a screenshot and one clear question.
 - Never claim something was tested if it wasn't. Evidence means a file path, Studio output, or a screenshot.
+
+## Asking the owner to test
+
+The owner is often on their phone and wants to tap through a test in under a minute. Only ask when a human really has to look or feel it (game feel, a real phone, a purchase, a second player). Then:
+1. Write 2 to 6 short steps a 10-year-old could follow, each starting with a verb: "Open the game", "Tap the green Shop button", "Buy the 100-coin pack".
+2. Show them, don't tell them: take a Studio screenshot of each step (same order as the steps), or turn them into a clip with `cli.mjs clip`. Mark where to tap if you can.
+3. Send it with `cli.mjs test --title … --steps "…|…" --media …`. The owner taps **It works** or **Something's wrong** and can attach their own photo or screen recording.
+4. Their answer comes back to the Lead with any files they attached (videos also come as a frame sheet you can look at).
 
 ## Handoffs
 

@@ -32,7 +32,7 @@ Their full instructions are in [`.claude/agents/`](.claude/agents), and the rule
 
 Start it with `node studio/server.mjs` and open **http://localhost:4600**.
 
-- **Home** — what needs you, who's working, and a box to ask the Lead anything.
+- **Home** — a setup checklist on first run, what needs you, who's working, and a box to ask the Lead anything.
 - **Lead** — chat with the Lead. Say what you want; it plans and assigns the work.
 - **Team** — every agent's own chat. Message any of them directly.
 - **Tasks** — everything queued, running and finished, with what came back.
@@ -42,7 +42,7 @@ Start it with `node studio/server.mjs` and open **http://localhost:4600**.
 - **Market** — Roblox charts with rank moves between snapshots, a reference corpus, benchmarks and breakout games.
 - **Library** — models, icons and sounds with their Roblox ids, plus reusable game systems.
 - **Vault** — the knowledge the agents study before they build (also an Obsidian vault).
-- **Settings** — Claude Code, Studio, Blender, Gemini and Open Cloud connections, and how much the crew may do alone.
+- **Settings** — Claude Code, Studio, Blender, Gemini and Open Cloud connections, which model each agent uses, your usage limit, friends, and how much the crew may do alone.
 
 How the automation works:
 
@@ -51,6 +51,50 @@ How the automation works:
 3. **Only one agent changes Studio at a time.** The app holds a Studio lock, shown as "Builder has Studio".
 4. When the crew goes quiet, the app wakes the Lead with everyone's handoffs. It plans the next round, so work keeps moving while you sleep, up to a limit you set.
 5. Anything only you can do (publish, set prices, create game passes on the Creator Hub) lands in **Needs you**.
+
+## Test requests you can do from your phone
+
+When an agent needs you to try something, it doesn't send a wall of text. You get a **Try it** card on Home with:
+
+- 2 to 6 short steps, each with a screenshot from Studio (they play like a slideshow, highlighting the step you're on), or a short clip the agent made from them;
+- checkboxes to tick off steps as you go;
+- **It works** or **Something's wrong**, plus **Photo / video** to attach a screenshot or screen recording from your phone's camera roll.
+
+Your answer and anything you attach go back to the Lead, who routes the fix and sends you a fresh test when it's done. Videos you upload also reach the agents as a frame sheet so they can see what happened.
+
+## Saving your Claude plan's usage
+
+Every agent run counts toward your Claude plan (Max included), so RoCrew spends Opus where it changes the result and lighter models elsewhere. Pick a preset in **Settings → Models and usage**:
+
+| Preset | Opus | Sonnet | Haiku |
+|---|---|---|---|
+| **Balanced** (default) | Lead, Architect, Builder, Frame, Reviewer, Merchant | Pulse, Librarian, Scenic, Playtest, Kid Tester, Balance, Splash, Liveops, Producer | |
+| **Best quality** | everyone | | |
+| **Save usage** | Lead, Builder | Pulse, Architect, Librarian, Frame, Scenic, Balance, Splash, Reviewer, Merchant | Playtest, Kid Tester, Liveops, Producer |
+| **Pick per agent** | you choose | | |
+
+On top of that, the Lead marks quick, mechanical tasks `small` (one model lighter, low effort) and hard ones `big` (Opus, extra thinking). If Opus is busy, a run falls back to Sonnet instead of failing.
+
+The sidebar shows your 5-hour and weekly usage as Claude Code reports it. When either passes **Stop new work at** (90% by default), agents wait until it resets and pick up on their own; messages you send the Lead still go through. If a run hits the limit anyway, its task goes back in the queue instead of failing.
+
+## Making games with a friend
+
+There are two ways to do it.
+
+**1. One studio, both of you in it (simplest).** One of you hosts: RoCrew and Roblox Studio run on their computer, and the crew uses their Claude plan.
+
+1. The host opens **Settings → Friends**, types the friend's name and presses **Invite**.
+2. The friend opens their private link:
+   - **Same Wi-Fi:** turn on **Open on my phone too**, save and restart. The link appears under the friend's name.
+   - **Different houses:** both install [Tailscale](https://tailscale.com/download) and join the same tailnet (or the host shares their computer with the friend's Tailscale account). The Tailscale link appears under the friend's name.
+   - **No installs for the friend:** the host runs `cloudflared tunnel --url http://localhost:4600`, then sends the `https://….trycloudflare.com` address it prints with `/?key=<their key>` on the end.
+3. The friend can talk to the Lead and any agent, queue tasks, review work, test builds and approve pitches. Everything they do shows their name, and agents know who asked. Only the host can change Settings.
+4. To build by hand together while the crew works, turn on **Team Create** for the place in Roblox Studio and add the friend as a collaborator.
+5. Remove a friend in Settings and their link stops working at once.
+
+**2. Two studios, one shared playbook.** Each of you runs your own RoCrew on your own computer and Claude plan, on different games (or different parts of one game, like the main game and a lobby place). Share this folder as a git repo: the vault, the agents and the crew rules stay the same for both, and each game's `games/<slug>/` files show what the other crew did. This doubles how much you can build, because each crew uses its own plan.
+
+Anyone with a link can direct the crew and spend the host's plan, so only invite people you trust.
 
 ## Setup
 
@@ -81,6 +125,8 @@ Steps:
 
 Leave Studio and the app running. Check in from your phone: in Settings, turn on **Open on my phone too**, restart the app, and open the private link it shows. Or use Claude Code's Remote Control.
 
+Home shows a short checklist until the basics are done, so you always know the next step.
+
 ## Permissions
 
 In **Settings → Permissions**:
@@ -103,6 +149,8 @@ This folder is also a normal Claude Code project. Run `claude` here and you're t
 node studio/cli.mjs status
 node studio/cli.mjs task add --agent builder --title "Wire the delivery loop" --brief "…" --game rooftop-deliveries
 node studio/cli.mjs ask --title "Create 3 game passes on the Creator Hub" --body "…"
+node studio/cli.mjs test --title "Try the shop" --steps "Open the game|Tap Shop|Buy the small pack" --media s1.png,s2.png,s3.png
+node studio/cli.mjs clip --images s1.png,s2.png,s3.png --out games/x/media/how-to-test.mp4
 node studio/cli.mjs review --file shot.png --question "Is this shop ready?"
 node studio/cli.mjs image --prompt "…" --out games/x/art/icon.png --aspect 1:1 --review "Which icon?"
 node studio/cli.mjs market --refresh
@@ -125,5 +173,6 @@ studio/cli.mjs          the crew's CLI
 
 - **Roblox Studio tools.** Roblox decides which tools its MCP server offers, so what the agents can do in Studio (run code, playtest, read output, screenshots) depends on your Studio version.
 - **Market data** comes from Roblox's public web endpoints, which aren't an official API and can change. If a refresh fails, the error shows on the Market page, and Pulse can still research with web search.
-- **Costs.** The crew uses your Claude Code plan's usage. Gemini and Open Cloud use your own keys. "Agents at once" and "Rounds on their own" in Settings control how fast usage goes.
+- **Costs.** The crew uses your Claude Code plan's usage. Gemini and Open Cloud use your own keys. The model preset, "Agents at once", "Rounds on their own" and "Stop new work at" in Settings control how fast usage goes.
+- **Clips** need [ffmpeg](https://ffmpeg.org) on the computer. Without it, agents send the step screenshots as a slideshow instead.
 - **Tests.** `npm test` runs the scheduler, the CLI and the server against a stand-in for Claude Code. It needs no accounts.
