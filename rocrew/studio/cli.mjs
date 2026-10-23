@@ -73,7 +73,7 @@ Generators and intel
   market [--refresh] [--json]              Openings by genre, breakouts, rank moves, top charts (compact)
   market --sort <chart>                    One full chart, e.g. --sort trending-in-survival
   market search "<words>"                 Top games for a keyword or format ("+1 speed", "climb"), biggest first
-  market game <universeId|placeId>         Deep dive: numbers, like ratio, pass and product prices,
+  market game <id>[,<id>,…]                Deep dive (up to 8 games in one command; don't loop): numbers, like ratio, pass and product prices,
                                            badge activity, similar games, 14 days of player counts
 
 Agent ids: lead pulse architect librarian builder frame scenic playtest kid-tester balance splash reviewer liveops merchant producer`;
@@ -365,17 +365,24 @@ switch (cmd) {
       break;
     }
     if (sub === "game") {
-      const id = o._[2];
-      if (!id) fail("Usage: market game <universeId or placeId>");
-      const g = await api("GET", `/api/market/game/${String(id).replace(/\D/g, "")}`);
-      console.log(`${g.name} (universe ${g.universeId}, place ${g.placeId}) by ${g.creator}`);
-      console.log(`${g.playing} playing · ${g.visits} visits · ${g.likePct ?? "-"}% liked · ${g.favoritesPer1kVisits ?? "-"} favorites per 1k visits · ${g.ageDays ?? "?"} days old · updated ${g.updated?.slice(0, 10) ?? "?"} · genre ${g.genre || "-"}`);
-      if (g.playersLast14Days.length) console.log(`Players, last 14 days: ${g.playersLast14Days.map((d) => d.players).join(" → ")}`);
-      if (g.passes.length) console.log(`Game passes (${g.passes.length}): ${g.passes.map((p) => `${p.name} ${p.price ?? "off sale"}`).join(", ")}`);
-      if (g.products.length) console.log(`Developer products (${g.products.length}): ${g.products.map((p) => `${p.name} ${p.price ?? "-"}`).join(", ")}`);
-      if (g.badges.length) console.log(`Badges awarded yesterday: ${g.badges.map((b) => `${b.name} ${b.pastDay ?? "-"}`).join(", ")}`);
-      if (g.similar.length) console.log(`Similar: ${g.similar.map((x) => `${x.name} (${x.players})`).join(", ")}`);
-      for (const n of g.notes) console.log(`note: ${n}`);
+      const ids = o._.slice(2).join(",").replace(/[^\d,]/g, "").replace(/,+/g, ",").replace(/^,|,$/g, "");
+      if (!ids) fail("Usage: market game <universeId>[,<universeId>…]  (up to 8 at once)");
+      const res = await api("GET", `/api/market/game/${ids}`);
+      for (const g of Array.isArray(res) ? res : [res]) {
+        if (g.error) {
+          console.log(`u${g.universeId}: ${g.error}\n`);
+          continue;
+        }
+        console.log(`${g.name} (universe ${g.universeId}, place ${g.placeId}) by ${g.creator}`);
+        console.log(`${g.playing} playing · ${g.visits} visits · ${g.likePct ?? "-"}% liked · ${g.favoritesPer1kVisits ?? "-"} favorites per 1k visits · ${g.ageDays ?? "?"} days old · updated ${g.updated?.slice(0, 10) ?? "?"} · genre ${g.genre || "-"}`);
+        if (g.playersLast14Days.length) console.log(`Players, last 14 days: ${g.playersLast14Days.map((d) => d.players).join(" → ")}`);
+        if (g.passes.length) console.log(`Game passes (${g.passes.length}): ${g.passes.map((p) => `${p.name} ${p.price ?? "off sale"}`).join(", ")}`);
+        if (g.products.length) console.log(`Developer products (${g.products.length}): ${g.products.map((p) => `${p.name} ${p.price ?? "-"}`).join(", ")}`);
+        if (g.badges.length) console.log(`Badges awarded yesterday: ${g.badges.map((b) => `${b.name} ${b.pastDay ?? "-"}`).join(", ")}`);
+        if (g.similar.length) console.log(`Similar: ${g.similar.map((x) => `${x.name} (${x.players})`).join(", ")}`);
+        for (const n of g.notes) console.log(`note: ${n}`);
+        console.log("");
+      }
       break;
     }
     const m = o.refresh ? await api("POST", "/api/market/refresh") : await api("GET", "/api/market");

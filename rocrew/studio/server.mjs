@@ -688,12 +688,19 @@ route("GET", /^\/api\/market\/search$/, async (req, url) => {
     throw new HttpError(502, `Roblox search didn't answer (${err.message}). It allows about one search a minute; try again shortly.`);
   }
 });
-route("GET", /^\/api\/market\/game\/(\d+)$/, async (req, url, [id]) => {
-  try {
-    return await gameDeepDive(id);
-  } catch (err) {
-    throw new HttpError(502, err.message);
+route("GET", /^\/api\/market\/game\/([\d,]+)$/, async (req, url, [ids]) => {
+  const list = ids.split(",").filter(Boolean).slice(0, 8);
+  // One at a time: Roblox rate-limits bursts. Several ids come back as a list.
+  const out = [];
+  for (const id of list) {
+    try {
+      out.push(await gameDeepDive(id));
+    } catch (err) {
+      if (list.length === 1) throw new HttpError(502, err.message);
+      out.push({ universeId: id, error: err.message });
+    }
   }
+  return list.length === 1 ? out[0] : out;
 });
 route("POST", /^\/api\/market\/corpus$/, async (req) => {
   const { universeId, add = true } = await readJson(req);

@@ -15,10 +15,37 @@ export const GENRE_SORTS = [
 ];
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function getJson(url, { timeoutMs = 15000, headers = {} } = {}) {
-  const res = await fetch(url, { headers: { ...UA, ...headers }, signal: AbortSignal.timeout(timeoutMs) });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}${new URL(url).pathname}`);
-  return res.json();
+// Roblox rate-limits its public APIs per host, so requests to one host go out one at a time
+// with a small gap, and a 429 ("too many requests") waits and tries again.
+const lastCall = new Map();
+const queues = new Map();
+const GAP_MS = { "apis.roblox.com": 1300, default: 600 };
+
+function throttle(host) {
+  const prev = queues.get(host) ?? Promise.resolve();
+  const next = prev.then(async () => {
+    const gap = GAP_MS[host] ?? GAP_MS.default;
+    const wait = (lastCall.get(host) ?? 0) + gap - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastCall.set(host, Date.now());
+  });
+  queues.set(host, next.catch(() => {}));
+  return next;
+}
+
+async function getJson(url, { timeoutMs = 15000, headers = {}, tries = 4 } = {}) {
+  const { host, pathname } = new URL(url);
+  for (let attempt = 1; ; attempt++) {
+    await throttle(host);
+    const res = await fetch(url, { headers: { ...UA, ...headers }, signal: AbortSignal.timeout(timeoutMs) });
+    if (res.ok) return res.json();
+    if ((res.status === 429 || res.status >= 500) && attempt < tries) {
+      const retryAfter = Number(res.headers.get("retry-after"));
+      await new Promise((r) => setTimeout(r, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 2000 * 2 ** attempt));
+      continue;
+    }
+    throw new Error(`${res.status} ${res.statusText} from ${host}${pathname}`);
+  }
 }
 
 function chunk(list, size) {
