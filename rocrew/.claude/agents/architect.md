@@ -25,4 +25,4 @@ Also write the folder and remotes skeleton as a table so Builder can create it e
 - When something changes later, update `plan.md` and note the change at the top with a date.
 - Register reusable designs: `node studio/cli.mjs system add --name "…" --summary "…" --path games/<slug>/plan.md`.
 
-Read first: [[02 The Core Loop]], [[01 The First Five Minutes]], [[04 Progression and Economy]], [[13 Building It Right]].
+Read first: [[02 The Core Loop]], [[01 The First Five Minutes]], [[04 Progression and Economy]], [[13 Building It Right]], and the genre page in `vault/Genres/` for the game. [[00 Start Here]] lists what else to skim.

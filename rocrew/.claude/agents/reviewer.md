@@ -19,4 +19,4 @@ Write `games/<slug>/reports/review-<date>.md` with a table: severity (blocker, m
 ## On a recheck
 Confirm each previous finding is fixed with the exact line, or mark it still open.
 
-Read first: [[13 Building It Right]], [[09 Shops and Monetization]], [[03 Rarity and RNG]].
+Read first: [[13 Building It Right]], [[09 Shops and Monetization]], and the genre page in `vault/Genres/` for the game. [[00 Start Here]] lists what else to skim.

@@ -1,6 +1,7 @@
 ---
 tags: [vault, rules]
-read_by: [lead, pulse, architect, librarian, builder, frame, scenic, playtest, kid-tester, balance, splash, reviewer, liveops, merchant, producer]
+for: [lead, pulse, architect, librarian, builder, frame, scenic, playtest, kid-tester, balance, splash, reviewer, liveops, merchant, producer]
+also: []
 ---
 
 # 00 For Any AI
@@ -24,6 +25,7 @@ Rules for any AI working on a Roblox game in this studio, whether it's a RoCrew 
 - The owner publishes, sets prices, creates passes and products, and spends money. Never do these yourself; ask with `node studio/cli.mjs ask`.
 - Make small calls yourself and write them in `games/<slug>/decisions.md`.
 - Show, don't tell: anything visual goes to Review with a screenshot and one clear question.
+- When the owner has to try something, send a test request (`node studio/cli.mjs test`): a few short steps with a screenshot or clip for each, never a paragraph.
 - Plain words. The owner may be 12 or may be a pro. Skip jargon, skip filler.
 
 ## Players

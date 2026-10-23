@@ -1,6 +1,7 @@
 ---
 tags: [vault, art, prompts]
-read_by: [frame, splash, scenic, librarian, architect]
+for: [frame, splash]
+also: [scenic, librarian, architect]
 ---
 
 # Claude Design Prompts

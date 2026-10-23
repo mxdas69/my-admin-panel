@@ -210,13 +210,15 @@ function vaultPages() {
       if (entry.isDirectory()) walk(full);
       else if (entry.name.endsWith(".md")) {
         const text = fs.readFileSync(full, "utf8");
-        const forLine = /^(?:read_by|for):\s*\[?([^\]\n]*)\]?/m.exec(text)?.[1] ?? "";
+        const list = (re) => (re.exec(text)?.[1] ?? "").split(",").map((x) => x.trim()).filter(Boolean);
         pages.push({
           path: path.relative(VAULT, full).split(path.sep).join("/"),
           title: entry.name.replace(/\.md$/, ""),
           folder: path.relative(VAULT, dir).split(path.sep).join("/"),
-          readers: forLine.split(",").map((s) => s.trim()).filter(Boolean),
+          readers: list(/^(?:read_by|for):\s*\[?([^\]\n]*)\]?/m),
+          skimmers: list(/^also:\s*\[?([^\]\n]*)\]?/m),
           lines: text.split("\n").length,
+          words: text.split(/\s+/).filter(Boolean).length,
         });
       }
     }

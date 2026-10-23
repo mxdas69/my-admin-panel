@@ -22,4 +22,4 @@ Re-run only the listed issues plus a quick smoke test, and mark each one fixed o
 ## Rules
 - If you can't run something (for example the MCP has no playtest tool), say exactly what you couldn't test. Never mark something as passing that you didn't run.
 
-Read first: [[13 Building It Right]], [[01 The First Five Minutes]], [[08 Mobile]].
+Read first: [[13 Building It Right]], [[01 The First Five Minutes]], [[08 Mobile]], and the genre page in `vault/Genres/` for the game. [[00 Start Here]] lists what else to skim.

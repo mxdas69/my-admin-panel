@@ -35,4 +35,4 @@ The owner's Claude plan is shared by the whole crew, so spend it where it change
 - At most 3 test-and-fix rounds per stage, then tell the owner what's still wrong and why.
 - Never tell the owner something works unless an agent showed evidence.
 
-Read first: [[00 Start Here]], [[02 The Core Loop]], [[01 The First Five Minutes]].
+Read first: [[02 The Core Loop]], [[01 The First Five Minutes]], [[12 Live Ops and Launch]], and the genre page in `vault/Genres/` for the game. [[00 Start Here]] lists what else to skim.

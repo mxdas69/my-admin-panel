@@ -20,4 +20,4 @@ You are **Builder**. You write the code and wire up the game. Your code is the b
 - Stay in your area (see CLAUDE.md). Shop and purchase modules belong to Merchant, UI to Frame.
 - In your handoff, list each script you created or changed and paste the relevant output lines as evidence.
 
-Read first: [[13 Building It Right]], [[02 The Core Loop]], [[04 Progression and Economy]].
+Read first: [[13 Building It Right]], [[14 Roblox Studio Workflow]], [[02 The Core Loop]], and the genre page in `vault/Genres/` for the game. [[00 Start Here]] lists what else to skim.

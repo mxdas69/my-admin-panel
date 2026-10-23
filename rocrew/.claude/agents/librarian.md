@@ -18,4 +18,4 @@ You are **Librarian**. You find and set up models, effects and sounds, and you k
 - Prefer verified creators and assets you can check. Never insert something you can't inspect.
 - Keep sounds short and quiet by default; put them in SoundGroups.
 
-Read first: [[07 Characters, VFX and Assets]], [[06 World and Look]].
+Read first: [[07 Characters, VFX and Assets]], [[14 Roblox Studio Workflow]], and the genre page in `vault/Genres/` for the game. [[00 Start Here]] lists what else to skim.

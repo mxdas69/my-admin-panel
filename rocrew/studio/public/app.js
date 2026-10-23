@@ -990,7 +990,7 @@ function vaultHref(title) {
 PAGES.vault = {
   title: (arg) => `Vault${arg ? ` · ${arg.split("/").pop().replace(/\.md$/, "")}` : ""}`,
   async mount(el, arg) {
-    el.innerHTML = `<div class="page-head"><h2>The vault</h2><p>What the agents study before they build. Open the <span class="mono">vault/</span> folder in Obsidian to edit it; the agents read the pages listed in their role.</p></div><div class="files"><div class="card" style="padding:8px" id="vault-list">Loading…</div><div class="card" id="vault-page"></div></div>`;
+    el.innerHTML = `<div class="page-head"><h2>The vault</h2><p>What the agents study before they build. Open the <span class="mono">vault/</span> folder in Obsidian to edit it; each agent reads the pages marked for its role.</p></div><div class="files"><div class="card" style="padding:8px"><input class="input small" id="vault-filter" placeholder="Filter pages…" style="margin-bottom:6px"><div id="vault-list">Loading…</div></div><div class="card" id="vault-page"></div></div>`;
     if (!S.vault) S.vault = (await attempt(() => api("GET", "/api/vault"))) ?? [];
     const groups = new Map();
     for (const p of S.vault) {
@@ -1000,8 +1000,12 @@ PAGES.vault = {
     }
     const target = arg || S.vault[0]?.path;
     el.querySelector("#vault-list").innerHTML =
-      [...groups.entries()].map(([g, pages]) => `<div class="nav-label">${esc(g)}</div>${pages.map((p) => `<a class="file-link ${p.path === target ? "active" : ""}" href="#/vault/${encodeURIComponent(p.path)}" style="font-family:var(--sans)">${esc(p.title)}</a>`).join("")}`).join("") ||
+      [...groups.entries()].map(([g, pages]) => `<div class="nav-label">${esc(g)}</div>${pages.map((p) => `<a class="file-link ${p.path === target ? "active" : ""}" href="#/vault/${encodeURIComponent(p.path)}" style="font-family:var(--sans)" title="For: ${esc(p.readers.map((x) => agent(x).name).join(", ") || "everyone")}">${esc(p.title.replace(/^Genre - /, ""))}${p.words > 300 ? `<small class="faint" style="float:right">${p.words >= 1000 ? `${Math.round(p.words / 1000)}k` : p.words} words</small>` : ""}</a>`).join("")}`).join("") ||
       `<p class="muted" style="padding:10px">The vault folder is empty.</p>`;
+    el.querySelector("#vault-filter").addEventListener("input", (e) => {
+      const q = e.target.value.toLowerCase();
+      for (const a of el.querySelectorAll("#vault-list .file-link")) a.style.display = a.textContent.toLowerCase().includes(q) ? "" : "none";
+    });
     if (target) {
       const res = await attempt(() => api("GET", `/api/vault/page?path=${encodeURIComponent(target)}`));
       if (!res) return;
