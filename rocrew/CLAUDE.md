@@ -110,11 +110,16 @@ The full standards for quality games (saves, performance, UI feel, tutorials, pr
 | `Workspace.Map`, `Terrain`, `Lighting` | Scenic |
 | `ReplicatedStorage.Assets`, `ServerStorage.Assets` | Librarian |
 
+## Know the game first
+
+Every game has `games/<slug>/game.md`: one page on what the game is (genre, who it's for, the core loop, what a real server looks like: e.g. "battlegrounds: 10-20 players fighting each other; training dummies are for practising combos, not rewards"), what's already built, and what a solo Studio test can't show (other players, a full server, ads traffic). Read it before any task on that game. If it's missing (an existing game the owner brought in), the first agent on the game writes it: read the owner's words, look through the place and scripts, check the genre card, and ask the owner only what you can't work out. Judge everything against what the game is meant to be, never against an empty test server.
+
 ## Files
 
 ```
 games/<slug>/
   brief.md        the idea, as the owner said it
+  game.md         what the game is and how it's played (read first)
   plan.md         Architect's game plan (the plan of record)
   economy.md      Balance's numbers and simulation results
   sim/            simulation scripts
