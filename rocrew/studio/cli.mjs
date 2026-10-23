@@ -59,7 +59,10 @@ Generators and intel
   image --prompt "…" --out <path> [--aspect 16:9] [--ref img.png,…] [--review "question"] [--title "…"]
                                             Generate an image with Gemini
   gemini --prompt "…" [--image a.png,…]    Ask Gemini for a second opinion
-  market [--refresh] [--json]              Roblox charts, rank moves and breakouts
+  market [--refresh] [--json]              Openings by genre, breakouts, rank moves, top charts (compact)
+  market --sort <chart>                    One full chart, e.g. --sort trending-in-survival
+  market game <universeId|placeId>         Deep dive: numbers, like ratio, pass and product prices,
+                                           badge activity, similar games, 14 days of player counts
 
 Agent ids: lead pulse architect librarian builder frame scenic playtest kid-tester balance splash reviewer liveops merchant producer`;
 
@@ -325,26 +328,50 @@ switch (cmd) {
   }
 
   case "market": {
+    if (sub === "game") {
+      const id = o._[2];
+      if (!id) fail("Usage: market game <universeId or placeId>");
+      const g = await api("GET", `/api/market/game/${String(id).replace(/\D/g, "")}`);
+      console.log(`${g.name} (universe ${g.universeId}, place ${g.placeId}) by ${g.creator}`);
+      console.log(`${g.playing} playing · ${g.visits} visits · ${g.likePct ?? "-"}% liked · ${g.favoritesPer1kVisits ?? "-"} favorites per 1k visits · ${g.ageDays ?? "?"} days old · updated ${g.updated?.slice(0, 10) ?? "?"} · genre ${g.genre || "-"}`);
+      if (g.playersLast14Days.length) console.log(`Players, last 14 days: ${g.playersLast14Days.map((d) => d.players).join(" → ")}`);
+      if (g.passes.length) console.log(`Game passes (${g.passes.length}): ${g.passes.map((p) => `${p.name} ${p.price ?? "off sale"}`).join(", ")}`);
+      if (g.products.length) console.log(`Developer products (${g.products.length}): ${g.products.map((p) => `${p.name} ${p.price ?? "-"}`).join(", ")}`);
+      if (g.badges.length) console.log(`Badges awarded yesterday: ${g.badges.map((b) => `${b.name} ${b.pastDay ?? "-"}`).join(", ")}`);
+      if (g.similar.length) console.log(`Similar: ${g.similar.map((x) => `${x.name} (${x.players})`).join(", ")}`);
+      for (const n of g.notes) console.log(`note: ${n}`);
+      break;
+    }
     const m = o.refresh ? await api("POST", "/api/market/refresh") : await api("GET", "/api/market");
     if (o.json) {
-      console.log(JSON.stringify({ moves: m.moves, breakouts: m.breakouts, latest: m.latest }, null, 2));
+      console.log(JSON.stringify({ openings: m.openings, moves: m.moves, breakouts: m.breakouts.slice(0, 20) }, null, 2));
       break;
     }
     if (m.error) console.log(`Last refresh failed: ${m.error}`);
     if (!m.latest) {
-      console.log("No chart snapshot yet. Run: node studio/cli.mjs market --refresh");
+      console.log("No chart snapshot yet. Run: node studio/cli.mjs market --refresh (takes about 30 s)");
       break;
     }
-    console.log(`Charts from ${new Date(m.latest.at).toISOString()} (${m.snapshots} snapshot(s) stored)`);
-    for (const [id, sort] of Object.entries(m.latest.sorts)) {
-      console.log(`\n${sort.name} [${id}]`);
-      for (const g of sort.games.slice(0, 15)) {
-        const like = g.up + g.down ? `${Math.round((g.up / (g.up + g.down)) * 100)}%` : "-";
-        console.log(`  #${String(g.rank).padEnd(3)} ${g.name.slice(0, 40).padEnd(40)} ${String(g.players).padStart(8)} playing  ${like.padStart(4)} liked  u${g.universeId}`);
-      }
+    const like = (g) => (g.up + g.down ? `${Math.round((g.up / (g.up + g.down)) * 100)}%` : "-");
+    if (typeof o.sort === "string") {
+      const sort = m.latest.sorts[o.sort];
+      if (!sort) fail(`No chart "${o.sort}". Charts: ${Object.keys(m.latest.sorts).join(", ")}`);
+      console.log(sort.name);
+      for (const g of sort.games) console.log(`  #${String(g.rank).padEnd(3)} ${g.name.slice(0, 40).padEnd(40)} ${String(g.players).padStart(8)} playing  ${like(g).padStart(4)} liked  u${g.universeId}${g.sponsored ? "  (sponsored)" : ""}`);
+      break;
     }
-    if (m.moves.length) console.log(`\nBiggest moves: ${m.moves.map((x) => `${x.name} (${x.isNew ? "new" : `${x.rankDelta > 0 ? "+" : ""}${x.rankDelta}`})`).join(", ")}`);
-    if (m.breakouts.length) console.log(`\nBreakouts: ${m.breakouts.slice(0, 10).map((b) => `${b.name} (${b.peak} peak, ${b.visits} visits)`).join(", ")}`);
+    console.log(`Charts from ${new Date(m.latest.at).toISOString()} · ${m.snapshots} snapshot(s) stored, one every 3 hours`);
+    if (m.openings?.length) {
+      console.log("\nOpenings (genres where young games are winning; higher score = easier to break in):");
+      for (const x of m.openings.slice(0, 8)) console.log(`  ${String(x.score).padStart(5)}  ${x.genre.padEnd(28)} ${String(x.youngShare).padStart(3)}% under 4 months old · median ${x.medianPlayers} playing · ${x.avgLikePct ?? "-"}% liked${x.newcomers !== null ? ` · ${x.newcomers} new on the chart` : ""}${x.examples.length ? ` · e.g. ${x.examples.map((e) => `${e.name} (${e.players}, ${e.ageDays}d)`).join(", ")}` : ""}`);
+    }
+    if (m.breakouts.length) console.log(`\nBreakouts (young, small, pulling players): ${m.breakouts.slice(0, 10).map((b) => `${b.name} [u${b.universeId}] ${b.peak} peak, ${b.ageDays ?? "?"}d old, ${b.likePct ?? "-"}% liked`).join("; ")}`);
+    if (m.moves.length) console.log(`\nBiggest moves: ${m.moves.map((x) => `${x.name} (${x.isNew ? "new" : `${x.rankDelta > 0 ? "+" : ""}${x.rankDelta}`} in ${x.sortName})`).join(", ")}`);
+    for (const id of ["up-and-coming", "top-trending", "top-earning"]) {
+      const sort = m.latest.sorts[id];
+      if (sort) console.log(`\n${sort.name}: ${sort.games.filter((g) => !g.sponsored).slice(0, 10).map((g) => `${g.name} (${g.players})`).join(", ")}`);
+    }
+    console.log(`\nMore: market --sort <chart> (${Object.keys(m.latest.sorts).join(", ")}) · market game <universeId>`);
     break;
   }
 

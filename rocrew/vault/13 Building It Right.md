@@ -1720,3 +1720,488 @@ Set `Config.Debug.DataStoreFailRate = 0.3` for the failure test (Rule 68), and b
 - Separate server and client messages in multi-client tests (each window shows its own side). In live servers, the Developer Console (F9) shows client and server logs, memory and network. Prefix logs with the system name (`[Shop]`, `[Receipts]`), and never `print` inside loops.
 - Live errors also show in Creator Hub's Error Report. After each release, Liveops reads it hourly for 6 hours ([[12 Live Ops and Launch]]).
 
+## Examples from top games
+
+### Build the data layer for the day you get millions
+**Game:** Grow a Garden ([13][17][25])
+**Shows:** Wikipedia says the original was built in about three days and became the first Roblox game to pass 5 million concurrent players, on May 17, 2025 [13]; Kotaku covered the milestone [17], and AP described millions of people playing every day [25].
+**Why it works:** A small, clear loop can grow faster than anyone plans for.
+**Steal:** Session-locked, versioned, idempotent saves and receipts from the first build (Rules 22-33), even for a "quick" game.
+**Avoid:** Telling yourself you'll fix saving "if it takes off". By then, every bug costs thousands of players' progress.
+
+### Load arrives in spikes, on update day
+**Game:** Grow a Garden ([14])
+**Shows:** WN Hub, citing RoMonitor, reported a record 11.7 million concurrent players on Saturday, May 31, 2025, against 8.9 million a week earlier [14].
+**Why it works:** Players arrive together at a known update time, which is great for growth and hard on code.
+**Steal:** Before every update, run the release test pass with a full local server, check DataStore budgets under load (Rule 29), and make shutdown saves fast (Rule 26), since restarts happen at the peak.
+**Avoid:** Untested save changes in an update that will meet the biggest crowd of the week.
+
+### Write code someone else can run
+**Game:** Grow a Garden ([15])
+**Shows:** GamesBeat's interview with Janzen Madsen describes Splitting Point managing the game the original creator built [15].
+**Why it works:** A game that grows needs a team, and a team needs a codebase it can understand.
+**Steal:** Contracts in `plan.md`, everything tunable in Config, one entry point, named services, logs with prefixes (Rules 2-6). Another agent should be able to change the shop without reading the whole game.
+**Avoid:** Clever, undocumented code that only its author can change.
+
+### Content as data makes a fast cadence possible
+**Game:** Grow a Garden ([20][21])
+**Shows:** PCGamesN describes weekly Saturday updates [20]; in August 2025 the developer said weekly events had become too hard to keep fresh and planned more depth instead [21].
+**Why it works:** A weekly cadence only works if adding content is cheap, and depth needs systems that extend without rewrites.
+**Steal:** New seeds, pets and worlds are Config rows (Rule 12); new systems arrive behind flags (Rule 13).
+**Avoid:** Hardcoded content, which makes every update a risky code change.
+
+### Stability is part of the ranking signal
+**Game:** Every game ranked by Recommended for You ([1])
+**Shows:** Roblox ranks games on per-user averages of qPTR, playtime, play days, spend days and co-play days [1].
+**Why it works:** A crash ends a session early, a lost save ends a player's return, and a broken purchase ends spending. Each one lowers those averages.
+**Steal:** Zero red errors, flat memory and the save matrix as hard gates before every release (Rules 53, 65-70).
+**Avoid:** Treating bugs as cosmetic. On Roblox they cost distribution.
+
+### Data loss destroys the long-term number
+**Game:** Games under the 28-day RFY view ([2][3])
+**Shows:** Roblox moved RFY to a 28-day view that measures long-term retention [3], with distribution fluctuations expected after the change [2].
+**Why it works:** A player who loses three weeks of progress on day 20 doesn't come back on day 28.
+**Steal:** Restore tools ready before launch (Rule 37) and versioned migrations (Rule 27).
+**Avoid:** "Resetting" data by renaming the store.
+
+### Original place files rank better than kits
+**Game:** Games that resemble existing games ([5])
+**Shows:** Roblox's promotion docs say games whose metadata and place files closely resemble existing games aren't prioritized for recommendations and may rank lower in search [5].
+**Why it works:** The platform wants new games, not copies.
+**Steal:** The studio skeleton and an original map (Rule 14).
+**Avoid:** Uncopylocked templates and kits, which also hide unread scripts (Rule 49).
+
+### Notification launch data is just another input
+**Game:** Experiences using experience notifications ([6][7][8])
+**Shows:** Notifications can carry launch data the game reads with `Player:GetJoinData()` [6], are sent from server code [7], and are opted into through `ExperienceNotificationService` on the client [8].
+**Why it works:** Landing a returning player on the new content is powerful, and anything that arrives through join data can be crafted.
+**Steal:** An allowlist of launch keys and server-side destinations (Rule 50); API keys only on the server (Rule 48).
+**Avoid:** Acting on any field of the join data without checking it.
+
+### Referral rewards need server-side caps
+**Game:** Experiences using the friend referral system ([9])
+**Shows:** `ReferredByPlayerId` is filled for all invite types, so a game can reward both players [9].
+**Why it works:** Rewards for bringing friends grow co-play, but alt accounts can farm them.
+**Steal:** Pay only for a new player's first session, cap rewards per inviter per day, and log every grant ([[15 Discovery and Growth]] has the code).
+**Avoid:** Uncapped referral rewards.
+
+### Don't design around events you can't call
+**Game:** Games that tried to count invites sent ([10])
+**Shows:** A DevForum answer explains that the event for an invite sent through the default invite UI is reserved for CoreScripts [10].
+**Why it works:** Engine security levels decide what game code can use, whatever the design wants.
+**Steal:** Check the API reference's security note before designing a feature around an event (Rule 51); reward arrivals instead.
+**Avoid:** A quest that can never complete.
+
+### Let the platform enforce what it enforces
+**Game:** Experiences in the rewarded video program ([11][22])
+**Shows:** Rewarded video ads are optional videos of up to 30 seconds for an in-game reward [22], shown only to users 13+ even if a prompt is shown [11].
+**Why it works:** The platform handles the age gate; the game handles fairness.
+**Steal:** A normal in-game path for every reward that an ad can also give, so younger players aren't locked out (Rule 51).
+**Avoid:** Building your own age logic, or making ads the only path.
+
+### Check for platform tools before building your own
+**Game:** Creators adding rewarded video ([12][23])
+**Shows:** Roblox announced a Studio plug-in with drag-and-drop templates for rewarded video, expected in Q4 2026 [12]; each year's RDC recap lists new creator tools and API changes [23].
+**Why it works:** Platform tools follow platform rules and get maintained.
+**Steal:** Before a big custom system, Architect checks the latest RDC recap and Creator Hub docs for an official tool.
+**Avoid:** Maintaining a homemade version of something Roblox now ships.
+
+### Ads bring waves of strangers: be ready for them
+**Game:** Experiences running Ads Manager campaigns ([18][19][16])
+**Shows:** Ads Manager campaigns place a game on Home, Discover and search [18][19], and Creator Hub shows retention by acquisition source to judge those players [16].
+**Why it works:** A campaign can add many new players within hours, every one of them a first session.
+**Steal:** Run the performance pass and the release test pass before the owner starts a campaign; watch the Performance dashboard during it.
+**Avoid:** Starting a campaign on a build with a known memory leak.
+
+### In-experience ad units follow advertising rules
+**Game:** Experiences with immersive ad units ([5][24])
+**Shows:** Roblox's promotion docs describe immersive ad units inside experiences (image, video and portal ads) [5], and the DevForum ads tag lists new advertising policies and standards from July 2026 [24].
+**Why it works:** Ad placements are part of the build, so they're part of what reviewers check.
+**Steal:** Reviewer checks every ad placement against the current policy before a gate.
+**Avoid:** Placing ad units where they block gameplay or mislead players.
+
+### Fun first, then the clever engineering
+**Game:** Games with low retention ([4])
+**Shows:** Roblox's advice for games with low retention is to make the core gameplay more fun, clear and rewarding first [4].
+**Why it works:** No architecture fixes a loop nobody wants to repeat.
+**Steal:** Keep the first build simple and correct (Rules 1-33); add Parallel Luau, native code or MemoryStore systems only when a measured need appears (Rule 64).
+**Avoid:** A week of optimization on a game that hasn't passed its first playtest.
+
+## By genre
+
+- **Simulator:** many drops and pets per player. Pool drops (Rule 57), detect pickups with spatial queries (Rule 56), followers interpolated on clients. Save pets as uid records and stackables as counts (Rule 28). Watch number sizes: keep currencies as integers below 2^53 and format them in the UI; switch to a mantissa/exponent pair if the design needs bigger numbers.
+- **Tycoon:** plot ownership checks on every button (`OwnerUserId` attribute), plot state saved as a compact list of bought item IDs, and plots rebuilt from Config on load. Mark each plot `PersistentPerPlayer` or Atomic so the owner always has it streamed. Reset plots cleanly on leave.
+- **Idle and incremental:** offline earnings computed on load from `os.time()` minus the last save time, capped (for example 8 hours, studio target), on the server. Never trust the client's clock. Big-number formulas live in `Shared/Formulas` with tests.
+- **Obby:** checkpoints saved as the highest stage reached, validated so a stage can only increase by 1 at a time unless the server teleported the player. Kill parts handled on the server or with server-confirmed respawns; movement checks tuned for jump pads and conveyors.
+- **Roleplay and life sim:** lots of player text (names, signs, bios), so filtering everywhere (Rule 46). Houses and vehicles as data. Admin and moderation tools server-side (Rule 47). Large servers need careful network budgets.
+- **Party and social hangout:** round state machine on the server (Lobby → Intermission → Round → Results), one loop, one remote for round state. Minigames load and clean up with a Cleaner per round (Rule 11).
+- **Story and puzzle:** progress saved as chapter and puzzle flags (string keys). Puzzle solutions checked on the server. Cutscenes on the client, triggered by server state, never deciding progress.
+- **Action and combat:** server hit validation (Rule 43), cooldowns on the server, damage from Config, server-owned projectiles (Rule 45). Budget NPC Humanoids (Rule 60). Hit effects through UnreliableRemoteEvent.
+- **Battlegrounds:** per-move cooldowns and hitboxes on the server with spatial queries; the client plays animations at once and the server confirms. Combo windows validated by server timestamps. Many players and effects at once, so performance passes after every new character.
+- **Shooter:** server raycasts or range checks for every shot, fire-rate limits per weapon, lag tolerance tuned with simulated lag. Matchmaking and reserved servers through teleports (release locks first, Rule 39).
+- **Horror:** monster AI on the server (one loop for all monsters), pathfinding results cached, lighting and sound on clients. Jumpscares triggered by server state so all party members see the same thing.
+- **Survival:** large saved worlds or bases: save compactly (grid positions as numbers, items as IDs), watch save size (Rule 30), and split large bases into a separate key if they approach the limit. Day/night and spawns in one server loop.
+- **Tower defense:** waves and enemy paths on the server; enemies as lightweight models (no Humanoid) moved by the server at a fixed rate and interpolated on clients. Tower placement validated (owned, affordable, valid tile, not overlapping).
+- **RNG and collection:** rolls only on the server, with odds from Config (secret odds in ServerStorage if the design requires, but displayed odds must match what the server uses, [[03 Rarity and RNG]]). Pity counters saved. Roll animations on the client after the server decides.
+- **Racing and vehicles:** vehicle physics owned by the driver's client for feel; lap and checkpoint validation on the server with order and timing checks. Spawned vehicles pooled and capped per server.
+- **Sports:** the ball owned by the server (Rule 45), goals detected on the server, team balance enforced by the server. Possession changes through one remote with distance checks.
+- **Farming and fishing:** crop growth stored as plant time plus growth duration, computed on load (no per-plant loops while offline). Fish rolls on the server. Many plots and plants, so one growth loop per server and clients animate growth locally.
+
+## Luau
+
+### Cleaner: one place to clean up a lifetime
+```lua
+--!strict
+-- ReplicatedStorage/Shared/Cleaner
+local Cleaner = {}
+Cleaner.__index = Cleaner
+
+export type Cleaner = typeof(setmetatable({} :: { items: {any} }, Cleaner))
+
+function Cleaner.new(): Cleaner
+	return setmetatable({ items = {} }, Cleaner)
+end
+
+function Cleaner.add<T>(self: Cleaner, item: T): T
+	table.insert(self.items, item)
+	return item
+end
+
+function Cleaner.clean(self: Cleaner)
+	for i = #self.items, 1, -1 do
+		local item = self.items[i]
+		self.items[i] = nil
+		local kind = typeof(item)
+		if kind == "RBXScriptConnection" then
+			item:Disconnect()
+		elseif kind == "Instance" then
+			item:Destroy()
+		elseif kind == "thread" then
+			pcall(task.cancel, item)
+		elseif kind == "function" then
+			item()
+		end
+	end
+end
+
+return Cleaner
+```
+Usage: `local c = Cleaner.new(); c:add(RunService.Heartbeat:Connect(step)); c:add(task.spawn(loop)); player.CharacterRemoving:Once(function() c:clean() end)`.
+
+### Validate: shared argument checks
+```lua
+--!strict
+-- ReplicatedStorage/Shared/Validate (the server relies on it; the client may use it to pre-check)
+local Validate = {}
+
+function Validate.int(v: unknown, min: number, max: number): number?
+	if typeof(v) ~= "number" or v ~= v or v % 1 ~= 0 or v < min or v > max then return nil end
+	return v
+end
+
+function Validate.num(v: unknown, min: number, max: number): number?
+	if typeof(v) ~= "number" or v ~= v or v < min or v > max then return nil end
+	return v
+end
+
+function Validate.str(v: unknown, maxLen: number): string?
+	if typeof(v) ~= "string" or #v == 0 or #v > maxLen or utf8.len(v) == nil then return nil end
+	return v
+end
+
+function Validate.key(v: unknown, allowed: {[string]: any}): string?
+	if typeof(v) ~= "string" or #v > 64 or allowed[v] == nil then return nil end
+	return v
+end
+
+function Validate.vec3(v: unknown, maxMagnitude: number): Vector3?
+	if typeof(v) ~= "Vector3" then return nil end
+	if v.X ~= v.X or v.Y ~= v.Y or v.Z ~= v.Z or v.Magnitude > maxMagnitude then return nil end
+	return v
+end
+
+function Validate.taggedPart(v: unknown, tag: string): BasePart?
+	if typeof(v) ~= "Instance" or not v:IsA("BasePart") or not v:HasTag(tag) then return nil end
+	return v
+end
+
+return Validate
+```
+
+### Cooldowns on the server
+```lua
+--!strict
+-- ServerScriptService/Services/Cooldowns
+local Players = game:GetService("Players")
+local Cooldowns = {}
+local last: {[Player]: {[string]: number}} = {}
+
+function Cooldowns.ready(player: Player, action: string, seconds: number): boolean
+	local byAction = last[player]
+	if not byAction then byAction = {}; last[player] = byAction end
+	local now = os.clock()
+	local t = byAction[action]
+	if t and now - t < seconds then return false end
+	byAction[action] = now
+	return true
+end
+
+function Cooldowns.Start()
+	Players.PlayerRemoving:Connect(function(player) last[player] = nil end)
+end
+
+return Cooldowns
+```
+
+### Object pool
+```lua
+--!strict
+-- ReplicatedStorage/Shared/Pool
+local Pool = {}
+Pool.__index = Pool
+
+export type Pool = typeof(setmetatable({} :: { template: PVInstance, free: {PVInstance}, folder: Instance }, Pool))
+
+function Pool.new(template: PVInstance, folder: Instance, prewarm: number): Pool
+	local self = setmetatable({ template = template, free = {}, folder = folder }, Pool)
+	for _ = 1, prewarm do
+		table.insert(self.free, template:Clone())
+	end
+	return self
+end
+
+function Pool.get(self: Pool, cframe: CFrame): PVInstance
+	local item = table.remove(self.free) or self.template:Clone()
+	item:PivotTo(cframe)
+	item.Parent = self.folder -- Parent last
+	return item
+end
+
+function Pool.release(self: Pool, item: PVInstance)
+	item.Parent = nil -- not Destroy: it will be reused
+	table.insert(self.free, item)
+end
+
+return Pool
+```
+Reset attributes and tags when an item goes back into the pool, so a reused coin doesn't keep its old value.
+
+### Pickups with one spatial query per player
+```lua
+--!strict
+-- ServerScriptService/Services/CollectibleService
+local Players = game:GetService("Players")
+local Economy = require(script.Parent.Economy)
+local Pool = require(game:GetService("ReplicatedStorage").Shared.Pool)
+
+local CollectibleService = {}
+local RADIUS = 8
+local params = OverlapParams.new()
+params.FilterType = Enum.RaycastFilterType.Include
+local coinPool: Pool.Pool
+
+function CollectibleService.Init()
+	params.FilterDescendantsInstances = { workspace.Drops }
+	coinPool = Pool.new(game:GetService("ServerStorage").Templates.Coin, workspace.Drops, 100)
+end
+
+local function scan()
+	for _, player in Players:GetPlayers() do
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if root and root:IsA("BasePart") then
+			for _, part in workspace:GetPartBoundsInRadius(root.Position, RADIUS, params) do
+				local value = part:GetAttribute("Value")
+				if typeof(value) == "number" and not part:GetAttribute("Claimed") then
+					part:SetAttribute("Claimed", true) -- first claim wins
+					Economy.add(player, "Coins", value, "Pickup")
+					coinPool:release(part)
+				end
+			end
+		end
+	end
+end
+
+function CollectibleService.Start()
+	task.spawn(function()
+		while true do
+			task.wait(0.1)
+			scan()
+		end
+	end)
+end
+
+return CollectibleService
+```
+This assumes each coin is a single Part (so the part found is the pooled instance). Clear `Claimed` and set a new `Value` when `coinPool:get` hands the coin out again.
+
+### Server movement check
+```lua
+--!strict
+-- ServerScriptService/Services/MovementCheck
+local Players = game:GetService("Players")
+
+local MovementCheck = {}
+local SAMPLE = 0.5
+local TOLERANCE = 1.6
+local lastGood: {[Player]: Vector3} = {}
+local graceUntil: {[Player]: number} = {}
+
+-- Call before any server teleport (portals, respawns), so the jump isn't flagged.
+function MovementCheck.allow(player: Player, seconds: number)
+	graceUntil[player] = os.clock() + seconds
+	lastGood[player] = nil
+end
+
+local function check(player: Player)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not (character and root and root:IsA("BasePart") and humanoid) then return end
+	if humanoid.SeatPart or os.clock() < (graceUntil[player] or 0) then
+		lastGood[player] = root.Position
+		return
+	end
+	local prev = lastGood[player]
+	local pos = root.Position
+	if prev then
+		local moved = Vector3.new(pos.X - prev.X, 0, pos.Z - prev.Z).Magnitude
+		local allowed = humanoid.WalkSpeed * SAMPLE * TOLERANCE + 4
+		if moved > allowed then
+			character:PivotTo(CFrame.new(prev) * root.CFrame.Rotation) -- pull back; don't kick
+			return
+		end
+	end
+	lastGood[player] = pos
+end
+
+function MovementCheck.Start()
+	Players.PlayerRemoving:Connect(function(player)
+		lastGood[player] = nil
+		graceUntil[player] = nil
+	end)
+	task.spawn(function()
+		while true do
+			task.wait(SAMPLE)
+			for _, player in Players:GetPlayers() do check(player) end
+		end
+	end)
+end
+
+return MovementCheck
+```
+
+### Server-validated shot
+```lua
+--!strict
+local function finite(v: Vector3): boolean
+	return v.X == v.X and v.Y == v.Y and v.Z == v.Z and v.Magnitude < 1e5
+end
+
+Remotes.get("Fire").OnServerEvent:Connect(function(player: Player, origin: unknown, direction: unknown)
+	if not RateLimit.allow(player, "Fire", 10, 10) then return end
+	if typeof(origin) ~= "Vector3" or typeof(direction) ~= "Vector3" then return end
+	if not finite(origin) or not finite(direction) or direction.Magnitude < 0.5 then return end
+	local weapon = Weapons.equipped(player) -- server-side record of the equipped weapon
+	if not weapon then return end
+	if not Cooldowns.ready(player, "Fire", weapon.FireInterval) then return end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not (character and root and root:IsA("BasePart")) then return end
+	if (root.Position - origin).Magnitude > 10 then return end -- shots start near the shooter
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character }
+	local hit = workspace:Raycast(origin, direction.Unit * weapon.Range, params)
+	if not hit then return end
+	local model = hit.Instance:FindFirstAncestorOfClass("Model")
+	local humanoid = model and model:FindFirstChildOfClass("Humanoid")
+	if humanoid and humanoid.Health > 0 then
+		humanoid:TakeDamage(weapon.Damage) -- damage from Config through the weapon record
+		Remotes.get("HitFx"):FireAllClients(hit.Position)
+	end
+end)
+```
+
+## Checklist
+Pre-ship code review (Reviewer runs this; Producer checks the evidence):
+- [ ] Every remote is in the contract table, rate-limited, and validates types, ranges, NaN, ownership and distance.
+- [ ] No client-provided price, reward, damage or progress value is trusted anywhere.
+- [ ] `Economy` is the only module that changes balances; every change is logged to analytics.
+- [ ] PlayerData loads with retries and a session lock; failed loads kick instead of handing out fresh data; saves use `UpdateAsync`.
+- [ ] Autosave, PlayerRemoving and BindToClose all save, and rejoining after each shows the same data in a 2-player test.
+- [ ] Save data is versioned and migrated; a newer-version save is never overwritten.
+- [ ] Save size after a long session is recorded and under 100 KB.
+- [ ] `ProcessReceipt` is idempotent by `PurchaseId` and acknowledges only after a successful save.
+- [ ] Game passes are checked with `pcall` and fall back to the saved cache.
+- [ ] Player text shown to others is filtered with `TextService`.
+- [ ] Admin handlers check UserId or group rank on the server.
+- [ ] No secrets, API keys or server logic in replicated containers.
+- [ ] Every inserted model and plugin script was audited; `LoadStringEnabled` is off.
+- [ ] Important unanchored parts have server network ownership.
+- [ ] No `wait(`, `spawn(` or `delay(` anywhere; `--!strict` on every script with zero Script Analysis errors.
+- [ ] No module has side effects at require time; no recursive requires.
+- [ ] Every connection to a global signal is disconnected; Player-keyed tables are cleared on leave.
+- [ ] Client code uses WaitForChild and tolerates streamed-out instances.
+- [ ] Instances are created with Parent set last; no loose Scripts in Workspace.
+- [ ] Every system has a flag in `Config.Flags`, and turning it off disables it cleanly.
+- [ ] The test runner passes; exploit tests rejected every bad input; injected DataStore failures caused no data loss.
+- [ ] A 30-minute soak test shows flat memory and instance counts.
+- [ ] The performance pass meets the budget table, or lists every miss with a plan.
+- [ ] A 2+ player local server session shows zero red errors in Output on every side.
+- [ ] Tunables and IDs live in `ReplicatedStorage.Shared.Config`, frozen.
+
+## Common mistakes
+- Letting the client send the price, the reward amount or "I won".
+- `SetAsync` saves without a session lock, so a fast server hop overwrites new data with old.
+- Saving a default table after a failed load, which wipes the player's progress.
+- Forgetting `BindToClose`, so every update loses the last minutes of everyone's progress.
+- Acknowledging a purchase before the grant is saved.
+- `RemoteFunction:InvokeClient`, or yielding inside `OnServerInvoke`.
+- A Heartbeat connection per spawned coin that is never disconnected.
+- Touched-based rewards with no ownership, debounce or claimed flag.
+- Sparse arrays or Vector3s in save data, which come back wrong.
+- Saves that grow forever (histories, logs) until they hit the size limit.
+- Leaderboard reads every time the board UI opens, burning the sorted-read budget.
+- Trusting MessagingService to deliver values, or forgetting MemoryStore expirations.
+- Teleporting without releasing the save lock, so the destination waits or fails.
+- Unfiltered player text on signs, pets or plots.
+- Admin checks in a LocalScript.
+- API keys in ReplicatedStorage.
+- Free models with hidden `require` backdoors.
+- Testing only with one player in Play mode and shipping multiplayer bugs.
+- Using `WaitForChild` on the server, or direct indexing (`workspace.Map.Shop`) on the client under streaming.
+- Optimizing without profiling, or adding Parallel Luau before there's a measured need.
+- Reporting "tested" without evidence.
+- Changing another agent's area (UI, map, assets) without being assigned it ([[00 Start Here]]).
+
+## References
+Most engineering rules in this chapter come from the studio's working knowledge of the Roblox engine APIs and are stated without citations; check the Creator Hub API reference for current signatures and limits. The sources below support the platform facts and examples.
+
+[1] Discovery (Roblox Creator Docs) — https://create.roblox.com/docs/discovery — RFY ranks on per-user averages of qPTR, playtime, play days, spend days, Robux spent and co-play days, so stability and saves affect distribution.
+[2] Recommended For You Algorithm Improvements That Better Value Long-Term Retention (DevForum) — https://devforum.roblox.com/t/recommended-for-you-algorithm-improvements-that-better-value-long-term-retention/4684575 — the 2026 RFY change and expected distribution fluctuations.
+[3] Optimizing discovery so great games reach millions of players (Roblox Newsroom, June 2026) — https://about.roblox.com/newsroom/2026/06/optimizing-discovery-great-games-reach-millions-players-roblox — RFY's 28-day view measuring long-term retention.
+[4] Boost Your Discovery by Building Games People Want to Play (DevForum) — https://devforum.roblox.com/t/boost-your-discovery-by-building-games-people-want-to-play/4779042 — with low retention, fix the core gameplay first.
+[5] Promotion (Roblox Creator Docs) — https://create.roblox.com/docs/production/promotion — games resembling existing games' metadata and place files aren't prioritized; immersive ad units in experiences.
+[6] Experience notifications (Roblox Creator Docs) — https://create.roblox.com/docs/production/promotion/experience-notifications — launch data read through Player:GetJoinData(); eligibility rules.
+[7] Experience notifications, cloud services (Roblox Creator Docs) — https://create.roblox.com/docs/cloud-services/experience-notifications — sending notifications from server-side code.
+[8] ExperienceNotificationService (API reference mirror) — https://robloxapi.github.io/ref-temp/class/ExperienceNotificationService.html — client opt-in members CanPromptOptInAsync, PromptOptIn, OptInPromptClosed (third-party mirror).
+[9] Friend invite reward system (Roblox Creator Docs) — https://create.roblox.com/docs/production/promotion/referral-system — ReferredByPlayerId in join data, read in PlayerAdded.
+[10] Help with invite system (DevForum) — https://devforum.roblox.com/t/help-with-invite-system/1634210 — the invite-sent event is restricted to CoreScripts.
+[11] More Creators Can Now Use Rewarded Video Ads (DevForum) — https://devforum.roblox.com/t/more-creators-can-now-use-rewarded-video-ads/3838678 — rewarded video shown only to users 13+ even when prompted.
+[12] Roblox eyes expanded placements for rewarded video ads (MediaPost) — https://www.mediapost.com/publications/article/417959/ — a Studio plug-in with templates for rewarded video expected in Q4 2026.
+[13] Grow a Garden (Wikipedia) — https://en.wikipedia.org/wiki/Grow_a_Garden — built in about three days; first Roblox game past 5M concurrent players (May 17, 2025).
+[14] Grow a Garden record (WN Hub) — https://wnhub.io/news/other/item-47931 — RoMonitor: 11.7M concurrent on Saturday, May 31, 2025, vs 8.9M a week earlier.
+[15] How Grow a Garden took off on Roblox: Janzen Madsen interview (GamesBeat) — https://gamesbeat.com/janzen-madsen-interview/ — Splitting Point manages the game.
+[16] Analytics: View retention by acquisition source and select your benchmark set (DevForum) — https://devforum.roblox.com/t/analytics-view-retention-by-acquisition-source-and-select-your-benchmark-set/4010157 — judging cohorts brought by different sources.
+[17] Grow a Garden hits 5 million active users (Kotaku) — https://kotaku.com/grow-a-garden-roblox-5-million-active-users-record-pc-1851781824 — coverage of the 5M milestone.
+[18] Ads Manager (Roblox Creator Docs) — https://create.roblox.com/docs/production/promotion/ads-manager — campaigns that bring new players to Home and search.
+[19] Sponsored experiences in Ads Manager (Roblox Creator Docs) — https://create.roblox.com/docs/production/promotion/sponsoring-experiences — sponsored placements on Home, Discover and search.
+[20] Grow a Garden update schedule (PCGamesN) — https://www.pcgamesn.com/grow-a-garden/update-schedule — weekly Saturday updates.
+[21] Grow a Garden major changes coming (NME) — https://www.nme.com/news/gaming-news/roblox-grow-a-garden-major-changes-coming-update-cooking-3884432 — weekly events hard to keep fresh; more depth instead.
+[22] Roblox teams up with Google to pay players to watch ads (Kidscreen) — https://kidscreen.com/?p=221179 — rewarded video: optional videos up to 30 seconds for in-game rewards.
+[23] RDC25: What we announced (DevForum) — https://devforum.roblox.com/t/rdc25-what-we-announced/3920245 — the yearly recap of new creator tools and platform changes.
+[24] Ads tag (DevForum) — https://devforum.roblox.com/tag/ads — July 2026 posts on new advertising policies and standards.
+[25] Millions are flocking to grow virtual gardens in viral Roblox game created by teenager (AP via KSAT, 2025-07-30) — https://www.ksat.com/business/2025/07/30/millions-are-flocking-to-grow-virtual-gardens-in-viral-roblox-game-created-by-teenager/ — millions of people playing every day.
+
+Related: [[00 Start Here]] · [[00 For Any AI]] · [[02 The Core Loop]] · [[03 Rarity and RNG]] · [[04 Progression and Economy]] · [[05 UI and HUD]] · [[07 Characters, VFX and Assets]] · [[08 Mobile]] · [[09 Shops and Monetization]] · [[10 Retention and Social]] · [[12 Live Ops and Launch]] · [[14 Roblox Studio Workflow]] · [[15 Discovery and Growth]]

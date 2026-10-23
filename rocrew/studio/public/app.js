@@ -14,7 +14,7 @@ const S = {
   ui: {
     reviewFilter: "pending",
     reviewAgent: "all",
-    marketTab: "charts",
+    marketTab: "openings",
     sortId: null,
     libTab: "assets",
     libKind: "all",
@@ -872,7 +872,7 @@ PAGES.market = {
   update(el) {
     const m = S.market;
     const tab = S.ui.marketTab;
-    const tabs = [["charts", "1 · charts"], ["corpus", "2 · corpus"], ["benchmarks", "3 · benchmarks"], ["breakouts", "4 · breakouts"]];
+    const tabs = [["openings", "Ideas"], ["charts", "Charts"], ["breakouts", "Breakouts"], ["corpus", "Reference games"], ["benchmarks", "Targets"]];
     const busy = S.ui.busy.market;
     el.innerHTML = `
       <div class="page-head"><div class="row"><h2 class="grow" style="margin:0">Market intel</h2><button class="btn primary" data-act="market-refresh" ${busy ? "disabled" : ""}>${busy ? '<span class="spinner"></span>Fetching charts…' : `${icon("refresh")}Refresh charts`}</button></div>
@@ -882,13 +882,55 @@ PAGES.market = {
       <div id="market-body"></div>`;
     const body = el.querySelector("#market-body");
     if (!m) return;
-    if (tab === "charts") body.innerHTML = marketCharts(m);
+    if (tab === "openings") body.innerHTML = marketOpenings(m);
+    else if (tab === "charts") body.innerHTML = marketCharts(m);
     else if (tab === "corpus") body.innerHTML = marketCorpus(m);
     else if (tab === "benchmarks") body.innerHTML = `<h3 class="section-title">Benchmark targets</h3><div class="banner blue"><b>These are this studio's starting targets, not facts about Roblox.</b>Tune them with your own Creator Hub numbers. Producer checks gates against them.</div>
       <div class="table-wrap"><table class="data"><thead><tr><th>#</th><th>Benchmark</th><th>Target</th><th>Measured by</th><th>Failure meaning</th></tr></thead><tbody>${BENCHMARKS.map((r) => `<tr>${r.map((c, i) => `<td${i === 1 ? ' style="font-weight:700"' : i === 2 ? ' class="mono"' : ""}>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
     else body.innerHTML = marketBreakouts(m);
   },
 };
+
+function marketOpenings(m) {
+  if (!m.latest) return `<div class="empty">No chart data yet. Press <b>Refresh charts</b> (about 30 seconds). After that, RoCrew takes a snapshot every 3 hours by itself, so trends build up while you sleep.</div>`;
+  const list = m.openings ?? [];
+  return `<div class="banner blue"><b>Where a new game can break in right now</b>From Roblox's genre charts: how many games in each chart are under 4 months old, how big they are, how well liked, and how many are new since the last snapshot. A high score means young games are winning there.</div>
+    <div class="row" style="margin-bottom:14px"><button class="btn primary" data-act="ask-pulse-openings">${icon("bulb")}Ask Pulse to pitch from these</button><span class="faint" style="font-size:12px">Pulse studies the top openings, deep-dives the best young games, and sends you pitches to approve.</span></div>
+    <div class="openings">${list
+      .map(
+        (x, i) => `<div class="card opening"><div class="row"><span class="rank">${i + 1}</span><b class="grow">${esc(x.genre)}</b><span class="pill ${x.score >= 40 ? "green" : x.score >= 25 ? "amber" : ""}" title="Opening score">${x.score}</span></div>
+        <div class="stats"><span><b>${x.youngShare}%</b> under 4 months</span><span><b>${fmt(x.medianPlayers)}</b> median playing</span><span><b>${x.avgLikePct ?? "–"}%</b> liked</span>${x.newcomers !== null ? `<span><b>${x.newcomers}</b> new on chart</span>` : ""}</div>
+        ${x.examples.length ? `<div class="faint" style="font-size:12px;margin-top:8px">Young games doing well: ${x.examples.map((e) => `<a href="#" data-act="deep-dive" data-id="${e.universeId}">${esc(e.name)}</a> (${fmt(e.players)}, ${e.ageDays ?? "?"}d)`).join(", ")}</div>` : ""}
+        <div class="row" style="margin-top:8px"><button class="btn small" data-act="market-open-sort" data-id="${esc(x.sortId)}">See the chart</button></div></div>`,
+      )
+      .join("") || `<div class="empty">No genre charts in the last snapshot.</div>`}</div>`;
+}
+
+async function deepDive(id) {
+  modal(`<h3>Looking closer…</h3><div class="empty"><span class="spinner"></span> Asking Roblox about this game</div>`);
+  const g = await attempt(() => api("GET", `/api/market/game/${id}`));
+  if (!g) return closeOverlay();
+  const spark = g.playersLast14Days.length ? sparkline(g.playersLast14Days.map((d) => d.players)) : "";
+  modal(`<div class="row"><h3 class="grow" style="margin:0">${esc(g.name)}</h3><a class="btn small" href="https://www.roblox.com/games/${esc(g.placeId)}" target="_blank" rel="noopener">Open on Roblox</a></div>
+    <p class="faint" style="margin-top:4px">by ${esc(g.creator)} · ${esc(g.genre || "no genre")} · ${g.ageDays ?? "?"} days old · updated ${esc(g.updated?.slice(0, 10) ?? "?")}</p>
+    <div class="stats big"><span><b>${fmt(g.playing)}</b> playing</span><span><b>${fmt(g.visits)}</b> visits</span><span><b>${g.likePct ?? "–"}%</b> liked</span><span><b>${g.favoritesPer1kVisits ?? "–"}</b> favorites / 1k visits</span></div>
+    ${spark ? `<h4>Players, last 14 days</h4>${spark}` : ""}
+    ${g.passes.length ? `<h4>Game passes (${g.passes.length})</h4><div class="row" style="gap:6px">${g.passes.map((p) => `<span class="pill">${esc(p.name)} · ${p.price ?? "off sale"}</span>`).join("")}</div>` : ""}
+    ${g.products.length ? `<h4>Developer products (${g.products.length})</h4><div class="row" style="gap:6px">${g.products.slice(0, 24).map((p) => `<span class="pill">${esc(p.name)} · ${p.price ?? "–"}</span>`).join("")}</div>` : ""}
+    ${g.badges.length ? `<h4>Badges earned yesterday</h4><div class="row" style="gap:6px">${g.badges.map((b) => `<span class="pill">${esc(b.name)} · ${fmt(b.pastDay)}</span>`).join("")}</div><p class="faint" style="font-size:12px">The first badge is often given on joining, so it roughly counts new players a day.</p>` : ""}
+    ${g.similar.length ? `<h4>Similar games</h4><div class="row" style="gap:6px">${g.similar.map((x) => `<a class="pill" href="#" data-act="deep-dive" data-id="${x.universeId}">${esc(x.name)} · ${fmt(x.players)}</a>`).join("")}</div>` : ""}
+    ${g.notes.length ? `<p class="faint" style="font-size:12px">${g.notes.map(esc).join(" · ")}</p>` : ""}
+    <div class="row end" style="margin-top:14px"><button class="btn" data-act="corpus" data-id="${g.universeId}" data-add="true">${icon("star")}Add to reference games</button><button class="btn primary" data-act="ask-pulse-game" data-id="${g.universeId}" data-name="${esc(g.name)}">${icon("bulb")}Ask Pulse about this</button></div>`);
+}
+
+function sparkline(values) {
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values);
+  const w = 520;
+  const h = 70;
+  const pts = values.map((v, i) => `${(i / Math.max(1, values.length - 1)) * w},${h - ((v - min) / Math.max(1, max - min)) * (h - 8) - 4}`).join(" ");
+  return `<svg viewBox="0 0 ${w} ${h}" class="spark" preserveAspectRatio="none" role="img" aria-label="Players over 14 days"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg><div class="row faint" style="font-size:12px;justify-content:space-between"><span>${fmt(values[0])}</span><span>${fmt(values.at(-1))}</span></div>`;
+}
 
 function likePct(g) {
   return g.up + g.down ? `${((g.up / (g.up + g.down)) * 100).toFixed(1)}%` : "–";
@@ -913,7 +955,7 @@ function marketCharts(m) {
         const inCorpus = m.corpus.some((c) => String(c.universeId) === String(g.universeId));
         return `<tr><td>${g.rank}</td><td class="${mv?.rankDelta > 0 ? "up" : mv?.rankDelta < 0 ? "down" : ""}">${mv ? (mv.isNew ? "new" : `${mv.rankDelta > 0 ? "+" : ""}${mv.rankDelta}`) : ""}</td>
         <td>${d.icon ? `<img class="ico" src="${esc(d.icon)}" alt="" loading="lazy">` : ""}</td>
-        <td><a href="https://www.roblox.com/games/${esc(g.placeId ?? d.placeId ?? "")}" target="_blank" rel="noopener" style="text-decoration:none;font-weight:650">${esc(g.name)}</a></td>
+        <td><a href="#" data-act="deep-dive" data-id="${g.universeId}" style="text-decoration:none;font-weight:650" title="Look closer">${esc(g.name)}</a>${g.sponsored ? ' <span class="pill">ad</span>' : ""}</td>
         <td>${fmt(g.players)}</td><td class="${mv?.playersDelta > 0 ? "up" : mv?.playersDelta < 0 ? "down" : ""}">${mv?.playersDelta ? `${mv.playersDelta > 0 ? "+" : ""}${fmt(mv.playersDelta)}` : ""}</td>
         <td>${likePct(g)}</td><td>${fmt(d.visits)}</td><td class="mono faint">${g.universeId}</td>
         <td><button class="btn small ${inCorpus ? "green" : ""}" data-act="corpus" data-id="${g.universeId}" data-add="${!inCorpus}" title="${inCorpus ? "In the reference corpus" : "Add to the reference corpus"}">${icon("star")}</button></td></tr>`;
@@ -1422,6 +1464,27 @@ const ACTIONS = {
     await refresh();
   },
   "select-all": (el) => el.select(),
+  "deep-dive": (el) => deepDive(el.dataset.id),
+  "market-open-sort": (el) => {
+    S.ui.marketTab = "charts";
+    S.ui.sortId = el.dataset.id;
+    render(true);
+  },
+  "ask-pulse-openings": async () => {
+    const t = await attempt(() =>
+      api("POST", "/api/tasks", { agent: "pulse", from: "owner", title: "Pitch games from the current market openings", brief: "Run `node studio/cli.mjs market` and look at the Openings and Breakouts. Pick the 2-3 strongest openings, deep-dive the best young games in them with `market game <id>`, and send me pitches with `cli.mjs pitch`. Say for each why now, what we'd do differently, and how big the risk is." }),
+    );
+    if (t) toast("Pulse is on it. Pitches will show up under Pitches.");
+  },
+  "ask-pulse-game": async (el) => {
+    const t = await attempt(() =>
+      api("POST", "/api/tasks", { agent: "pulse", from: "owner", title: `Size up ${el.dataset.name}`, brief: `Look closely at ${el.dataset.name} (universe ${el.dataset.id}) with \`node studio/cli.mjs market game ${el.dataset.id}\`. Why is it working, who plays it, how does it make money, and could we make a better version or a twist? If yes, send me a pitch.` }),
+    );
+    if (t) {
+      closeOverlay();
+      toast("Pulse is on it.");
+    }
+  },
   "roblox-signin": async () => {
     if (await attempt(() => api("POST", "/api/roblox/signin"))) await refresh();
   },

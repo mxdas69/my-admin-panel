@@ -15,7 +15,7 @@ import { Crew, slugify } from "./lib/crew.mjs";
 import { AGENTS, isAgent } from "./lib/agents.mjs";
 import { probeClaude } from "./lib/claude.mjs";
 import { presetTable } from "./lib/models.mjs";
-import { fetchCharts, fetchDetails, velocity, breakouts, liveNumbers, uploadDecal } from "./lib/roblox.mjs";
+import { fetchCharts, fetchDetails, velocity, breakouts, openings, gameDeepDive, liveNumbers, uploadDecal } from "./lib/roblox.mjs";
 import { generateImage, askGemini } from "./lib/gemini.mjs";
 import { RemoteControl } from "./lib/remote.mjs";
 import { RobloxBrowser } from "./lib/robloxBrowser.mjs";
@@ -31,6 +31,7 @@ fs.mkdirSync(MEDIA, { recursive: true });
 const config = new Config(path.join(DATA, "config.json"));
 const store = new Store(path.join(DATA, "db.json"));
 const crew = new Crew({ store, config, root: ROOT });
+if (!fs.existsSync(store.marketFile)) store.saveMarket(); // move market data out of db.json once
 // A stable secret, so a phone bookmark of the private link keeps working across restarts.
 const TOKEN_FILE = path.join(DATA, "token");
 const TOKEN = fs.existsSync(TOKEN_FILE) ? fs.readFileSync(TOKEN_FILE, "utf8").trim() : randomBytes(24).toString("hex");
@@ -279,6 +280,7 @@ function marketView() {
     previousAt: m.snapshots.at(-2)?.at ?? null,
     moves: velocity(m.snapshots),
     breakouts: breakouts(m.snapshots, m.details),
+    openings: openings(m.snapshots, m.details),
     corpus: m.corpus.map((id) => m.details[id] ?? { universeId: id, name: `Universe ${id}` }),
     details: m.details,
   };
@@ -298,6 +300,8 @@ async function refreshMarket() {
   } catch (err) {
     m.error = `${err.message}${err.cause ? ` (${err.cause.code ?? err.cause.message})` : ""}`;
   }
+  m.triedAt = Date.now();
+  store.saveMarket();
   crew.changed();
   return marketView();
 }
@@ -618,6 +622,13 @@ route("POST", /^\/api\/upload$/, async (req) => {
 
 route("GET", /^\/api\/market$/, () => marketView());
 route("POST", /^\/api\/market\/refresh$/, () => refreshMarket());
+route("GET", /^\/api\/market\/game\/(\d+)$/, async (req, url, [id]) => {
+  try {
+    return await gameDeepDive(id);
+  } catch (err) {
+    throw new HttpError(502, err.message);
+  }
+});
 route("POST", /^\/api\/market\/corpus$/, async (req) => {
   const { universeId, add = true } = await readJson(req);
   const id = String(universeId ?? "").replace(/\D/g, "");
@@ -626,6 +637,7 @@ route("POST", /^\/api\/market\/corpus$/, async (req) => {
   if (add && !market.corpus.includes(id)) market.corpus.push(id);
   if (!add) market.corpus = market.corpus.filter((x) => x !== id);
   if (add && !store.data.market.details[id]) Object.assign(store.data.market.details, await fetchDetails([id]).catch(() => ({})));
+  store.saveMarket();
   crew.changed();
   return marketView();
 });
@@ -894,6 +906,15 @@ server.listen(port, host, () => {
   checkConnections().catch(() => {});
   const recheck = () => robloxBrowser.status.signedIn && !crew.browserHolder && robloxBrowser.check().catch(() => {});
   setTimeout(recheck, 5000);
+  // Snapshot the charts every 3 hours, so rank moves and breakouts build up on their own.
+  const marketTick = () => {
+    const m = store.data.market;
+    if (Date.now() - (m.triedAt ?? m.fetchedAt ?? 0) > 3 * 3600000) refreshMarket().catch(() => {});
+  };
+  if (!process.env.ROCREW_NO_MARKET) {
+    setTimeout(marketTick, 20000);
+    setInterval(marketTick, 30 * 60000).unref();
+  }
   setInterval(recheck, 6 * 3600000).unref();
   if (process.argv.includes("--open")) openInBrowser(`http://localhost:${port}`);
 });

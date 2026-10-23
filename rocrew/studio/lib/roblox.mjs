@@ -6,7 +6,14 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 const UA = { "user-agent": "RoCrew/0.1 (+local agent studio)", accept: "application/json" };
-const WANTED_SORTS = /trending|up-and-coming|up_and_coming|top-playing|top-earning|top-rated|popular/i;
+// Charts that answer when asked directly, including genre charts get-sorts doesn't always list.
+export const MAIN_SORTS = ["top-trending", "up-and-coming", "top-playing-now", "top-earning", "top-revisited", "fun-with-friends", "top-rated", "most-popular"];
+export const GENRE_SORTS = [
+  "trending-in-simulation", "trending-in-survival", "trending-in-action", "trending-in-rpg", "trending-in-shooter", "trending-in-strategy",
+  "trending-in-sports-and-racing", "trending-in-roleplay-and-avatar-sim", "trending-in-party-and-casual", "trending-in-obby-and-platformer",
+  "trending-in-puzzle", "trending-in-shopping", "trending-in-entertainment",
+];
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function getJson(url, { timeoutMs = 15000, headers = {} } = {}) {
   const res = await fetch(url, { headers: { ...UA, ...headers }, signal: AbortSignal.timeout(timeoutMs) });
@@ -20,31 +27,43 @@ function chunk(list, size) {
   return out;
 }
 
-/** One snapshot of the Roblox charts: { at, sorts: { [sortId]: { name, games: [...] } } }. */
-export async function fetchCharts({ perSort = 40 } = {}) {
+/** One snapshot of the Roblox charts: { at, sorts: { [sortId]: { name, genre, games: [...] } } }. */
+export async function fetchCharts({ perSort = 30, gapMs = 1300 } = {}) {
   const sessionId = randomUUID();
   const base = "https://apis.roblox.com/explore-api/v1";
-  const sortList = await getJson(`${base}/get-sorts?sessionId=${sessionId}&device=computer&country=all`);
-  const sorts = (sortList.sorts ?? []).filter((s) => s.sortId && WANTED_SORTS.test(s.sortId) && (s.contentType ?? "Games") === "Games");
-  if (!sorts.length) throw new Error("The charts API answered but listed no game sorts. Roblox may have changed it.");
-
+  const names = {};
+  try {
+    const list = await getJson(`${base}/get-sorts?sessionId=${sessionId}&device=all&country=all`);
+    for (const s of list.sorts ?? []) if (s.sortId) names[s.sortId] = s.sortDisplayName ?? s.sortId;
+  } catch {}
   const snapshot = { at: Date.now(), sorts: {} };
-  for (const sort of sorts.slice(0, 6)) {
-    const content = await getJson(
-      `${base}/get-sort-content?sessionId=${sessionId}&sortId=${encodeURIComponent(sort.sortId)}&device=computer&country=all`,
-    );
-    const games = (content.games ?? []).slice(0, perSort).map((g, i) => ({
-      rank: i + 1,
-      universeId: g.universeId,
-      placeId: g.rootPlaceId ?? null,
-      name: g.name,
-      players: g.playerCount ?? 0,
-      up: g.totalUpVotes ?? 0,
-      down: g.totalDownVotes ?? 0,
-    }));
-    snapshot.sorts[sort.sortId] = { name: sort.sortDisplayName ?? sort.sortId, games };
+  const errors = [];
+  for (const sortId of [...MAIN_SORTS, ...GENRE_SORTS]) {
+    try {
+      const content = await getJson(`${base}/get-sort-content?sessionId=${sessionId}&sortId=${sortId}&device=all&country=all`);
+      const games = (content.games ?? []).slice(0, perSort).map((g, i) => ({
+        rank: i + 1,
+        universeId: g.universeId,
+        placeId: g.rootPlaceId ?? null,
+        name: g.name,
+        players: g.playerCount ?? 0,
+        up: g.totalUpVotes ?? 0,
+        down: g.totalDownVotes ?? 0,
+        ...(g.isSponsored ? { sponsored: true } : {}),
+      }));
+      if (games.length) snapshot.sorts[sortId] = { name: names[sortId] ?? prettySort(sortId), genre: sortId.startsWith("trending-in-") ? prettySort(sortId.slice(12)) : null, games };
+    } catch (err) {
+      errors.push(err.message);
+      if (/429/.test(err.message)) await pause(15000);
+    }
+    await pause(gapMs);
   }
+  if (!Object.keys(snapshot.sorts).length) throw new Error(`Roblox's charts didn't answer${errors[0] ? `: ${errors[0]}` : ""}. Roblox may have changed them; Pulse can still research with web search.`);
   return snapshot;
+}
+
+function prettySort(id) {
+  return id.replace(/-/g, " ").replace(/\b(and)\b/g, "&").replace(/^\w/, (c) => c.toUpperCase());
 }
 
 /** Visits, creation date, genre etc. for up to a few hundred universes. */
@@ -84,6 +103,7 @@ export function velocity(snapshots) {
   for (const [sortId, sort] of Object.entries(now.sorts)) {
     const before = new Map((prev.sorts[sortId]?.games ?? []).map((g) => [g.universeId, g]));
     for (const g of sort.games) {
+      if (g.sponsored) continue;
       const old = before.get(g.universeId);
       moves.push({
         sortId,
@@ -106,6 +126,7 @@ export function breakouts(snapshots, details, { maxVisits = 300000, minPlayers =
   for (const snap of snapshots.filter((s) => s.at >= weekAgo)) {
     for (const sort of Object.values(snap.sorts)) {
       for (const g of sort.games) {
+        if (g.sponsored) continue;
         const prev = seen.get(g.universeId);
         if (!prev || g.players > prev.peak) seen.set(g.universeId, { ...g, peak: g.players, firstSeen: prev?.firstSeen ?? snap.at });
         else prev.players = g.players;
@@ -122,6 +143,85 @@ export function breakouts(snapshots, details, { maxVisits = 300000, minPlayers =
       likePct: g.up + g.down ? Math.round((g.up / (g.up + g.down)) * 1000) / 10 : null,
     }))
     .sort((a, b) => b.peak - a.peak);
+}
+
+/**
+ * Where a new game can break in: for each genre chart, how many of its games are young,
+ * how big they are, how well liked, and whether the chart is moving. A genre where young
+ * games hold chart spots with good ratings is an opening; one held by years-old giants isn't.
+ */
+export function openings(snapshots, details) {
+  const now = snapshots.at(-1);
+  if (!now) return [];
+  const prev = snapshots.at(-2);
+  const out = [];
+  for (const [sortId, sort] of Object.entries(now.sorts)) {
+    if (!sort.genre) continue;
+    const games = sort.games.filter((g) => !g.sponsored).map((g) => ({ ...g, ...(details[g.universeId] ?? {}) }));
+    if (!games.length) continue;
+    const ages = games.map((g) => (g.created ? (Date.now() - Date.parse(g.created)) / 86400000 : null));
+    const young = games.filter((g, i) => ages[i] !== null && ages[i] < 120);
+    const players = games.map((g) => g.players).sort((a, b) => a - b);
+    const median = players[Math.floor(players.length / 2)] ?? 0;
+    const likes = games.filter((g) => g.up + g.down > 50).map((g) => g.up / (g.up + g.down));
+    const before = new Set((prev?.sorts[sortId]?.games ?? []).map((g) => g.universeId));
+    const newcomers = prev ? games.filter((g) => !before.has(g.universeId)).length : null;
+    const youngShare = young.length / games.length;
+    const score = Math.round((youngShare * 60 + Math.min(1, Math.log10(Math.max(median, 1)) / 4) * 25 + (newcomers ? Math.min(newcomers / games.length, 0.5) * 30 : 0)) * 10) / 10;
+    out.push({
+      sortId,
+      genre: sort.genre,
+      games: games.length,
+      medianPlayers: median,
+      youngShare: Math.round(youngShare * 100),
+      newcomers,
+      avgLikePct: likes.length ? Math.round((likes.reduce((a, b) => a + b, 0) / likes.length) * 1000) / 10 : null,
+      score,
+      examples: young.sort((a, b) => b.players - a.players).slice(0, 3).map((g) => ({ universeId: g.universeId, name: g.name, players: g.players, ageDays: g.created ? Math.round((Date.now() - Date.parse(g.created)) / 86400000) : null })),
+    });
+  }
+  return out.sort((a, b) => b.score - a.score);
+}
+
+/**
+ * Everything public about one game, for sizing up a format: numbers, like ratio, how it
+ * monetizes (pass and product price ladders), badge activity (a rough new-players-per-day
+ * signal), similar games, and two weeks of player counts from RoMonitor when it answers.
+ */
+export async function gameDeepDive(id) {
+  let universeId = String(id).replace(/\D/g, "");
+  let g = (await fetchDetails([universeId]))[universeId];
+  if (!g) {
+    const u = await getJson(`https://apis.roblox.com/universes/v1/places/${universeId}/universe`).catch(() => null);
+    if (u?.universeId) {
+      universeId = String(u.universeId);
+      g = (await fetchDetails([universeId]))[universeId];
+    }
+  }
+  if (!g) throw new Error(`No Roblox game found for ${id} (tried it as a universe id and a place id).`);
+  const tryJson = (url) => getJson(url).catch((err) => ({ error: err.message }));
+  const [passes, products, badges, similar] = await Promise.all([
+    tryJson(`https://apis.roblox.com/game-passes/v1/universes/${universeId}/game-passes?passView=Full&pageSize=100`),
+    tryJson(`https://apis.roblox.com/developer-products/v2/universes/${universeId}/developerproducts?limit=100`),
+    tryJson(`https://badges.roblox.com/v1/universes/${universeId}/badges?limit=100&sortOrder=Asc`),
+    tryJson(`https://games.roblox.com/v1/games/recommendations/game/${universeId}?maxRows=12`),
+  ]);
+  const end = new Date();
+  const start = new Date(end - 13 * 86400000);
+  const ccu = await tryJson(`https://romonitorstats.com/api/v1/charts/get?name=ccus&timeslice=day&placeId=${g.placeId}&start=${start.toISOString()}&ends=${end.toISOString()}`);
+  const series = Array.isArray(ccu) ? Object.entries(ccu[0]?.data ?? {}).map(([day, n]) => ({ day: day.slice(0, 10), players: Math.round(n) })) : [];
+  return {
+    ...g,
+    likePct: g.up + g.down ? Math.round((g.up / (g.up + g.down)) * 1000) / 10 : null,
+    ageDays: g.created ? Math.round((Date.now() - Date.parse(g.created)) / 86400000) : null,
+    favoritesPer1kVisits: g.visits ? Math.round((g.favorites / g.visits) * 10000) / 10 : null,
+    passes: (passes.gamePasses ?? []).map((p) => ({ name: p.displayName ?? p.name, price: p.price ?? null })).sort((a, b) => (a.price ?? 1e9) - (b.price ?? 1e9)),
+    products: (products.developerProducts ?? []).map((p) => ({ name: p.Name, price: p.PriceInRobux ?? null })).sort((a, b) => (a.price ?? 1e9) - (b.price ?? 1e9)),
+    badges: (badges.data ?? []).slice(0, 12).map((b) => ({ name: b.name, pastDay: b.statistics?.pastDayAwardedCount ?? null, total: b.statistics?.awardedCount ?? null })),
+    similar: (similar.games ?? []).map((s) => ({ universeId: s.universeId, name: s.name, players: s.playerCount })),
+    playersLast14Days: series,
+    notes: [passes.error && `passes: ${passes.error}`, products.error && `products: ${products.error}`, badges.error && `badges: ${badges.error}`, ccu.error && "player history: RoMonitor didn't answer"].filter(Boolean),
+  };
 }
 
 /** Live numbers for one of your own games. */

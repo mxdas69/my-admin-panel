@@ -411,7 +411,7 @@ The **owner publishes**, sets prices, creates products, spends money and restart
 - **Economy:** `LogEconomyEvent` powers sources vs sinks per currency. Compare it with Balance's simulation in `economy.md` ([[04 Progression and Economy]]).
 - **Benchmarks:** choose the benchmark set that matches the game's genre and size [5], and use it in every weekly review.
 - Dashboards lag behind real time. Verify that events fire with no errors in Studio, then confirm the data appears after real sessions.
-- Roblox has said it would publish more about how the algorithm works in Creator Analytics [6] and the full list of RFY signals with their relative importance [3]. Check the Discovery page [1] every month and update this chapter if it changed.
+- Roblox has said it would publish more about how the algorithm works in Creator Analytics [6] and the full list of RFY signals with their relative importance [3]. Check the Discovery page [1] every month, read each year's RDC recap of announcements [27], and update this chapter when something changed.
 
 ## AnalyticsService events (server only)
 
@@ -562,6 +562,35 @@ end)
 - Roblox's advertising policies and Ads Manager change often; the DevForum ads tag lists the latest posts (for example the July 2026 Kids and Select launch and new advertising policies) [10].
 - Time big campaigns with an update or event, so new players arrive to fresh content and the team is watching (Rule 46). The full playbook is [[15 Discovery and Growth]].
 
+## Template: `games/<slug>/liveops.md`
+```
+# <Game> live ops
+
+## Update slot
+Every <weekday> <HH:MM> UTC, every <1|2> weeks.
+
+## Analytics contract
+| Kind | Name | When | Fields |
+
+## Metrics (weekly)
+| Week | New | D1 (n) | D7 (n) | D30 (n) | Median session | Payer % | ARPDAU | Errors/session | qPTR |
+
+## Calendar (next 4 weeks)
+| Week | Slot | Headline | Target metric | Event | Code | Ads/creators |
+
+## Next 3 updates
+1. <headline> — target <metric> — status <planned|building|ready>
+
+## Events (12 months)
+| Id | Starts UTC | Ends UTC | Type | Free track | Paid items | Currency rule |
+
+## Update results
+| Version | Date | Change | Expected | Result after 7 d | Decision |
+
+## Log (newest first)
+YYYY-MM-DD HH:MM · what happened · result
+```
+
 ## Examples from top games
 
 ### A fixed update slot is a promise players plan around
@@ -587,7 +616,7 @@ end)
 
 ### A tiny first version, then a team to run it
 **Game:** Grow a Garden ([17][18])
-**Shows:** The original creator built it in about three days; Splitting Point, Janzen Madsen's studio, now manages it [17][18].
+**Shows:** The original creator built it in about three days; Splitting Point, Janzen Madsen's studio, now manages it [17][18]. Kotaku covered its 5 million milestone [30], and Reuters reported that it helped push Roblox past 100 million users [31].
 **Why it works:** A small, complete loop got real players quickly, and live operation scaled up once players proved the idea.
 **Steal:** Launch the smallest version with a complete first session and update #1 ready (Rule 48). Plan who runs live ops if it takes off.
 **Avoid:** Skipping save safety because the build is small. Growth turns every data bug into a crisis ([[13 Building It Right]]).
@@ -1034,35 +1063,6 @@ Run one experiment at a time per funnel, split 50/50, and read it only after bot
 - A cadence the team can't keep, followed by weeks of silence.
 - Treating D1 as the only number while the algorithm looks at 28 days [3].
 - No live-ops log, so nobody can link a change in the numbers to its cause.
-
-## Template: `games/<slug>/liveops.md`
-```
-# <Game> live ops
-
-## Update slot
-Every <weekday> <HH:MM> UTC, every <1|2> weeks.
-
-## Analytics contract
-| Kind | Name | When | Fields |
-
-## Metrics (weekly)
-| Week | New | D1 (n) | D7 (n) | D30 (n) | Median session | Payer % | ARPDAU | Errors/session | qPTR |
-
-## Calendar (next 4 weeks)
-| Week | Slot | Headline | Target metric | Event | Code | Ads/creators |
-
-## Next 3 updates
-1. <headline> — target <metric> — status <planned|building|ready>
-
-## Events (12 months)
-| Id | Starts UTC | Ends UTC | Type | Free track | Paid items | Currency rule |
-
-## Update results
-| Version | Date | Change | Expected | Result after 7 d | Decision |
-
-## Log (newest first)
-YYYY-MM-DD HH:MM · what happened · result
-```
 
 ## References
 [1] Discovery (Roblox Creator Docs) — https://create.roblox.com/docs/discovery — RFY signals (qPTR, playtime, play days, spend days, Robux spent, co-play days); per-user averages; only RFY-acquired players ranked; qPTR dip before impression drop; seasonality and competitors; Home Recommendations dashboard.

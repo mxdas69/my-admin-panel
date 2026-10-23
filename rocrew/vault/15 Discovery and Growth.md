@@ -8,11 +8,11 @@ also: [architect, merchant, frame, balance, kid-tester, builder]
 
 This chapter is about how players find a Roblox game and what makes Roblox show it to more of them. It covers the surfaces (Home and its Recommended for You sort, Charts, search, sponsored slots, curated programs, notifications, friends and invites), the signals Roblox says it ranks on, thumbnail testing, Ads Manager, short-video creators, Discord, update-driven spikes, and a day-by-day launch-week plan. The other chapters make a game worth playing. This one gets it in front of players, and then makes sure the first players it reaches tell Roblox to show it to more.
 
-On Roblox the algorithm is the publisher, and it doesn't read pitches. It watches what real players do after they see your tile: do they click, do they stay, do they come back on other days, do they bring friends, do they spend. Roblox's own Discovery page says Recommended for You ranks games on per-player averages of those behaviors, and only counts players who arrived through Recommended for You [1]. Since mid-2026 it looks at a 28-day window built to value long-term retention [2][3]. Ads, YouTubers and Discord can bring players and data, but they can't buy distribution. Distribution is earned by the first session ([[01 The First Five Minutes]]), the loop ([[02 The Core Loop]]) and retention ([[10 Retention and Social]]).
+On Roblox the algorithm is the publisher, and it doesn't read pitches. It watches what real players do after they see your tile: do they click, do they stay, do they come back on other days, do they bring friends, do they spend. Roblox's own Discovery page says Recommended for You ranks games on per-player averages of those behaviors, and only counts players who arrived through Recommended for You [1]. Since mid-2026 it looks at a 28-day window built to value long-term retention [2][3], continuing a direction Roblox set out in 2025 toward organic recommendations that value long-term retention [6][7]. Ads, YouTubers and Discord can bring players and data, but they can't buy distribution. Distribution is earned by the first session ([[01 The First Five Minutes]]), the loop ([[02 The Core Loop]]) and retention ([[10 Retention and Social]]).
 
 Read this chapter at three moments. During **Pitch**, Pulse uses the surfaces and signals sections to judge whether a format can win a chart. During **Ship prep**, Splash, Liveops and Lead follow the launch-week plan and the thumbnail-testing recipe. After **launch**, Liveops reads the weekly dashboard procedure every Monday and logs every growth action in `games/<slug>/growth.md`. The owner spends money, sets the store page and talks to creators. Agents draft, measure and recommend.
 
-Platform features change faster than any page. Before acting on a rule that names a Roblox surface or setting, check the linked Creator Hub page for the current wording, and report any difference in your handoff so the Lead can fix this chapter.
+Platform features change faster than any page, and Roblox announces many discovery and ads changes at its yearly developer conference (RDC) [40]. Before acting on a rule that names a Roblox surface or setting, check the linked Creator Hub page for the current wording, and report any difference in your handoff so the Lead can fix this chapter.
 
 ## Rules
 
@@ -515,7 +515,7 @@ No pressure, and thanks for reading. <owner name>
 
 ### Real growth survives scrutiny
 **Game:** Grow a Garden ([25][31])
-**Shows:** After it passed 5 million concurrent players, investors alleged bot inflation, then retracted the claim. Roblox said its preliminary analysis confirmed genuine popularity [25]. Kotaku covered the 5 million milestone [31].
+**Shows:** After it passed 5 million concurrent players, investors alleged bot inflation, then retracted the claim. Roblox said its preliminary analysis confirmed genuine popularity [25]. Kotaku covered the 5 million milestone [31], and Reuters reported that the game helped push Roblox past 100 million users [41].
 **Why it works:** Genuine engagement holds up when anyone checks.
 **Steal:** Grow only through honest channels (Rule 36).
 **Avoid:** Any paid "visits", bots or fake engagement.

@@ -13,6 +13,7 @@ import { pickModel } from "../studio/lib/models.mjs";
 import { Crew } from "../studio/lib/crew.mjs";
 import { Store } from "../studio/lib/db.mjs";
 import { Config } from "../studio/lib/config.mjs";
+import { openings } from "../studio/lib/roblox.mjs";
 import { parseWhoAmI } from "../studio/lib/robloxBrowser.mjs";
 import { listPages, findPage, card, readSections, search } from "../studio/lib/vault.mjs";
 
@@ -51,7 +52,7 @@ const relay = http
   .listen(RELAY_PORT);
 relay.unref();
 
-const env = { ...process.env, ROCREW_DATA: DATA, PORT: String(PORT), FAKE_DELAY: "300", ROCREW_RELAY_URL: `http://127.0.0.1:${RELAY_PORT}`, ROCREW_FAKE_TUNNEL: "1" };
+const env = { ...process.env, ROCREW_DATA: DATA, PORT: String(PORT), FAKE_DELAY: "300", ROCREW_RELAY_URL: `http://127.0.0.1:${RELAY_PORT}`, ROCREW_FAKE_TUNNEL: "1", ROCREW_NO_MARKET: "1" };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function api(method, route, body, headers = {}) {
@@ -430,4 +431,19 @@ test("browser tasks get the signed-in browser one at a time, and only once signe
   assert.ok(merchant.allowedTools.includes("mcp__roblox-browser"));
   assert.match(merchant.prompt, /signed in to the owner's Roblox account as mxdas/);
   assert.ok(!runs.some((r) => r.agent === "pulse"), "the second browser task waits for the first");
+});
+
+test("market openings rank genres where young games are winning", () => {
+  const day = 86400000;
+  const g = (id, players, ageDays) => ({ id, players, ageDays });
+  const sort = (genre, games) => ({ name: genre, genre, games: games.map((x, i) => ({ rank: i + 1, universeId: x.id, name: `G${x.id}`, players: x.players, up: 90, down: 10 })) });
+  const young = [g(1, 5000, 30), g(2, 4000, 60), g(3, 3000, 90), g(4, 2000, 400)];
+  const old = [g(5, 90000, 2000), g(6, 80000, 1500), g(7, 70000, 1800), g(8, 1000, 20)];
+  const snaps = [{ at: Date.now(), sorts: { "trending-in-survival": sort("Survival", young), "trending-in-rpg": sort("RPG", old) } }];
+  const details = Object.fromEntries([...young, ...old].map((x) => [x.id, { created: new Date(Date.now() - x.ageDays * day).toISOString() }]));
+  const list = openings(snaps, details);
+  assert.equal(list[0].genre, "Survival");
+  assert.equal(list[0].youngShare, 75);
+  assert.equal(list[0].examples[0].name, "G1");
+  assert.equal(list[1].youngShare, 25);
 });

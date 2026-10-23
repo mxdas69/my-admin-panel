@@ -31,6 +31,12 @@ export class Store {
     this.timer = null;
     fs.mkdirSync(path.dirname(file), { recursive: true });
     this.data = EMPTY();
+    this.load(file);
+    // Older saves kept the market inside db.json; newer ones keep it in market.json.
+    if (fs.existsSync(this.marketFile)) this.loadMarket();
+  }
+
+  load(file) {
     for (const candidate of [file, `${file}.bak`, `${file}.tmp`]) {
       if (!fs.existsSync(candidate)) continue;
       try {
@@ -64,6 +70,22 @@ export class Store {
     return item;
   }
 
+  /** Market data is big and changes rarely, so it lives in its own file (market.json). */
+  get marketFile() {
+    return path.join(path.dirname(this.file), "market.json");
+  }
+
+  loadMarket() {
+    try {
+      const m = JSON.parse(fs.readFileSync(this.marketFile, "utf8"));
+      this.data.market = { ...EMPTY().market, ...m };
+    } catch {}
+  }
+
+  saveMarket() {
+    writeDurably(this.marketFile, JSON.stringify(this.data.market));
+  }
+
   save() {
     if (this.timer) return;
     this.timer = setTimeout(() => this.flush(), 250);
@@ -72,15 +94,21 @@ export class Store {
   flush() {
     clearTimeout(this.timer);
     this.timer = null;
-    const tmp = `${this.file}.tmp`;
-    const fd = fs.openSync(tmp, "w");
-    try {
-      fs.writeSync(fd, JSON.stringify(this.data, null, 1));
-      fs.fsyncSync(fd);
-    } finally {
-      fs.closeSync(fd);
-    }
-    if (fs.existsSync(this.file)) fs.renameSync(this.file, `${this.file}.bak`);
-    fs.renameSync(tmp, this.file);
+    const { market, ...rest } = this.data;
+    writeDurably(this.file, JSON.stringify(rest, null, 1), true);
   }
+}
+
+/** Write to a temp file, flush it to disk, keep the old copy as .bak, then swap it in. */
+function writeDurably(file, text, backup = false) {
+  const tmp = `${file}.tmp`;
+  const fd = fs.openSync(tmp, "w");
+  try {
+    fs.writeSync(fd, text);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  if (backup && fs.existsSync(file)) fs.renameSync(file, `${file}.bak`);
+  fs.renameSync(tmp, file);
 }
