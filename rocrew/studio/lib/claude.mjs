@@ -65,6 +65,8 @@ export function runClaude(opts) {
   if (opts.mcpConfigs?.length) args.push("--mcp-config", ...opts.mcpConfigs);
   if (opts.model) args.push("--model", opts.model);
   if (opts.effort) args.push("--effort", opts.effort);
+  // Live progress (thinking/writing) so the app can tell a busy agent from a stuck one.
+  if (opts.live) args.push("--include-partial-messages");
   if (opts.fallbackModel && opts.fallbackModel !== opts.model) args.push("--fallback-model", opts.fallbackModel);
 
   const child = spawnCommand(opts.command, args, {
@@ -87,6 +89,9 @@ export function runClaude(opts) {
   let stderr = "";
   let buffer = "";
   let killedFor = null;
+  // Watchdog: while waiting on the model (not while a step runs), silence this long means stuck.
+  let lastModelAt = Date.now();
+  let inTool = false;
 
   const handleLine = (line) => {
     if (!line.trim()) return;
@@ -98,6 +103,28 @@ export function runClaude(opts) {
       return;
     }
     if (ev.session_id) sessionId = ev.session_id;
+    if (ev.type === "stream_event") {
+      const e = ev.event ?? {};
+      const kind = e.type === "content_block_start" ? e.content_block?.type : null;
+      const phase = kind === "thinking" || kind === "redacted_thinking" ? "thinking" : kind === "text" ? "writing" : kind === "tool_use" ? "starting a step" : null;
+      if (phase) emit({ type: "activity", phase });
+      lastModelAt = Date.now();
+      return;
+    }
+    if (ev.type === "system" && ev.subtype === "api_retry") {
+      emit({ type: "activity", phase: `Claude's servers are busy, retrying (try ${ev.attempt ?? "?"})` });
+      lastModelAt = Date.now();
+      return;
+    }
+    if (ev.type === "assistant") {
+      lastModelAt = Date.now();
+      inTool = (ev.message?.content ?? []).some((b) => b.type === "tool_use");
+      if (inTool) emit({ type: "activity", phase: "running a step" });
+    } else if (ev.type === "user") {
+      lastModelAt = Date.now();
+      inTool = false;
+      emit({ type: "activity", phase: "thinking" });
+    }
     if (ev.type === "system" && ev.subtype === "init") {
       emit({ type: "init", sessionId, mcpServers: ev.mcp_servers ?? [], tools: ev.tools ?? [] });
     } else if (ev.type === "assistant") {
@@ -146,6 +173,12 @@ export function runClaude(opts) {
     ? setTimeout(() => kill(`timed out after ${Math.round(opts.timeoutMs / 60000)} min`), opts.timeoutMs)
     : null;
 
+  const watchdog = opts.stallMs
+    ? setInterval(() => {
+        if (!inTool && Date.now() - lastModelAt > opts.stallMs) kill(`stalled: no answer from Claude for ${Math.round(opts.stallMs / 60000)} min`);
+      }, 30000)
+    : null;
+
   function kill(reason) {
     if (child.exitCode !== null) return;
     killedFor = reason;
@@ -159,6 +192,7 @@ export function runClaude(opts) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearInterval(watchdog);
       if (buffer) handleLine(buffer);
       if (killedFor) resolve({ ok: false, sessionId, text: "", error: killedFor });
       else if (result) resolve({ ...result, sessionId, error: result.ok ? null : (result.text?.trim() || `Claude Code ended with "${result.subtype}"`) });

@@ -126,6 +126,13 @@ function untilText(ts) {
   return `${Math.round(m / 1440)}d`;
 }
 
+/** "Thinking for 3 min", "Running a step", "Writing"… from the agent's live phase. */
+function phaseText(p) {
+  const mins = Math.floor((Date.now() - p.at) / 60000);
+  const t = p.text[0].toUpperCase() + p.text.slice(1);
+  return mins >= 1 ? `${t} for ${mins} min` : t;
+}
+
 function usageBars(u, footer = true) {
   if (!u || (!u.fiveHour && !u.week)) return "";
   const ceiling = S.state.usageCeilingPct ?? 90;
@@ -216,7 +223,7 @@ function renderSidebar(r) {
     <div class="team-grid">${agents().map((a) => tile(a.id, "", true)).join("")}</div>
     <div class="side-box">
       <b>${s.paused ? "Crew paused" : c.working ? `${c.working} agent${c.working > 1 ? "s" : ""} working` : "Crew is idle"}</b>
-      <small>${holder ? `${icon("lock")} ${esc(holder)} has Studio` : c.queued ? `${c.queued} task(s) queued` : "Nothing running"}</small>
+      <small>${holder ? `${icon("lock")} ${esc(holder)} has Studio` : c.queued ? `${c.queued} task(s) queued` : c.working ? "Open Team to see what they're doing" : "Nothing running"}</small>
     </div>
     ${s.update?.available ? `<div class="side-box update-box"><b>${icon("upload")} Update ready</b><small>${esc(s.update.latest?.message ?? "A new version of RoCrew")}</small><button class="btn primary small" data-act="update-now">Update now</button></div>` : ""}
     ${s.usage?.fiveHour || s.usage?.week ? `<div class="side-box usage" title="Your Claude plan's usage, as Claude Code last reported it">${s.usageHold ? `<b style="color:var(--amber)">Waiting for your plan to reset</b>` : `<b>Claude plan usage</b>`}${s.accounts ? s.accounts.map((a) => `<div class="usage-acc"><small class="faint">${esc(a.name)}${a.waiting ? " · resting" : ""}</small>${usageBars(a.usage, false)}</div>`).join("") + usageFooter(Math.max(...s.accounts.map((a) => a.usage?.at ?? 0)) || null) : usageBars(s.usage)}</div>` : ""}
@@ -364,7 +371,7 @@ function updateAgentDetail(el, id, list) {
     head.innerHTML = `${tile(id, "xl")}
       <div class="grow"><h2>${esc(a.name)}</h2>
         <div class="row" style="gap:8px;margin-top:4px">
-          <span class="${"st-" + st.status}"><span class="dot ${st.status === "working" ? "live" : ""}"></span> ${st.status[0].toUpperCase() + st.status.slice(1)}</span>
+          <span class="${"st-" + st.status}"><span class="dot ${st.status === "working" ? "live" : ""}"></span> ${st.status[0].toUpperCase() + st.status.slice(1)}${st.current?.phase ? ` <span class="faint">· ${esc(phaseText(st.current.phase))}</span>` : ""}</span>
           ${st.current ? `<span class="pill purple">${icon("tasks")} ${esc(st.current.title)}</span>` : ""}
           ${st.queued ? `<span class="pill amber">${st.queued} queued</span>` : ""}
           ${st.hasStudio ? `<span class="pill green">${icon("lock")} has Studio</span>` : ""}
@@ -503,7 +510,7 @@ PAGES.home = {
       .sort((x, y) => order[status(x.id).status] - order[status(y.id).status])
       .map((a) => {
         const st = status(a.id);
-        return `<a class="live-row ${st.status}" href="#/team/${a.id}">${tile(a.id, "sm")}<span class="grow"><b>${esc(a.name)}</b><small>${st.current ? `On: ${esc(st.current.title)}` : st.queued ? `${st.queued} task${st.queued > 1 ? "s" : ""} waiting` : "Idle"}</small></span>${st.status === "working" ? '<span class="spinner"></span>' : st.queued ? `<span class="pill amber">${st.queued} queued</span>` : ""}</a>`;
+        return `<a class="live-row ${st.status}" href="#/team/${a.id}">${tile(a.id, "sm")}<span class="grow"><b>${esc(a.name)}</b><small>${st.current ? `${st.current.phase ? `${esc(phaseText(st.current.phase))} · ` : ""}On: ${esc(st.current.title)}` : st.queued ? `${st.queued} task${st.queued > 1 ? "s" : ""} waiting` : "Idle"}</small></span>${st.status === "working" ? '<span class="spinner"></span>' : st.queued ? `<span class="pill amber">${st.queued} queued</span>` : ""}</a>`;
       })
       .join("");
   },

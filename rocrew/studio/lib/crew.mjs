@@ -370,6 +370,8 @@ export class Crew extends EventEmitter {
       effort: choice.effort,
       fallbackModel: choice.model === "opus" ? "sonnet" : undefined,
       timeoutMs: cfg.taskTimeoutMin * 60000,
+      live: true,
+      stallMs: 12 * 60000,
       env: { ROCREW_AGENT: task.agent, ROCREW_TASK: task.id, ROCREW_GAME: task.game ?? "", ...accountEnv(account) },
       onEvent: (e) => this.onRunEvent(task, e),
     });
@@ -390,6 +392,12 @@ export class Crew extends EventEmitter {
       const studio = (e.mcpServers ?? []).find((s) => /roblox|studio/i.test(s.name) && s.name !== BROWSER_SERVER);
       if (task.studio && studio && studio.status !== "connected") {
         this.message(task.agent, "system", `Roblox Studio MCP is ${studio.status}. Open Studio and check the MCP connection.`);
+      }
+    } else if (e.type === "activity") {
+      // Only phase changes reach the app (the stream sends many small events).
+      if (task.phase?.text !== e.phase) {
+        task.phase = { text: e.phase, at: Date.now() };
+        this.changed();
       }
     } else if (e.type === "usage") {
       this.recordUsage(e.info, task.account ?? MAIN);
@@ -416,6 +424,18 @@ export class Crew extends EventEmitter {
 
     task.endedAt = Date.now();
     task.costUsd = res.costUsd ?? null;
+    task.phase = null;
+    if (/^stalled/.test(res.error ?? "") && !task.stallRetried) {
+      // Claude went quiet (a dropped connection): try once more in the same conversation.
+      task.stallRetried = true;
+      task.status = "queued";
+      task.startedAt = null;
+      task.endedAt = null;
+      this.message(task.agent, "system", "Claude stopped answering, so this task was restarted. It picks up where it left off.", { taskId: task.id });
+      this.changed();
+      this.tick();
+      return;
+    }
     if (res.error === "stopped by you") {
       task.status = "cancelled";
       task.error = res.error;
@@ -681,7 +701,7 @@ export class Crew extends EventEmitter {
       return {
         id: a.id,
         status: working ? "working" : queued ? "queued" : "idle",
-        current: working ? { id: working.id, title: working.title, startedAt: working.startedAt } : null,
+        current: working ? { id: working.id, title: working.title, startedAt: working.startedAt, phase: working.phase ?? null } : null,
         queued,
         hasStudio: Boolean(working && this.studioHolder === working.id),
         lastActiveAt: state.lastActiveAt ?? null,
