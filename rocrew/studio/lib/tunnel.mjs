@@ -139,7 +139,7 @@ export class Tunnel {
 }
 
 /** Poll the public address until Cloudflare routes it (HTTP 530 = not yet), up to about 45 s. */
-async function waitUntilReachable(url, tries = 15) {
+export async function waitUntilReachable(url, tries = 15) {
   for (let i = 0; i < tries; i++) {
     try {
       const res = await fetch(`${url}/favicon.ico`, { signal: AbortSignal.timeout(5000) });
