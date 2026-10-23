@@ -19,10 +19,10 @@ const CANDIDATES = {
   win32: () => {
     const pf = [process.env["ProgramFiles(x86)"], process.env.ProgramFiles, process.env.LOCALAPPDATA].filter(Boolean);
     return [
-      // Brave first (the owner's browser), then Edge (always on Windows), then Chrome.
-      ...pf.map((d) => ({ channel: "brave", file: path.join(d, "BraveSoftware", "Brave-Browser", "Application", "brave.exe") })),
+      // Edge first: it comes with Windows and handles a separate profile reliably. Then Chrome, then Brave.
       ...pf.map((d) => ({ channel: "msedge", file: path.join(d, "Microsoft", "Edge", "Application", "msedge.exe") })),
       ...pf.map((d) => ({ channel: "chrome", file: path.join(d, "Google", "Chrome", "Application", "chrome.exe") })),
+      ...pf.map((d) => ({ channel: "brave", file: path.join(d, "BraveSoftware", "Brave-Browser", "Application", "brave.exe") })),
     ];
   },
   darwin: () => [
@@ -36,7 +36,8 @@ const CANDIDATES = {
 export class RobloxBrowser {
   constructor({ dir, getShow }) {
     this.dir = dir;
-    this.profile = path.join(dir, "roblox-profile");
+    // A fresh profile for Edge, so nothing left over from earlier Brave attempts gets in the way.
+    this.profile = path.join(dir, "roblox-profile-edge");
     this.statusFile = path.join(dir, "status.json");
     this.getShow = getShow;
     this.window = null;
@@ -102,7 +103,8 @@ export class RobloxBrowser {
     const b = this.browser();
     if (!b) return Promise.resolve(this.saveStatus({ signedIn: false, error: "No Edge or Chrome found." }));
     // Never start a second copy on a profile that's open: it would just open tabs in that window.
-    if (this.window || busy || this.profileInUse()) return Promise.resolve(this.status);
+    if (this.window || busy) return Promise.resolve(this.status);
+    if (this.profileInUse()) return Promise.resolve(this.saveStatus({ error: "The RoCrew Roblox window is still open. Close it, then press Check." }));
     if (!fs.existsSync(this.profile)) return Promise.resolve(this.saveStatus({ signedIn: false, name: null, userId: null, error: null }));
     return new Promise((resolve) => {
       const child = spawn(b.file, ["--headless=new", `--user-data-dir=${this.profile}`, "--mute-audio", "--disable-gpu", "--no-first-run", "--dump-dom", "https://users.roblox.com/v1/users/authenticated"], { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
