@@ -50,6 +50,7 @@ export class Config {
     // Environment variables win over the file, so keys can stay out of it entirely.
     if (process.env.GEMINI_API_KEY) this.values.gemini.apiKey = process.env.GEMINI_API_KEY;
     if (process.env.ROBLOX_OPEN_CLOUD_KEY) this.values.roblox.openCloudKey = process.env.ROBLOX_OPEN_CLOUD_KEY;
+    this.values.model = validModel(this.values.model);
   }
 
   get() {
@@ -68,6 +69,7 @@ export class Config {
     this.values.maxAutoRounds = clampInt(this.values.maxAutoRounds, 1, 200);
     this.values.usageCeilingPct = clampInt(this.values.usageCeilingPct, 10, 100);
     if (!["safe", "auto", "autopilot"].includes(this.values.permissionMode)) this.values.permissionMode = "safe";
+    this.values.model = validModel(this.values.model);
     if (!["quality", "balanced", "saver", "custom"].includes(this.values.modelPreset)) this.values.modelPreset = "balanced";
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     fs.writeFileSync(this.file, JSON.stringify(this.values, null, 2));
@@ -96,6 +98,12 @@ function merge(target, source) {
     } else if (v && typeof v === "object" && !Array.isArray(v) && target[k] && typeof target[k] === "object") merge(target[k], v);
     else if (k in target) target[k] = v;
   }
+}
+
+/** A Claude model name ("opus", "sonnet", "haiku") or id ("claude-…"); anything else (e.g. autofill) is dropped. */
+function validModel(value) {
+  const v = String(value ?? "").trim();
+  return /^(opus|sonnet|haiku|claude-[a-z0-9.\-\[\]]+)$/i.test(v) ? v : "";
 }
 
 function clampInt(value, min, max) {

@@ -161,7 +161,7 @@ export function runClaude(opts) {
       clearTimeout(timer);
       if (buffer) handleLine(buffer);
       if (killedFor) resolve({ ok: false, sessionId, text: "", error: killedFor });
-      else if (result) resolve({ ...result, sessionId, error: result.ok ? null : `Claude Code ended with "${result.subtype}"` });
+      else if (result) resolve({ ...result, sessionId, error: result.ok ? null : (result.text?.trim() || `Claude Code ended with "${result.subtype}"`) });
       else resolve({ ok: false, sessionId, text: "", error: describeFailure(code, stderr) });
     };
     child.on("error", (err) => {
