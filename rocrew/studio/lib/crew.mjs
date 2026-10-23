@@ -144,6 +144,24 @@ export class Crew extends EventEmitter {
     return task;
   }
 
+  /**
+   * Run a queued task right now: the agent's current work pauses (it picks up again right after,
+   * in the same conversation) and this one jumps the queue.
+   */
+  runNow(taskId) {
+    const task = this.task(taskId);
+    if (!task || task.status !== "queued") throw bad("That task isn't waiting.");
+    task.urgent = true;
+    const busy = this.db.tasks.find((t) => t.agent === task.agent && t.status === "working");
+    if (busy) {
+      busy.interrupted = true;
+      this.running.get(busy.id)?.kill("paused for your message");
+    }
+    this.changed();
+    this.tick();
+    return task;
+  }
+
   resetAgent(agent) {
     const state = this.store.agent(agent);
     state.sessionId = null;
@@ -268,7 +286,7 @@ export class Crew extends EventEmitter {
     this.ticking = true;
     try {
       const cfg = this.config.get();
-      const queued = this.db.tasks.filter((t) => t.status === "queued").sort((a, b) => a.createdAt - b.createdAt);
+      const queued = this.db.tasks.filter((t) => t.status === "queued").sort((a, b) => Number(Boolean(b.urgent)) - Number(Boolean(a.urgent)) || a.createdAt - b.createdAt);
 
       for (const task of queued) {
         if (this.depsState(task) === "broken") {
@@ -342,6 +360,7 @@ export class Crew extends EventEmitter {
 
     const choice = pickModel(task, cfg);
     task.status = "working";
+    task.urgent = false;
     task.startedAt = Date.now();
     task.ran = { model: choice.model, effort: choice.effort ?? null };
     task.error = null;
@@ -425,6 +444,17 @@ export class Crew extends EventEmitter {
     task.endedAt = Date.now();
     task.costUsd = res.costUsd ?? null;
     task.phase = null;
+    if (task.interrupted) {
+      // Paused so the owner's message could go first: back in line, same conversation.
+      task.interrupted = false;
+      task.status = "queued";
+      task.startedAt = null;
+      task.endedAt = null;
+      this.message(task.agent, "system", "Paused so your message goes first. This task picks up again right after.", { taskId: task.id });
+      this.changed();
+      this.tick();
+      return;
+    }
     if (/^stalled/.test(res.error ?? "") && !task.stallRetried) {
       // Claude went quiet (a dropped connection): try once more in the same conversation.
       task.stallRetried = true;

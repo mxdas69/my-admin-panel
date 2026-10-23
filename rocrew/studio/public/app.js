@@ -375,6 +375,10 @@ function updateAgentDetail(el, id, list) {
           ${st.current ? `<span class="pill purple">${icon("tasks")} ${esc(st.current.title)}</span>` : ""}
           ${st.queued ? `<span class="pill amber">${st.queued} queued</span>` : ""}
           ${st.hasStudio ? `<span class="pill green">${icon("lock")} has Studio</span>` : ""}
+          ${(() => {
+            const waiting = st.status === "working" && S.state.tasks.find((t) => t.agent === id && t.status === "queued" && t.from === "owner" && !t.urgent);
+            return waiting ? `<span class="pill amber">Your message is waiting <button class="btn small primary" data-act="task-now" data-id="${waiting.id}">${icon("send")}Send now</button></span>` : "";
+          })()}
           <span class="faint">${esc(a.blurb)}</span>
         </div>${a.detail ? `<div class="muted" style="font-size:13px;margin-top:6px;max-width:760px"><span class="eyebrow" style="color:${a.color}">A closer look</span> ${esc(a.detail)}</div>` : ""}</div>
       <button class="btn small" data-act="reset-agent" data-id="${id}" title="Start a new conversation with a clean context">${icon("refresh")}Start fresh</button>`;
@@ -681,6 +685,7 @@ function taskRow(t, open = new Set()) {
   return `<div class="task ${t.status}" style="flex-wrap:wrap">${tile(t.agent, "lg")}
     <div class="grow"><b>${esc(t.title)}</b>${modelBadge(t)}<small>${esc(a.name)} · from ${esc(t.from === "owner" ? personLabel(t.by) : agent(t.from === "system" ? "lead" : t.from).name)}${t.game ? ` · ${esc(gameName(t.game))}` : ""} · ${when}${t.studio ? " · needs Studio" : ""}${esc(deps)} · <span class="mono">${t.id}</span></small></div>
     ${t.status === "working" ? '<span class="spinner"></span>' : ""}${statusPill(t.status)}
+    ${t.status === "queued" && S.state.statuses.some((x) => x.id === t.agent && x.status === "working") ? `<button class="btn small primary" data-act="task-now" data-id="${t.id}" title="Pause what ${esc(agent(t.agent).name)} is doing and handle this first">${icon("send")}Send now</button>` : ""}
     ${["queued", "working"].includes(t.status) ? `<button class="btn small" data-act="cancel-task" data-id="${t.id}">${t.status === "working" ? "Stop" : "Cancel"}</button>` : ""}
     <a class="btn small" href="#/team/${t.agent}">Chat</a>
     ${body ? `<details data-id="${t.id}" ${open.has(t.id) ? "open" : ""}><summary class="faint" style="cursor:pointer;font-size:12px">Details</summary><div class="task-body">${esc(body)}</div></details>` : ""}
@@ -1599,6 +1604,10 @@ const ACTIONS = {
     await attempt(() => api("POST", `/api/agents/${el.dataset.id}/reset`), "Fresh start.");
     await loadMessages(el.dataset.id);
     refreshChat(el.dataset.id, true);
+  },
+  "task-now": async (el) => {
+    el.disabled = true;
+    if (await attempt(() => api("POST", `/api/tasks/${el.dataset.id}/now`), "Sent. The agent pauses what it was doing and reads this first.")) await refresh();
   },
   "cancel-task": async (el) => {
     await attempt(() => api("POST", `/api/tasks/${el.dataset.id}/cancel`));

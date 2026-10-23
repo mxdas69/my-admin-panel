@@ -533,6 +533,7 @@ route("POST", /^\/api\/tasks\/decide$/, async (req) => {
   return { changed: crew.decideProposed(ids.map(String), Boolean(approve), personName(req)) };
 });
 route("POST", /^\/api\/tasks\/([\w]+)\/cancel$/, (req, url, [id]) => crew.cancel(id));
+route("POST", /^\/api\/tasks\/([\w]+)\/now$/, (req, url, [id]) => crew.runNow(id));
 route("POST", /^\/api\/pause$/, async (req) => {
   crew.setPaused((await readJson(req)).paused);
   return { paused: store.data.paused };
