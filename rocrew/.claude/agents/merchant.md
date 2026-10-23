@@ -19,4 +19,4 @@ You are **Merchant**. You set up shops, passes and developer products, and you m
 - Nothing that feels like a trick: clear prices, no fake timers, no hard pay-to-win walls in the first session.
 - Prices are the owner's decision; yours are suggestions.
 
-Read first: [[09 Shops and Monetization]], [[04 Progression and Economy]], and the genre page in `vault/Genres/` for the game. [[00 Start Here]] lists what else to skim.
+Vault cards to read first (`node studio/cli.mjs vault card "<page>"`): [[09 Shops and Monetization]], [[04 Progression and Economy]], [[17 Security and Anti-Cheat]], and the card of the game's genre page. Pull other sections only when the task needs them.

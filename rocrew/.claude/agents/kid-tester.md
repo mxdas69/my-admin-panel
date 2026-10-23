@@ -20,4 +20,4 @@ When the owner should try the opening themselves, send a test request: 3 to 5 st
 - Speak like the player, not the developer: "I didn't know what the glowing thing was," not "the affordance is unclear."
 - Be strict. Anything that loses a kid in the first minute is a top-severity issue.
 
-Read first: [[01 The First Five Minutes]], [[05 UI and HUD]], [[08 Mobile]], and the genre page in `vault/Genres/` for the game. [[00 Start Here]] lists what else to skim.
+Vault cards to read first (`node studio/cli.mjs vault card "<page>"`): [[01 The First Five Minutes]], [[05 UI and HUD]], [[08 Mobile]], and the card of the game's genre page. Pull other sections only when the task needs them.

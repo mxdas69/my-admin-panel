@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { listPages, findPage, card, toc, readSections, search } from "./lib/vault.mjs";
 
 const ROOT = path.resolve(process.env.ROCREW_ROOT ?? path.join(path.dirname(fileURLToPath(import.meta.url)), ".."));
 const ME = process.env.ROCREW_AGENT || "lead";
@@ -23,6 +24,14 @@ Work
                                            --size big: hard design or code on Opus with more thinking.
   task list [--game slug] [--all]          Open tasks (or every task with --all)
   say --to <id> "…"                         Post a handoff note on the team feed
+
+The vault (read it in small pieces — pages are long, and every word read costs the owner's plan)
+  vault                                    Every page, its length and who it's for
+  vault card <page>                        A page's Rules and Checklist: read this first (e.g. vault card ui)
+  vault toc <page>                         A page's headings with word counts
+  vault read <page> --section "<heading>"  Just the sections you need (e.g. --section "shop")
+  vault search "<words>"                   Find the sections that cover something, across all pages
+                                           <page> can be loose: "ui", "05", "obby", "first five"
 
 The owner
   ask --title "…" [--body "…"] [--game slug]            Add a "Needs you" checkpoint (a question or a decision)
@@ -113,6 +122,48 @@ switch (cmd) {
   case "--help":
     console.log(HELP);
     break;
+
+  case "vault": {
+    const pages = listPages(path.join(ROOT, "vault"));
+    const name = o._.slice(2).join(" ") || (typeof o.page === "string" ? o.page : "");
+    const need = () => {
+      const page = findPage(pages, name);
+      if (!page) fail(`No vault page matches "${name}". Run: node studio/cli.mjs vault`);
+      return page;
+    };
+    if (!sub || sub === "list") {
+      for (const p of pages) {
+        const who = p.readers.length === 15 ? "everyone" : p.readers.join(", ");
+        console.log(`${p.title.padEnd(44)} ${String(p.words).padStart(6)} words${who ? `  for: ${who}` : ""}`);
+      }
+      console.log(`\nRead a page's card first: node studio/cli.mjs vault card "<page>"`);
+    } else if (sub === "card") {
+      const page = need();
+      console.log(card(page));
+      console.log(`\n(${page.words} words in the full page. Pull more with: node studio/cli.mjs vault toc "${page.title}", then vault read "${page.title}" --section "…")`);
+    } else if (sub === "toc") {
+      const page = need();
+      console.log(`${page.title} — ${page.words} words`);
+      for (const h of toc(page.text)) console.log(`${h.level === 2 ? "" : "    "}${h.heading}${h.words ? `  (${h.words} words)` : ""}`);
+    } else if (sub === "read") {
+      const page = need();
+      if (typeof o.section !== "string") {
+        console.log(card(page));
+        console.log(`\nThat's the card. Name a section to read more:\n${toc(page.text).filter((h) => h.level === 2).map((h) => `  --section "${h.heading}"  (${h.words} words)`).join("\n")}`);
+        break;
+      }
+      const hits = readSections(page, o.section);
+      if (!hits.length) fail(`No section in "${page.title}" matches "${o.section}". Run: node studio/cli.mjs vault toc "${page.title}"`);
+      console.log(hits.map((h) => h.text).join("\n\n"));
+    } else if (sub === "search") {
+      const q = o._.slice(2).join(" ");
+      if (!q) fail('Usage: vault search "daily rewards"');
+      const hits = search(pages, q);
+      if (!hits.length) console.log(`Nothing in the vault mentions "${q}".`);
+      for (const h of hits) console.log(`${h.page} › ${h.heading}  (${h.words} words)\n    …${h.snippet}…\n    node studio/cli.mjs vault read "${h.page}" --section "${h.heading}"`);
+    } else fail("Usage: vault [card|toc|read|search] …");
+    break;
+  }
 
   case "status": {
     const s = await api("GET", "/api/state");

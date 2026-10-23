@@ -13,6 +13,7 @@ import { pickModel } from "../studio/lib/models.mjs";
 import { Crew } from "../studio/lib/crew.mjs";
 import { Store } from "../studio/lib/db.mjs";
 import { Config } from "../studio/lib/config.mjs";
+import { listPages, findPage, card, readSections, search } from "../studio/lib/vault.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), "rocrew-test-"));
@@ -270,4 +271,24 @@ test("after a crash, leftover agent runs are stopped and their tasks resume", as
   const t = store.data.tasks[0];
   assert.equal(t.status, "queued");
   assert.equal(t.interrupted, 1);
+});
+
+test("the vault is read in small pieces: cards, sections and search", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rocrew-vault-"));
+  const long = Array.from({ length: 400 }, () => "Explaining why in many words.").join(" ");
+  fs.writeFileSync(
+    path.join(dir, "05 UI and HUD.md"),
+    `---\nfor: [frame]\n---\n# 05 UI and HUD\n\nUI that fits phones.\n\n## Rules\n\n### Layout\n\n1. **Tap targets are at least 44 px.**\n   Why: ${long}\n\n## Shop screens\n\nShop cards show the price on a big button. ${long}\n\n## Checklist\n\n- [ ] Targets are 44 px\n\n## Sources\n\n1. https://example.com\n`,
+  );
+  const pages = listPages(dir);
+  const page = findPage(pages, "ui");
+  assert.equal(page.title, "05 UI and HUD");
+  assert.deepEqual(page.readers, ["frame"]);
+  const c = card(page);
+  assert.match(c, /1\. Tap targets are at least 44 px\./);
+  assert.match(c, /- \[ \] Targets are 44 px/);
+  assert.ok(!c.includes("Explaining why"), "the card leaves out the long explanations");
+  assert.match(readSections(page, "shop")[0].text, /price on a big button/);
+  assert.equal(search(pages, "price button")[0].heading, "Shop screens");
+  assert.equal(search(pages, "example.com").length, 0, "sources aren't searched");
 });

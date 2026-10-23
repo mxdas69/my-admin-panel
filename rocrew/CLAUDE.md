@@ -50,6 +50,7 @@ node studio/cli.mjs asset add --kind model --name "…" --roblox-id 123 --tags a
 node studio/cli.mjs system add --name "…" --summary "…" --path games/<slug>/…
 node studio/cli.mjs market --refresh                          # Roblox charts, rank moves, breakouts
 node studio/cli.mjs say --to lead "…"                         # short note on the team feed
+node studio/cli.mjs vault card <page>                         # read the vault in small pieces (see "The vault")
 node studio/cli.mjs help
 ```
 
@@ -57,10 +58,20 @@ Your agent id and the current game are already in the environment (`ROCREW_AGENT
 
 ## The vault
 
-`vault/` is the studio's playbook. Your role file lists the chapters you must read; each chapter starts with numbered **Rules**, then step-by-step procedures, recipes, examples from top games, a per-genre section, a checklist and references. Genre pages live in `vault/Genres/`.
-- Before a task, read the Rules and the sections that apply to it, plus the genre page for the game. Don't skim past the numbers: they're the spec.
-- You keep your memory between tasks, so don't re-read a page you already read in this conversation unless it changed.
-- If you learn something the vault gets wrong or is missing, say so in your handoff so the Lead can get it fixed.
+`vault/` is the studio's playbook: chapters on every part of a Roblox game, plus genre pages in `vault/Genres/`. The pages are long, and every word you read comes out of the owner's Claude plan, so read them in small pieces:
+
+```
+node studio/cli.mjs vault card "05 UI and HUD"        # the page's rules as one-liners, its checklist and common mistakes
+node studio/cli.mjs vault toc ui                      # the headings, with word counts
+node studio/cli.mjs vault read ui --section "shop"    # only the section the task needs
+node studio/cli.mjs vault search "daily reward streak"   # which sections cover something
+```
+
+- On your first task for a game, read the cards your role lists and the card of the game's genre page. Then read only the sections the task needs.
+- The numbers in the rules are the spec. If you go against one, write down why in `games/<slug>/decisions.md`.
+- You keep your memory between tasks, so don't re-read a card you already read in this conversation.
+- Opening whole vault pages with Read is blocked for crew runs; use the CLI.
+- If the vault gets something wrong or is missing something, say so in your handoff.
 
 ## Roblox Studio
 
@@ -68,7 +79,11 @@ Your agent id and the current game are already in the environment (`ROCREW_AGENT
 - **Only the agent holding the Studio lock changes the place.** Your task says whether you hold it. Without it you may read, but make no changes.
 - Look before you change: inspect the existing tree and scripts first. Change only your area (see below). Never delete work you didn't make unless your task says so.
 - Keep changes undoable and small. Name things clearly. Put shared values in `ReplicatedStorage.Shared.Config`.
-- Modern Luau only: the `task` library (never `wait`, `spawn`, `delay`), `--!strict` where practical, server authority for anything that matters.
+- Modern Luau only: the `task` library (never `wait`, `spawn`, `delay`), `--!strict` where practical.
+- **Build things as real objects, not with scripts.** Maps, buildings and props are Instances placed in `Workspace` in Studio. Menus and HUDs are real ScreenGuis in `StarterGui`, built in Studio so the owner can open and edit them by hand. Scripts add behavior; they don't build the world or the UI at runtime. The one exception is repeated items in a list (shop cards, inventory slots): design one template in Studio, keep it in `StarterGui` or `ReplicatedStorage`, and clone it.
+- **Assume every player could be a cheater.** The client can fire any remote with any values, so the server decides money, items, damage, stats, purchases and progress. Every RemoteEvent checks types, ranges, distance and a per-player rate limit, and never takes a price, amount or reward from the client. Read the card for [[17 Security and Anti-Cheat]] before writing any remote or save code.
+- **Every game works on phone, PC and console.** Every action has a touch button, a key and a gamepad button; every menu can be used with a controller (selection, B to close); text is readable on a TV. See [[16 Console and Controllers]] and [[08 Mobile]].
+- **Use Team Create** for the place when you can, so every change is saved to Roblox straight away and nothing is lost if Studio or the PC crashes.
 
 | Area | Owner |
 |---|---|

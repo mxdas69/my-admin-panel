@@ -12,6 +12,19 @@ import { runClaude } from "./claude.mjs";
 import { pickModel } from "./models.mjs";
 
 const TERMINAL = new Set(["done", "failed", "cancelled", "blocked"]);
+// Refused in every permission mode. Secrets stay out of agents' reach (a page an agent reads
+// on the web can't talk it into leaking them), and whole vault pages are read through
+// `cli.mjs vault` in small pieces so they don't eat the owner's plan.
+export const DENIED_TOOLS = [
+  "Read(./vault/**/*.md)",
+  "Read(./.rocrew/config.json)",
+  "Read(./.rocrew/token)",
+  "Read(./.rocrew/runtime.json)",
+  "Read(./.rocrew/remote.json)",
+  "Read(./.rocrew/browser/**)",
+  "Edit(./.rocrew/**)",
+];
+
 const BASE_TOOLS = [
   "Read", "Write", "Edit", "MultiEdit", "Glob", "Grep", "LS", "TodoWrite", "NotebookEdit",
   "WebSearch", "WebFetch",
@@ -268,6 +281,7 @@ export class Crew extends EventEmitter {
       sessionId: state.sessionId,
       permissionMode: cfg.permissionMode,
       allowedTools: this.allowedTools(),
+      disallowedTools: DENIED_TOOLS,
       model: choice.model,
       effort: choice.effort,
       fallbackModel: choice.model === "opus" ? "sonnet" : undefined,
@@ -491,7 +505,11 @@ export class Crew extends EventEmitter {
     const name = agentName(task.agent);
     const parts = [];
     // The role itself comes from .claude/agents/<id>.md through `claude --agent`.
-    parts.push(fresh ? `You are ${name} (agent id "${task.agent}") on the RoCrew team. Follow your role and the crew rules in CLAUDE.md.` : `(You are ${name}; your role and the crew rules still apply.)`);
+    parts.push(
+      fresh
+        ? `You are ${name} (agent id "${task.agent}") on the RoCrew team. Follow your role and the crew rules in CLAUDE.md. Read the vault in small pieces with \`node studio/cli.mjs vault card <page>\` and \`vault read <page> --section "…"\`; whole vault pages can't be opened with Read.`
+        : `(You are ${name}; your role and the crew rules still apply.)`,
+    );
 
     const state = this.store.agent(task.agent);
     if (state.verdicts?.length) {

@@ -42,6 +42,8 @@ function spawnCommand(command, args, options) {
  * @param {string} [opts.agent]     run as this .claude/agents/<id>.md role (`--agent`)
  * @param {string} opts.permissionMode  "safe" | "auto" | "autopilot"
  * @param {string[]} opts.allowedTools
+ * @param {string[]} [opts.disallowedTools]  always refused, in every mode (secrets, whole vault pages)
+ * @param {string[]} [opts.mcpConfigs]  extra MCP servers for this run only (JSON strings)
  * @param {string} [opts.model]
  * @param {Record<string,string>} [opts.env]
  * @param {number} [opts.timeoutMs]
@@ -59,6 +61,8 @@ export function runClaude(opts) {
     args.push("--permission-mode", opts.permissionMode === "auto" ? "auto" : "dontAsk");
     if (opts.allowedTools?.length) args.push("--allowedTools", opts.allowedTools.join(","));
   }
+  if (opts.disallowedTools?.length) args.push("--disallowedTools", opts.disallowedTools.join(","));
+  if (opts.mcpConfigs?.length) args.push("--mcp-config", ...opts.mcpConfigs);
   if (opts.model) args.push("--model", opts.model);
   if (opts.effort) args.push("--effort", opts.effort);
   if (opts.fallbackModel && opts.fallbackModel !== opts.model) args.push("--fallback-model", opts.fallbackModel);
