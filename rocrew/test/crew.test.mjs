@@ -13,6 +13,7 @@ import { pickModel } from "../studio/lib/models.mjs";
 import { Crew } from "../studio/lib/crew.mjs";
 import { Store } from "../studio/lib/db.mjs";
 import { Config } from "../studio/lib/config.mjs";
+import { makeStoreArt, ENDINGS } from "../studio/lib/storeArt.mjs";
 import { openings } from "../studio/lib/roblox.mjs";
 import { parseWhoAmI } from "../studio/lib/robloxBrowser.mjs";
 import { listPages, findPage, card, readSections, search } from "../studio/lib/vault.mjs";
@@ -377,8 +378,15 @@ test("Remote Control: pair, send a request, join live, and get cut off when it's
     assert.ok(bState.tasks.some((t) => t.agent === "lead" && t.by === "mxdas"));
     assert.equal((await state()).remote.invite, null);
 
+    // Through the tunnel, live updates come by long-polling; turning it off ends that too.
+    const seq = (await apiB("GET", "/api/changes?since=-1", null, key)).json.seq;
+    const waiting = apiB("GET", `/api/changes?since=${seq}`, null, key);
+
     // Othman turns it off: the key stops working at once.
     await apiB("POST", "/api/remote/share", { on: false });
+    // A poll that was waiting ends (with 401, or with an update that landed just before), and new ones are refused.
+    assert.ok([200, 401].includes((await waiting).status));
+    assert.equal((await apiB("GET", `/api/changes?since=${seq}`, null, key)).status, 401);
     assert.equal((await apiB("GET", "/api/state", null, key)).status, 401);
   } finally {
     const exited = new Promise((r) => b.once("exit", r));
@@ -446,4 +454,47 @@ test("market openings rank genres where young games are winning", () => {
   assert.equal(list[0].youngShare, 75);
   assert.equal(list[0].examples[0].name, "G1");
   assert.equal(list[1].youngShare, 25);
+});
+
+test("store art: variants in parallel, finished to Roblox sizes with real text, judged at phone size", async (t) => {
+  try {
+    execFileSync("ffmpeg", ["-version"], { stdio: "ignore" });
+  } catch {
+    return t.skip("ffmpeg isn't installed");
+  }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rocrew-art-"));
+  const src = path.join(dir, "src.png");
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=orange:s=1376x768", "-frames:v", "1", src]);
+  const prompts = [];
+  const generate = async ({ prompt, out }) => {
+    prompts.push(prompt);
+    fs.copyFileSync(src, `${out}.png`);
+    return { file: `${out}.png` };
+  };
+  const ask = async () => '{"id":"A","ctr":8,"ai_clean":7,"text_seen":"MEGA EGGS","worst":"busy sky","fix":"simplify the sky"}\n{"id":"B","ctr":5,"ai_clean":6,"text_seen":"MEGA EGS","worst":"","fix":""}';
+  const set = await makeStoreArt({ apiKey: "k", kind: "thumb", variants: ["A: warm grade", "B: cool grade"], refs: [src], dir, text: "Mega eggs", hasFfmpeg: async () => true, generate, ask });
+  assert.equal(prompts.length, 2);
+  assert.ok(prompts.every((p) => p.includes(ENDINGS.edit)), "captures are finished, not reinvented");
+  const a = set.candidates[0];
+  assert.match(a.file, /thumb_A\.jpg$/);
+  const dims = execFileSync("ffprobe", ["-v", "error", "-select_streams", "v", "-show_entries", "stream=width,height", "-of", "csv=p=0", a.file], { encoding: "utf8" }).trim();
+  assert.equal(dims, "1920,1080");
+  assert.ok(fs.statSync(a.file).size < 3_000_000, "under Roblox's 3 MB limit");
+  assert.ok(fs.existsSync(set.sheet));
+  assert.equal(a.score.ctr, 8);
+  assert.ok(set.candidates[1].score.textMismatch, "misspelled text is flagged");
+  await assert.rejects(makeStoreArt({ apiKey: "k", kind: "thumb", variants: ["A"], dir, text: "way too many words here", hasFfmpeg: async () => true, generate, ask }));
+});
+
+test("live updates by long-polling return as soon as something changes", async () => {
+  const { seq } = (await api("GET", "/api/changes?since=-1")).json;
+  const started = Date.now();
+  const poll = api("GET", `/api/changes?since=${seq}`);
+  await sleep(200);
+  await api("POST", "/api/pause", { paused: true });
+  await api("POST", "/api/pause", { paused: false });
+  const r = await poll;
+  assert.ok(r.json.seq > seq);
+  assert.ok(r.json.events.length >= 1);
+  assert.ok(Date.now() - started < 5000);
 });

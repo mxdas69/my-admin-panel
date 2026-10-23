@@ -12,7 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 
-export const PLAYWRIGHT_MCP = "@playwright/mcp@0.0.41";
+export const PLAYWRIGHT_MCP = "@playwright/mcp@0.0.83";
 export const SERVER_NAME = "roblox-browser";
 
 const CANDIDATES = {

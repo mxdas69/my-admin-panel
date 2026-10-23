@@ -12,7 +12,7 @@ Every agent reads the pages marked `for` its role before it plans or builds, and
 
 ## Rules
 
-1. **Read before you build.** Before a task, read the chapter's Rules and the sections that apply, plus the genre page for the game. You keep your memory between tasks, so don't re-read a page you already read in this conversation.
+1. **Read in small pieces.** Pages are long and every word read costs the owner's Claude plan. Read a page's card first (`node studio/cli.mjs vault card "<page>"`: its rules as one-liners, its checklist and common mistakes), then only the sections a task needs (`vault read <page> --section "…"`, or `vault search "…"`). You keep your memory between tasks, so don't re-read a card you already read in this conversation.
 2. **The numbers are the spec.** "Tap targets at least 44 px", "first reward within 30 seconds": build to the number. If you go against one, write down why in `games/<slug>/decisions.md`.
 3. **Genre page beats chapter.** When a genre page and a chapter disagree for that genre, the genre page wins. Chapters are the general case.
 4. **Proof over opinion.** A rule here is a starting point; the game's own playtests and live numbers decide in the end. When the data says otherwise, change the game, then tell the Lead so the vault gets fixed.
@@ -58,6 +58,8 @@ Every agent reads the pages marked `for` its role before it plans or builds, and
 | 13 | [[13 Building It Right]] | Luau code, server authority, saving data, security and testing |
 | 14 | [[14 Roblox Studio Workflow]] | Working in Studio: structure, tools, MCP, Team Create and publishing |
 | 15 | [[15 Discovery and Growth]] | How Roblox recommends games, charts, sorts and growing the player count |
+| 16 | [[16 Console and Controllers]] | Gamepads, Xbox and PlayStation: input, menus you can drive with a controller, TV-sized UI |
+| 17 | [[17 Security and Anti-Cheat]] | Stopping exploiters: remotes, server authority, saves, purchases, backdoors |
 | | [[00 For Any AI]] | The ground rules for any AI working here |
 | | [[Claude Design Prompts]] | Prompt templates for icons, thumbnails, UI art and effects |
 
@@ -80,10 +82,10 @@ Each genre page covers what the top games in that genre do, the loop, the first 
 | Shooter | [[Genre - Shooter]] |
 | Horror | [[Genre - Horror]] |
 | Survival | [[Genre - Survival]] |
-| Tower defense | [[Genre - Tower Defense]] |
-| Racing and vehicles | [[Genre - Racing and Vehicles]] |
-| Sports | [[Genre - Sports]] |
-| Farming and fishing | [[Genre - Farming and Fishing]] |
+| Tower defense | [[Genre - Tower Defense]] (coming soon; use the closest genre page and the chapters meanwhile) |
+| Racing and vehicles | [[Genre - Racing and Vehicles]] (coming soon; use the closest genre page and the chapters meanwhile) |
+| Sports | [[Genre - Sports]] (coming soon; use the closest genre page and the chapters meanwhile) |
+| Farming and fishing | [[Genre - Farming and Fishing]] (coming soon; use the closest genre page and the chapters meanwhile) |
 
 ## What each agent reads
 
@@ -95,16 +97,16 @@ Read the **must read** pages before your first task on a game, and the genre pag
 | Pulse | [[15 Discovery and Growth]], [[12 Live Ops and Launch]], [[02 The Core Loop]] | [[11 Thumbnails, Icons and the Store Page]], every genre page |
 | Architect | [[02 The Core Loop]], [[01 The First Five Minutes]], [[04 Progression and Economy]], [[13 Building It Right]] | [[03 Rarity and RNG]], [[10 Retention and Social]], [[14 Roblox Studio Workflow]] |
 | Librarian | [[07 Characters, VFX and Assets]], [[14 Roblox Studio Workflow]] | [[06 World and Look]], [[Claude Design Prompts]] |
-| Builder | [[13 Building It Right]], [[14 Roblox Studio Workflow]], [[02 The Core Loop]] | [[04 Progression and Economy]], [[09 Shops and Monetization]] |
-| Frame | [[05 UI and HUD]], [[08 Mobile]], [[01 The First Five Minutes]] | [[Claude Design Prompts]], [[09 Shops and Monetization]], [[14 Roblox Studio Workflow]] |
+| Builder | [[13 Building It Right]], [[17 Security and Anti-Cheat]], [[14 Roblox Studio Workflow]], [[16 Console and Controllers]] | [[04 Progression and Economy]], [[09 Shops and Monetization]] |
+| Frame | [[05 UI and HUD]], [[08 Mobile]], [[16 Console and Controllers]], [[01 The First Five Minutes]] | [[Claude Design Prompts]], [[09 Shops and Monetization]], [[14 Roblox Studio Workflow]] |
 | Scenic | [[06 World and Look]], [[14 Roblox Studio Workflow]] | [[01 The First Five Minutes]], [[08 Mobile]], [[07 Characters, VFX and Assets]] |
-| Playtest | [[13 Building It Right]], [[01 The First Five Minutes]], [[08 Mobile]] | [[14 Roblox Studio Workflow]], [[05 UI and HUD]] |
+| Playtest | [[13 Building It Right]], [[01 The First Five Minutes]], [[08 Mobile]], [[16 Console and Controllers]] | [[14 Roblox Studio Workflow]], [[05 UI and HUD]] |
 | Kid Tester | [[01 The First Five Minutes]], [[05 UI and HUD]], [[08 Mobile]] | [[02 The Core Loop]] |
 | Balance | [[04 Progression and Economy]], [[03 Rarity and RNG]] | [[09 Shops and Monetization]], [[10 Retention and Social]] |
 | Splash | [[11 Thumbnails, Icons and the Store Page]], [[Claude Design Prompts]] | [[06 World and Look]], [[15 Discovery and Growth]] |
-| Reviewer | [[13 Building It Right]], [[09 Shops and Monetization]] | [[03 Rarity and RNG]], [[14 Roblox Studio Workflow]] |
+| Reviewer | [[17 Security and Anti-Cheat]], [[13 Building It Right]], [[09 Shops and Monetization]] | [[03 Rarity and RNG]], [[14 Roblox Studio Workflow]] |
 | Liveops | [[12 Live Ops and Launch]], [[10 Retention and Social]], [[15 Discovery and Growth]] | [[09 Shops and Monetization]] |
-| Merchant | [[09 Shops and Monetization]], [[04 Progression and Economy]] | [[03 Rarity and RNG]], [[05 UI and HUD]] |
+| Merchant | [[09 Shops and Monetization]], [[04 Progression and Economy]], [[17 Security and Anti-Cheat]] | [[03 Rarity and RNG]], [[05 UI and HUD]] |
 | Producer | [[00 For Any AI]], [[13 Building It Right]], [[12 Live Ops and Launch]] | The checklist at the end of every chapter |
 
 ## Galleries

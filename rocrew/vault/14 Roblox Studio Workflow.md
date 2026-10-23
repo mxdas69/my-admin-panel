@@ -232,7 +232,7 @@ Studio changes often: buttons move between ribbon tabs, panels get renamed and b
 
 35. **Debug commands and test fixtures run only in Studio: guarded by `RunService:IsStudio()`, created at startup only in Studio, and absent from the published game.**
     Why: "give me 1 billion coins" commands are how testers reach late-game content quickly, and a debug remote left in a live game is a free exploit.
-    How: a server DebugService (Luau section) that returns immediately unless `RunService:IsStudio()` is true, creates its RemoteEvent only in Studio, and accepts commands only from the owner's or test accounts. The remotes contract table lists it as a Studio-only exception. The pre-publish audit fails if a `DebugCommand` remote exists in the saved place.
+    How: a server DebugService (Luau section) that returns immediately unless `RunService:IsStudio()` is true, creates its RemoteEvent only in Studio, validates every argument like any other remote, and logs every command it runs. The remotes contract table lists it as a Studio-only exception. The pre-publish audit fails if a `DebugCommand` remote exists in the saved place.
     Done right: Playtest jumps to zone 5 with `/give coins 1e6` in Studio, and the command doesn't exist live.
     Done wrong: A debug remote shipped to production, found by an exploiter in a day.
 
@@ -351,3 +351,793 @@ Studio changes often: buttons move between ribbon tabs, panels get renamed and b
     How: tasks are sized small or big (`--size small|big` on `cli.mjs task add`). A big task is split into steps that each leave the place working. Each step has its own test and handoff.
     Done right: "Desert zone" as 5 tasks: greybox, systems, kit art, lighting and audio, polish.
     Done wrong: "Rebuild the whole map in the new style" as one overnight task.
+
+## Step by step
+
+### The Studio task loop in 12 steps
+
+1. Read the task, the plan, the vault pages for your role and the game's `decisions.md`. Check the task says whether you hold the Studio lock.
+2. List the Studio MCP tools you have (rule 23). If there are none, stop and report.
+3. Inspect: run the read-only tree inspector on your area and read every script you'll touch (rule 1). Note the place version (rule 16).
+4. Plan the change as a list of small steps, each one leaving the place working.
+5. For risky bulk work, save a local backup (rule 17).
+6. Make each step as one recorded change (rule 5), parent last, printing a summary (rule 24).
+7. Run Script Analysis on what you changed (rule 9).
+8. Test: Play for the join path, Local Server with 2+ clients for anything shared, the Device Emulator for anything visible, and the Client/Server toggle for anything the server owns (rules 28-31).
+9. Check Output is clean and save it as evidence (rule 37).
+10. Clean up: remove test parts and debug prints, commit any script drafts (rule 13), publish or revert package changes (rule 15).
+11. Note the place version after the change.
+12. Hand off in under 150 words: what changed (paths), evidence, what's open, who's next (rule 51).
+
+### Setting up a new game's Studio workflow in 14 steps
+
+1. The owner creates the experience under their group (or account) and publishes an empty place.
+2. The owner turns on Team Create and adds the crew's Studio session and any human collaborator.
+3. Record the new place's defaults (rule 7): LightingStyle, streaming, avatar type and scaling, StarterPlayer movement.
+4. Decide Studio-first or Rojo-first (rule 19) and write it in `plan.md`.
+5. If Rojo-first: set up the project file and toolchain (Rojo section), back up, then do the first sync with the owner watching.
+6. Create the tree from [[13 Building It Right]]: services, Shared, Remotes, Assets, Map.
+7. Create SoundGroups and the Lighting stack ([[07 Characters, VFX and Assets]], [[06 World and Look]]).
+8. Add DebugService (Studio-only, Luau section) and the test-prefix DataStore name in Config.
+9. The owner creates a private test experience for data and beta trials (rule 18), and its id goes in `decisions.md`.
+10. Record the script collaboration mode (live or drafts) (rule 13).
+11. Confirm security settings are off (rule 47) and note them.
+12. Convert any shared kits to packages (rule 15).
+13. Run the pre-publish audit once on the empty structure to make sure it passes.
+14. Write all of the above into `decisions.md` as the game's workflow baseline.
+
+### Running a multiplayer test in 9 steps
+
+1. Clear Output in Studio.
+2. Test tab → Clients and Servers → Local Server with 2 players (3-8 for crowds or rounds). Start.
+3. Arrange the windows so you can see both clients and the server.
+4. On client 1, do the action. On client 2, watch for the result.
+5. Repeat with client 2 acting and client 1 watching.
+6. Try the conflicts: both act at once, one leaves mid-action, one rejoins.
+7. In the server window, check the values the server holds (attributes, data in a debug print).
+8. Copy Output from the server and both clients.
+9. Write the report in `games/<slug>/reports/<date>-<feature>.md` with the steps, results and Output.
+
+### Profiling a slow scene in 8 steps
+
+1. Reproduce the slow scene reliably (the busiest zone, a full round, a boss fight).
+2. Record the frame time with the MicroProfiler or the in-game performance view, on the slowest target (Device Emulator is not a performance test; use a real phone where possible).
+3. Pause the MicroProfiler on a spike and read the widest labels (rule 42).
+4. If scripts are wide, record 20 s with the Script Profiler and sort by time (rule 43).
+5. If rendering is wide, run the world audit ([[06 World and Look]]) and check parts, transparency, lights and effects.
+6. Fix the single biggest cost.
+7. Measure again in the same scene.
+8. Report before and after numbers, and stop when you're within budget (rule 41).
+
+## Studio panel map
+
+| Panel or tool | Where to find it | What the crew uses it for | Main users |
+|---|---|---|---|
+| Explorer | View or Window menu | The tree; filter by name or class; reparenting | Everyone |
+| Properties | View or Window menu | Reading and setting properties; attributes and tags at the bottom | Everyone |
+| Command bar | View or Window menu | Edit-mode audits and bulk edits (rule 4) | Everyone with the lock (read-only without) |
+| Output | View or Window menu | Errors, warnings, prints, by context | Everyone |
+| Script editor | Double-click a script | Editing code, breakpoints, go to definition | Builder, Frame, Merchant |
+| Script Analysis | View or Window menu | Type and lint errors across scripts (rule 9) | Builder, Frame, Reviewer |
+| Find All / Replace All | Ctrl+Shift+F | Finding every reference before renames (rule 8) | Builder, Reviewer |
+| Toolbox | View or Window menu | Creator Store inserts (quarantine first, [[07 Characters, VFX and Assets]]) | Librarian |
+| Asset Manager | View or Window menu | The experience's places, images, meshes, audio and packages | Librarian, Lead |
+| Material Manager | Model tab or View menu | Creating and editing MaterialVariants [20], [21] | Scenic, Librarian |
+| Terrain Editor | Home or Model tab | Generate, sculpt, paint, sea level | Scenic |
+| Model tools (move, scale, rotate, snap, align, pivot) | Home or Model tab | Placing and aligning parts; union and negate for greyboxing [14] | Scenic, Builder |
+| Lighting properties | Explorer → Lighting | The look; the core curriculum walks these properties [15] | Scenic |
+| Import 3D | File menu, Home or Avatar tab | Bringing in Blender meshes | Librarian |
+| Rig Builder, Animation Editor | Avatar tab | Test dummies, NPCs, animations | Librarian |
+| Test tab (Play, Play Here, Run, Clients and Servers, Device, Player, Team Test) | Test tab | All playtesting (rules 28-36) | Playtest, everyone |
+| Debugger (Watch, Call Stack, Breakpoints) | Appears when paused; View menu | Stepping through bugs (rule 39) | Builder |
+| MicroProfiler, Script Profiler | View or Window menu; Developer Console | Performance (rules 41-44) | Builder, Reviewer, Playtest |
+| Beta Features | File menu | Trying new features in a copy (rule 10) | Lead, Builder |
+| Team Create / Collaborators / Drafts | Home or View, collaboration controls | Collaboration (rules 11-13) | Lead, owner |
+| Game Settings / Experience Settings | Home tab or File menu | Avatar, world, security, places, permissions | Owner (agents read) |
+| Assistant | Studio's AI panel | Drafts and lookups (rule 26) | Anyone, with review |
+| Properties asset fields | Properties | Asset ids for textures and SurfaceAppearance maps [22] | Librarian |
+
+Roblox's own curricula are a good way to learn where things are: the core curriculum's greyboxing and lighting lessons [14], [15] and the environmental art curriculum [16] have published sample places you can open in Studio to see a finished project's structure [17], [18]. The tutorials index lists the rest [19].
+
+## Keyboard shortcuts
+
+| Shortcut | Action |
+|---|---|
+| F5 | Play |
+| F8 | Run (server simulation, no player) |
+| Shift+F5 | Stop the test |
+| Ctrl+Z / Ctrl+Y | Undo / redo |
+| Ctrl+D | Duplicate |
+| Ctrl+G / Ctrl+U | Group / ungroup |
+| Ctrl+Shift+G | Union |
+| Ctrl+Shift+N | Negate |
+| Ctrl+Shift+U | Separate |
+| Ctrl+L | Toggle local and world space for the move and rotate tools |
+| F (in the viewport) | Focus the camera on the selection |
+| Ctrl+Shift+F | Find All / Replace All in scripts |
+| Alt+P | Publish to Roblox (owner only, rule 45) |
+| F9 (in a running game) | Developer Console |
+| Ctrl+F6 (in the Roblox client) | MicroProfiler |
+
+Shortcuts can be changed in Studio's shortcut settings. If one doesn't work, look the action up there.
+
+## Collaboration recipes
+
+### The Studio lock protocol (two humans and the crew)
+
+| Situation | What happens |
+|---|---|
+| An agent task holds the lock | Only that agent writes. All other agents inspect read-only (rule 25). |
+| A human wants to edit | They post "taking the lock: <area> until <time>" to the Lead (`cli.mjs say --to lead`). The Lead pauses tasks that need the lock. |
+| A human finishes | They post "releasing the lock" plus a one-line summary of what they changed. The Lead writes it into `decisions.md` if it's a decision. |
+| An agent finds a human mid-edit in its area | It stops, makes no changes, and reports back to the Lead. |
+| Two areas, one change | The agent finishes its own part and creates a task for the other area's owner (rule 14). |
+| Emergency fix needed live | Only the owner decides to publish a hotfix ([[12 Live Ops and Launch]]). |
+
+### Packages
+
+1. Build the kit or widget in one place and test it.
+2. Right-click → Convert to Package. Name it clearly (`Kit_Castle`, `UI_ShopCard`).
+3. For kits that must always match, turn on `AutoUpdate` on each copy's `PackageLink`.
+4. To change a package, edit one copy, test, then publish the package change. Every auto-updating copy updates.
+5. Never leave a modified, unpublished package copy at the end of a task. Publish or revert.
+6. Packages owned by the group can be used across the group's places.
+7. Note in the handoff when a package version changed and which places use it.
+
+### Version and backup protocol
+
+| When | Action |
+|---|---|
+| Start of any big task | Note the place's current version number |
+| Before mass edits, terrain regeneration, package conversions or the first Rojo sync | Save a local `.rbxl` backup (rule 17) |
+| End of task | Note the version after the change in the handoff |
+| Something broke | Tell the Lead with the last good version. The owner approves any restore. |
+| Before each publish | Producer records the version being published in the gate report |
+
+## Rojo setup (Rojo-first games only)
+
+```json
+{
+  "name": "game-slug",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$ignoreUnknownInstances": true,
+      "Shared": { "$path": "src/shared" }
+    },
+    "ServerScriptService": {
+      "$ignoreUnknownInstances": true,
+      "Server": { "$path": "src/server" }
+    },
+    "StarterPlayer": {
+      "$ignoreUnknownInstances": true,
+      "StarterPlayerScripts": {
+        "$ignoreUnknownInstances": true,
+        "Client": { "$path": "src/client" }
+      }
+    }
+  }
+}
+```
+
+```
+games/<slug>/
+  default.project.json
+  src/
+    shared/        → ReplicatedStorage.Shared   (Config.luau, Types.luau, Util/...)
+    server/        → ServerScriptService.Server (Main.server.luau, Services/*.luau)
+    client/        → StarterPlayerScripts.Client (Main.client.luau, Controllers/*.luau)
+```
+
+| File name | Becomes |
+|---|---|
+| `Name.server.luau` | Script |
+| `Name.client.luau` | LocalScript |
+| `Name.luau` | ModuleScript |
+| `Folder/init.luau` | The folder becomes a ModuleScript with its children |
+| `Folder/init.server.luau` | The folder becomes a Script |
+| `Name.meta.json` | Extra properties or attributes for the matching instance |
+
+Workflow: run `rojo serve` from the game folder, connect the Rojo plugin in Studio, and edit files. Map, UI, Lighting and Assets stay Studio-managed (rule 22). With the mapping above, the code folders sit inside the existing Shared and Main structure from [[13 Building It Right]]; adjust paths to match the game's plan, and keep entry scripts and module names as the plan lists them.
+
+## Studio MCP recipes
+
+**Start of every task:** list tools → run the read-only tree inspector on your area → read scripts → note the version.
+
+**A safe write through MCP:**
+1. Read: print the current state of exactly what you'll change.
+2. Write: one recorded change using the safe-edit wrapper, idempotent (find before create), parent last.
+3. Verify: print the new state and counts.
+4. Paste steps 1 and 3 into the handoff as evidence.
+
+**When something fails mid-run:** don't re-run blindly. Inspect first (what got created?), then run an idempotent version that only does what's missing.
+
+**Plugin-level power:** code run through MCP or the command bar can set properties that game scripts can't, such as SurfaceAppearance maps [23]. That's useful for setup and dangerous for mistakes, so keep the read, write and verify pattern.
+
+**What MCP can't prove:** a write succeeding isn't a test. Run the playtest (or hand it to Playtest) before claiming a feature works (rule 27).
+
+## Playtest matrix
+
+| What changed | Minimum test | Plus |
+|---|---|---|
+| A server system (economy, data, rewards) | Play + Client/Server check | Local Server 2 clients; rejoin to check saving |
+| A remote | Local Server 2 clients | Bad-input test (wrong types, spam) from a client |
+| UI | Play + Device Emulator (2 phones, tablet, both orientations) | Review screenshot |
+| World or lighting | Play from a fresh join + quality 1, 5, 10 | Device Emulator; real phone if possible |
+| Streaming-sensitive client code | Fresh joins at 3 spots, walk to the far edge, use every portal [12], [13] | Output clean of infinite yields |
+| Purchases | Studio test purchase through ProcessReceipt | Owner tests a real purchase on the published game |
+| Teleports or multi-place | Team Test or published test experience | Both places published together |
+| Round or match systems | Run (F8) soak for 10 minutes + Local Server 4+ clients | Force-map debug command for every map |
+| Data migrations | Test experience with fake profiles (rule 18) | Rejoin and verify every field |
+| Performance | MicroProfiler + Script Profiler in the heaviest scene | 10-minute memory soak |
+| First five minutes | Play from a fresh profile, no debug commands | Kid Tester run ([[01 The First Five Minutes]]) |
+
+## What Studio can't fully simulate
+
+| Feature | In Studio | How to test for real |
+|---|---|---|
+| Robux purchases | Test purchase prompts; no Robux charged | Owner buys on the published game |
+| Teleports between places | Don't run | Team Test or published test experience |
+| DataStores | Real stores of the experience, only with Studio API access on | Key prefix in Studio (Luau) or the test experience |
+| HTTP requests | Only with Allow HTTP Requests | Keep off unless planned |
+| Real phone performance | Device Emulator shows layout, not speed | A real low-end phone |
+| Many real players | Local Server up to a handful of clients | Team Test with humans, or a soft launch |
+| Live server memory and errors | Studio's own process | Developer Console on the published game |
+
+## Output and debugging
+
+### Common Output messages
+
+| Message (shape) | Usually means | Fix |
+|---|---|---|
+| `Infinite yield possible on 'X:WaitForChild("Y")'` | Y doesn't exist (renamed, not created, streamed out) | Check the name; for map parts use tags or a timeout ([[06 World and Look]] rule 62) |
+| `attempt to index nil with 'Z'` | A value you expected is nil (missing child, failed lookup, unloaded data) | Find which variable is nil at that line; guard or fix the source |
+| `Y is not a valid member of X` | Indexing a child or property that doesn't exist | Check spelling and class; use `FindFirstChild` for optional children |
+| `Requested module experienced an error while loading` | The required module threw at require time | Open the module's own error above it; modules must not have side effects ([[13 Building It Right]]) |
+| `Script timeout: exhausted allowed execution time` | A loop that never yields | Add `task.wait()` or restructure; never `while true do end` |
+| `Maximum event re-entrancy depth exceeded` | An event handler that triggers itself | Break the loop (guard flag, defer) |
+| Errors mentioning API access or permissions on DataStore calls | Studio API access is off, or the place isn't published | Ask the owner; use the test experience |
+| `HTTP requests are not enabled` | HttpService call with HTTP off | Don't turn it on for a free model; check the plan |
+| Animation or sound fails to load | Asset not owned by or shared with the experience | Upload to the owner or group ([[07 Characters, VFX and Assets]]) |
+
+### Debugging steps
+
+1. Reproduce it reliably, in the smallest test that shows it.
+2. Read the full error and stack (rule 38).
+3. Breakpoint at the line, run, inspect Watch and Call Stack (rule 39).
+4. Check both sides: is it a client or server error, and does the server's view match (rule 30)?
+5. Fix the cause, not the symptom (no blanket `pcall`).
+6. Re-run the same test, then the playtest matrix row for that area.
+
+## Profiling guide
+
+| Number | Target | Where |
+|---|---|---|
+| Frame time, PC | 16.7 ms or less (60 FPS) | MicroProfiler |
+| Frame time, low-end phone | 33.3 ms or less (30 FPS) | Real phone, Developer Console |
+| One client system | about 1 ms per frame average or less | Script Profiler |
+| One server system | about 2 ms per frame average or less | Script Profiler (server) |
+| Client memory growth in 10 minutes | Flat, after warm-up | Developer Console Memory tab |
+| Server memory growth per hour | Flat, after warm-up | Developer Console (server) |
+| Remote traffic | No remote firing every frame for every player | Network tab; code review |
+
+**Reading the MicroProfiler:** each horizontal bar is a frame. Click a tall one and look for the widest labels. Wide script labels point at Script Profiler work. Wide rendering labels point at the world audit (parts, transparency, lights, effects). Wide physics labels point at unanchored parts, many Humanoids or complex collision. Your own labels from `debug.profilebegin` show exactly which system to fix.
+
+## Publishing checklist
+
+Producer fills this in before the Lead asks the owner to publish.
+
+- [ ] All gates passed for this version (plan, build, test and fix, ship prep).
+- [ ] Place version recorded; local backup taken.
+- [ ] Pre-publish audit (Luau section) passes: no DebugCommand remote, no `require(<number>)`, no `loadstring`, security settings as recorded, streaming on.
+- [ ] Output clean in the final Local Server test (attached).
+- [ ] Every place in the experience that changed is listed and ready to publish together (rule 46).
+- [ ] Package changes all published (rule 15); script drafts all committed (rule 13).
+- [ ] DataStore names are the live names (no TEST_ prefix in live code paths); save format migration tested in the test experience.
+- [ ] Monetization items that the update needs exist on the Creator Hub (the owner created them), and their ids are in Config.
+- [ ] Icon, thumbnails and description updates ready ([[11 Thumbnails, Icons and the Store Page]]).
+- [ ] Analytics events for the update in place ([[12 Live Ops and Launch]]).
+- [ ] Version note written ("v1.3: …").
+- [ ] Rollback plan: the version number to restore if something goes wrong.
+
+## Creator Hub settings the owner controls
+
+| Setting | What it decides | Who prepares the values |
+|---|---|---|
+| Name, description, genre | Discovery and store page | Splash, Pulse ([[11 Thumbnails, Icons and the Store Page]], [[15 Discovery and Growth]]) |
+| Icon and thumbnails | Click-through | Splash |
+| Maturity and compliance questionnaire | Who can see the game | Owner answers; Reviewer drafts notes |
+| Access (public or private) | Whether players can join | Owner |
+| Devices supported | Phone, tablet, PC, console, VR | Architect (plan) |
+| Server size and server fill | Players per server | Architect, Balance |
+| Private servers and price | Private server availability | Merchant proposes |
+| Game passes and developer products | What players can buy | Merchant proposes names and prices ([[09 Shops and Monetization]]) |
+| Places | Lobby, arenas, worlds | Architect (rule 46) |
+| Localization | Automatic and manual translations | Frame lists strings |
+| Notifications | Experience notifications to players | Liveops ([[10 Retention and Social]]) |
+| Permissions and collaborators | Who can edit | Owner (rule 11) |
+| Avatar settings | Rig type, scaling | Architect (rule 49) |
+| Security settings | HTTP, Studio API access, third-party sales and teleports | Owner; Reviewer advises (rule 47) |
+| Analytics | Dashboards and custom events | Liveops |
+| API keys (Open Cloud) | Automation access | Owner (rule 50) |
+
+## Open Cloud
+
+Open Cloud is Roblox's set of web APIs for working with experiences from outside Studio, authenticated with API keys (or OAuth apps). For this crew it's owner-gated automation.
+
+| Use | Scope (shape) | Who runs it | Notes |
+|---|---|---|---|
+| Publish a place file | Place publishing for one experience | Owner only | Uses the place's versions endpoint with the published version type; same effect as Publish in Studio |
+| Read player data for support | Data store read for one experience | Liveops, with an owner key | Read-only; never write from tools without the owner |
+| Fix one player's data | Data store write | Owner approves each use | Log every change in `decisions.md` |
+| Send a message to live servers | Messaging for one experience | Liveops, owner approves | Announcements, live event triggers |
+| Upload images, audio or models | Asset upload | Librarian through the app, owner key | Assets belong to the owner or group ([[07 Characters, VFX and Assets]]) |
+| Run Luau checks against a place | Luau execution, where available | Reviewer, owner key | Automated tests without opening Studio |
+
+**Key hygiene:** one key per job, the smallest scope, limited to one experience, an IP allowlist where possible, an expiry date (90 days or less), stored as an app secret or environment variable, never in a file, place, chat or handoff. Rotate on any suspicion of a leak.
+
+## Examples from top games
+
+These examples come from what sources say each game does. The Studio workflow lessons are this crew's inference about what such features take to build and test.
+
+### Timed shop restocks need a time-skip in testing
+**Game:** Grow a Garden ([30])
+**Shows:** Guides say the Seed Shop and Gear Shop stock restocks every five minutes.
+**Why it works:** A short, shared timer gives players a reason to check back and creates moments when everyone rushes the shop.
+**Steal:** Server-timed restocks driven by `workspace:GetServerTimeNow()`, with a `Config.Debug.TimeScale` that speeds timers up in Studio only (Luau section) so testers see ten restocks in a minute.
+**Avoid:** Testing a 5-minute timer by waiting 5 minutes per check, or shipping a debug time scale.
+
+### Key buildings must survive streaming and fresh joins
+**Game:** Grow a Garden ([29])
+**Shows:** One guide says the Gear Shop sometimes doesn't appear in the playing area and suggests restarting the game as a fix.
+**Why it works:** (as a lesson) Players have workarounds, but every restart is a chance to quit.
+**Steal:** Add "every key building and NPC appears for a fresh join at 3 spawn points" to the playtest matrix (rule 33), and make key buildings Atomic or Persistent where needed ([[06 World and Look]] rule 62).
+**Avoid:** Testing only with the same session that built the map.
+
+### Huge content needs kits, packages and version discipline
+**Game:** Pet Simulator 99 ([32], [40])
+**Shows:** A guide says the game has 99 areas as of its latest update, and another describes many biomes split across several worlds.
+**Why it works:** Steady streams of new areas keep players progressing, but only if each area is fast to build and safe to ship.
+**Steal:** Zone kits as packages (rule 15), a zone template with its volume, gate and lighting preset, and a version note per update (rule 16).
+**Avoid:** Hand-building each area from scratch, so every update risks breaking older areas.
+
+### Cross-server features need real servers to test
+**Game:** Pet Simulator 99 ([31])
+**Shows:** The Spawn hub has a mailbox and leaderboards alongside the shop.
+**Why it works:** Mail and leaderboards connect players across servers, which keeps the hub busy.
+**Steal:** Test cross-server features (mail, global leaderboards, messaging) in the test experience with Studio API access, then in Team Test, never with live data (rules 18, 34, 36).
+**Avoid:** "Mailbox tested" from a single Studio session that never sent anything across servers.
+
+### Progression gates need test fixtures
+**Game:** Bee Swarm Simulator ([33], [41])
+**Shows:** The Basic Bee Gate needs 5 bees and the Ant Gate needs 20.
+**Why it works:** Requirement-named gates make progress concrete.
+**Steal:** Studio-only debug commands (rule 35) that set a profile to "just under" and "just over" each gate, so Playtest can check both sides of every gate in minutes.
+**Avoid:** Testing gates by grinding, which means late gates never get tested.
+
+### Portals need streaming-aware tests
+**Game:** Bee Swarm Simulator ([34])
+**Shows:** The Hive Hub sits inside the Hive Hub Portal past the Ant Gate.
+**Why it works:** Portals make special areas feel like destinations.
+**Steal:** Every portal is in the streaming test (rule 33): use it from a fresh join and check the destination streams in (the server calls `RequestStreamAroundAsync` before moving the player).
+**Avoid:** Portals that drop players into an empty void for a second while content streams.
+
+### Stuck timers need fast-forward testing
+**Game:** Doors ([35])
+**Shows:** If a player is stuck in a Dark Room for more than 20 seconds, Guiding Light lights up the next door.
+**Why it works:** Adaptive help rescues stuck players without spoiling the room for others.
+**Steal:** Put every timer like this in Config with a Studio-only time scale, and test the "stuck" path deliberately in the playtest matrix.
+**Avoid:** Help systems that only trigger in conditions nobody tests.
+
+### New floors as staged content
+**Game:** Doors ([35], [36])
+**Shows:** Doors has separate floors, including the Hotel and The Mines, with the same guide entity appearing in both.
+**Why it works:** Each floor is big new content that reuses the game's core systems.
+**Steal:** Build big updates as staged tasks (rule 53) and shared systems as packages or shared modules, so a new floor doesn't fork the code.
+**Avoid:** Copying the whole place to make a new floor and maintaining two versions of every system.
+
+### World changes driven by state need both views
+**Game:** 99 Nights in the Forest ([37])
+**Shows:** Guides say upgrading the campfire expands the map, revealing more areas.
+**Why it works:** Shared progress visibly changes the world for the whole group.
+**Steal:** Test state-driven world changes with a Local Server and 2-3 clients, checking the server view (rule 30) and a player who joins after the upgrade.
+**Avoid:** World changes that only happen on the client of the player who triggered them.
+
+### Multiple endings need save fixtures
+**Game:** 99 Nights in the Forest ([38])
+**Shows:** Guides cover the game's different endings.
+**Why it works:** Endings give a long session a goal and give players reasons to replay.
+**Steal:** Debug fixtures that jump to the state just before each ending, so every branch gets tested before each update.
+**Avoid:** Endings that break silently because nobody reaches them in testing.
+
+### Round systems need soak tests and forced maps
+**Game:** Natural Disaster Survival ([39])
+**Shows:** The lobby has miniature models of maps, and a guide notes that in a public server you have to wait until each map comes up as a round location.
+**Why it works:** Rotation keeps rounds fresh.
+**Steal:** A Studio-only "force map" debug command and a 10-minute Run soak (rule 28) that cycles every map, so each one is tested every update.
+**Avoid:** Maps that only get tested when they happen to come up.
+
+### Platform changes arrive through Studio betas
+**Game:** Every Roblox game, during the Unified Lighting rollout ([2], [4], [5])
+**Shows:** Unified Lighting started as a Studio beta in January 2025, with live experiences unaffected, and went fully live in July 2025 while preserving existing experiences' looks.
+**Why it works:** Roblox gives creators a window to test big engine changes.
+**Steal:** Watch announcements, try relevant betas in the test copy (rule 10), and update the vault when defaults change.
+**Avoid:** Learning about an engine change from player complaints.
+
+### Learning from Roblox's sample places
+**Game:** Roblox's Environmental Art sample places ([16], [17], [18])
+**Shows:** Roblox publishes sample places for each stage of its environmental art curriculum, including an asset library and the constructed world.
+**Why it works:** Opening a finished, well-organized place shows how assets, folders and libraries are laid out.
+**Steal:** Open the sample places in Studio and copy the organization patterns (asset library place, kits), not the art.
+**Avoid:** Inventing a new folder structure per game.
+
+## By genre
+
+**Simulator.** Test fixtures for every zone gate and egg, a time-scale debug for timers, a 10-minute memory soak with many collectibles, and Local Server tests with 4+ clients collecting in the same field. Zone kits as packages.
+
+**Tycoon.** Local Server tests with 2-4 clients claiming plots at once, rejoin tests for plot saving, a debug command to fill a plot to each stage, and a performance soak with all plots fully built.
+
+**Obby.** A debug command to jump to any stage, a test of every checkpoint from a fresh join, phone tests of every jump in the Device Emulator plus a real phone, and Output checks for kill-brick scripts at scale.
+
+**Roleplay and life sim.** Local Server with 6-8 clients for houses, vehicles and jobs, permission tests (who can enter which house), streaming walks across the whole town, and Player Emulator checks for chat and text features.
+
+**Action and combat.** Two-client hit tests from both sides, bad-input tests on combat remotes, MicroProfiler during big fights, and Script Profiler on hit detection.
+
+**Battlegrounds.** 8-client Local Server fights for effect budgets, ability cooldown tests with fixtures, and memory soaks after 20 rounds.
+
+**Survival.** Run soaks of the day/night cycle and creature spawning, time-scale debug, fixtures for each base level, and 3-client tests of shared base upgrades.
+
+**Horror.** Stuck-timer tests, fixtures to jump to each room or floor, darkness checks at low graphics quality, and audio checks on real devices.
+
+**Tower defense.** Run soaks of full waves, fixtures for late waves, Script Profiler on targeting, and 4-client co-op tests.
+
+**RNG and collection.** Fixtures for rare results (forced roll outcomes, Studio only), Studio test purchases of roll products, and data tests of large inventories in the test experience.
+
+**Shooter.** Two-client hit registration tests, network checks for frequent remotes, and MicroProfiler with many projectiles.
+
+**Racing.** Streaming tests at top speed, checkpoint tests, physics profiling with many cars, and a real-phone frame test.
+
+**Sports.** 4-8 client matches, ball ownership and physics tests from both sides, and score sync checks on the server view.
+
+**Party and social hangout.** Minigame rotation soaks with forced picks, 8-client tests, and multi-place teleports in Team Test.
+
+**Story and puzzle.** Fixtures for every chapter start and ending, puzzle state saves tested by rejoining, and cutscene skip tests.
+
+**Farming and fishing.** Time-scale debug for growth timers, fixtures for each biome and rod tier, and restock timer tests ([30]).
+
+## Luau
+
+### Safe-edit wrapper (command bar or MCP code)
+
+```lua
+-- Edit mode. Run a change as one named undo step. Falls back to a waypoint if recording isn't available.
+local ChangeHistoryService = game:GetService("ChangeHistoryService")
+
+local function safeEdit(name: string, change: () -> string)
+	local ok, recording = pcall(function()
+		return ChangeHistoryService:TryBeginRecording(name)
+	end)
+	local id = if ok then recording else nil
+	local success, result = pcall(change)
+	if id then
+		ChangeHistoryService:FinishRecording(id,
+			if success then Enum.FinishRecordingOperation.Commit else Enum.FinishRecordingOperation.Cancel)
+	else
+		ChangeHistoryService:SetWaypoint(name)
+	end
+	if success then
+		print("[" .. name .. "] " .. tostring(result))
+	else
+		warn("[" .. name .. "] failed: " .. tostring(result))
+	end
+end
+
+safeEdit("Create SoundGroups", function()
+	local SoundService = game:GetService("SoundService")
+	local created = 0
+	for groupName, volume in { Music = 0.35, SFX = 0.6, UI = 0.5, Ambient = 0.4 } do
+		if not SoundService:FindFirstChild(groupName) then
+			local group = Instance.new("SoundGroup")
+			group.Name = groupName
+			group.Volume = volume
+			group.Parent = SoundService -- parent last
+			created += 1
+		end
+	end
+	return ("created %d, already present %d"):format(created, 4 - created)
+end)
+```
+
+### Read-only tree inspector
+
+```lua
+-- READ ONLY. Prints a compact tree with class names and child counts, to a depth.
+local function inspect(root: Instance, maxDepth: number)
+	local lines = {}
+	local function walk(inst: Instance, depth: number)
+		local children = inst:GetChildren()
+		table.insert(lines, ("%s%s [%s]%s"):format(string.rep("  ", depth), inst.Name, inst.ClassName,
+			#children > 0 and (" (" .. #children .. ")") or ""))
+		if depth < maxDepth then
+			table.sort(children, function(a, b) return a.Name < b.Name end)
+			for _, child in children do walk(child, depth + 1) end
+		end
+	end
+	walk(root, 0)
+	print(table.concat(lines, "\n"))
+end
+
+inspect(game:GetService("ServerScriptService"), 2)
+inspect(game:GetService("ReplicatedStorage"), 2)
+```
+
+### Studio-only debug commands (server)
+
+```lua
+--!strict
+-- ServerScriptService/Services/DebugService (ModuleScript). Exists only in Studio sessions (rule 35).
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Config = require(ReplicatedStorage.Shared.Config)
+local PlayerData = require(script.Parent.PlayerData) -- your data service
+
+local DebugService = {}
+
+local COMMANDS: { [string]: (player: Player, arg: string?) -> () } = {
+	coins = function(player, arg)
+		local data = PlayerData.Get(player)
+		local amount = tonumber(arg or "")
+		if data and amount and amount == amount and amount >= 0 and amount <= 1e12 then
+			data.Coins = math.floor(amount)
+		end
+	end,
+	stage = function(player, arg)
+		local data = PlayerData.Get(player)
+		local stage = tonumber(arg or "")
+		if data and stage then data.Stage = math.clamp(math.floor(stage), 0, 10000) end
+	end,
+	timescale = function(_player, arg)
+		local scale = tonumber(arg or "")
+		if scale then Config.Debug.TimeScale = math.clamp(scale, 0.1, 100) end
+	end,
+}
+
+function DebugService.Start()
+	if not RunService:IsStudio() then return end -- never active on live servers
+	local remote = Instance.new("RemoteEvent")
+	remote.Name = "DebugCommand"
+	remote.Parent = ReplicatedStorage:WaitForChild("Remotes") -- created at runtime, Studio only
+	remote.OnServerEvent:Connect(function(player: Player, command: unknown, arg: unknown)
+		if typeof(command) ~= "string" then return end
+		if arg ~= nil and typeof(arg) ~= "string" then return end
+		local handler = COMMANDS[command]
+		if handler then
+			handler(player, arg :: string?)
+			print(("[Debug] %s ran %s %s"):format(player.Name, command, tostring(arg)))
+		end
+	end)
+	print("[Debug] DebugService active (Studio only). Players:", #Players:GetPlayers())
+end
+
+return DebugService
+```
+
+### Studio-safe DataStore names and the time scale
+
+```lua
+--!strict
+-- In ReplicatedStorage.Shared.Config (excerpt). Studio sessions use separate store names and may speed timers.
+local RunService = game:GetService("RunService")
+local IS_STUDIO = RunService:IsStudio()
+
+local Config = {}
+Config.Data = {
+	-- Studio tests write to TEST_ stores so they never touch real player data (rule 18).
+	StoreName = (if IS_STUDIO then "TEST_" else "") .. "PlayerData_v1",
+}
+Config.Debug = {
+	TimeScale = 1, -- DebugService may raise this in Studio only
+	Logging = IS_STUDIO,
+}
+return Config
+```
+
+```lua
+--!strict
+-- A server timer that respects the debug time scale (for example, a 5-minute shop restock).
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local RESTOCK_SECONDS = 300
+
+local elapsed = 0
+local function step(dt: number): boolean
+	elapsed += dt * Config.Debug.TimeScale
+	if elapsed >= RESTOCK_SECONDS then
+		elapsed -= RESTOCK_SECONDS
+		return true -- restock now
+	end
+	return false
+end
+
+return step
+```
+
+### Profiler labels and a gated logger
+
+```lua
+--!strict
+-- ReplicatedStorage.Shared.Log (ModuleScript). Debug logs only when Config.Debug.Logging is on.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Log = {}
+
+function Log.debug(tag: string, ...: any)
+	if Config.Debug.Logging then print("[" .. tag .. "]", ...) end
+end
+
+function Log.warn(tag: string, ...: any)
+	warn("[" .. tag .. "]", ...)
+end
+
+-- Wrap expensive work so it shows by name in the MicroProfiler (rule 42).
+function Log.profile<T...>(label: string, fn: (T...) -> (), ...: T...)
+	debug.profilebegin(label)
+	fn(...)
+	debug.profileend()
+end
+
+return Log
+```
+
+### Pre-publish audit (command bar)
+
+```lua
+-- READ ONLY. Run before Producer's final gate. Every FAIL must be fixed or explained in decisions.md.
+local HttpService = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local fails, warnings = 0, 0
+local function fail(msg: string) fails += 1; warn("FAIL: " .. msg) end
+local function note(msg: string) warnings += 1; print("WARN: " .. msg) end
+
+if HttpService.HttpEnabled then note("HTTP requests are enabled; must be in decisions.md") end
+if ServerScriptService.LoadStringEnabled then fail("LoadStringEnabled is on") end
+if not workspace.StreamingEnabled then note("StreamingEnabled is off") end
+local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+if remotes and remotes:FindFirstChild("DebugCommand") then fail("DebugCommand remote saved in the place") end
+
+local PATTERNS = {
+	{ "require%s*%(%s*%d", "require by asset id" },
+	{ "loadstring", "loadstring" },
+	{ "getfenv", "getfenv" }, { "setfenv", "setfenv" },
+	{ "%f[%w_]wait%s*%(", "deprecated wait()" },
+	{ "%f[%w_]spawn%s*%(", "deprecated spawn()" },
+	{ "%f[%w_]delay%s*%(", "deprecated delay()" },
+}
+for _, d in game:GetDescendants() do
+	local ok, isScript = pcall(function() return d:IsA("LuaSourceContainer") end)
+	if ok and isScript then
+		local readable, src = pcall(function() return (d :: any).Source end)
+		if readable and type(src) == "string" then
+			-- strip `task.wait(`, `task.spawn(` and `task.delay(` before checking the deprecated globals
+			local stripped = src:gsub("task%.wait", "TASKWAIT"):gsub("task%.spawn", "TASKSPAWN"):gsub("task%.delay", "TASKDELAY")
+			for _, p in PATTERNS do
+				if string.find(stripped, p[1]) then
+					if p[2]:find("deprecated") then note(p[2] .. " in " .. d:GetFullName())
+					else fail(p[2] .. " in " .. d:GetFullName()) end
+				end
+			end
+		end
+	end
+end
+
+for _, child in workspace:GetChildren() do
+	if not (child:IsA("Camera") or child:IsA("Terrain") or child.Name == "Map") then
+		note("Unexpected top-level Workspace child: " .. child:GetFullName())
+	end
+end
+
+print(("Pre-publish audit: %d FAIL, %d WARN"):format(fails, warnings))
+```
+
+Runtime folders (Drops, NPCs) created by code won't exist in edit mode, so anything the audit lists at the top of Workspace is a leftover. Core and plugin scripts that Studio can't read are skipped by the `pcall`.
+
+## Checklist
+
+- [ ] Studio MCP tools were listed at the start of the task, or their absence was reported.
+- [ ] The Studio lock was held for every write; read-only work made no changes.
+- [ ] The tree and scripts were inspected before changes, with the place version noted.
+- [ ] Bulk edits were recorded as named undo steps; a local backup exists for risky ones.
+- [ ] Only the agent's own area was changed; cross-area needs became tasks.
+- [ ] Script drafts are committed and package changes are published or reverted.
+- [ ] Rojo mode is written in `plan.md`, and no Rojo-managed script was edited in Studio.
+- [ ] Script Analysis shows 0 errors and 0 warnings in changed files.
+- [ ] The feature was tested with Play from a fresh join (not only Play Here).
+- [ ] Multiplayer features were tested in a Local Server with 2+ clients, including a leave mid-action.
+- [ ] Server-owned values were checked in the Server view.
+- [ ] UI and world changes were checked in the Device Emulator (2 phones, tablet, both orientations).
+- [ ] Streaming test done: fresh joins at 3 spots, far walks, every portal, no infinite yields.
+- [ ] Studio-limited features (purchases, teleports, DataStores) were tested the real way or listed as untested.
+- [ ] Output was clean at the end of the test and attached as evidence.
+- [ ] Performance numbers (frame time, top scripts, memory soak) are in the report for performance-sensitive changes.
+- [ ] DebugService only activates in Studio; no DebugCommand remote is saved in the place.
+- [ ] Studio tests use TEST_ DataStore names or the test experience.
+- [ ] Security settings match `decisions.md`.
+- [ ] The pre-publish audit passes with 0 FAIL.
+- [ ] The publishing checklist is complete and sent to the owner; no agent published.
+- [ ] No API key appears in any file, place or handoff.
+- [ ] The handoff is under 150 words with paths, evidence, open items and next owner.
+
+## Common mistakes
+
+- Writing to the place without holding the Studio lock.
+- Claiming a change was made or tested when no Studio tool was called.
+- Editing another agent's area because it was faster.
+- Editing a Rojo-managed script in Studio and losing it on the next sync.
+- A first Rojo sync that deletes Studio-made UI or Remotes.
+- Leaving script drafts uncommitted or package copies modified and unpublished.
+- Bulk edits with no undo step and no backup.
+- Renaming a remote without finding every reference.
+- Testing only with Play Solo or Play Here.
+- Never checking the Server view, so client-only "successes" ship.
+- No Device Emulator check, so buttons sit under the jump button.
+- Testing streaming-sensitive code from the spawn only.
+- Running data experiments against the live experience's DataStores.
+- Treating a Studio test purchase or a failed teleport as proof the real thing works.
+- Shipping a debug remote or a debug time scale.
+- Wrapping errors in `pcall` instead of fixing them.
+- Leaving dozens of debug prints and warnings in Output.
+- Optimizing without profiling, or profiling only on a desktop.
+- An agent pressing Publish, creating a game pass or changing security settings.
+- API keys pasted into files or chat.
+- Two humans and an agent editing the same area at the same time.
+
+## References
+
+Research note: the session's shared web search limit ran out before this page's own searches, so it reuses sources found while researching [[06 World and Look]]. Most Studio panel, Team Create, packages, Rojo, MCP, playtesting, profiler, publishing and Open Cloud specifics are written from the crew's working knowledge without a citation. Verify menu paths in the current Studio and add citations in a later research pass.
+
+[1] Post-processing effects — https://create.roblox.com/docs/environment/post-processing-effects — some effects need Studio's Editor Quality Level at the highest to show.
+[2] Let There Be (Unified) Light! Unified Lighting is Fully Live — https://devforum.roblox.com/t/let-there-be-unified-light-unified-lighting-is-fully-live/3401512 — the July 2025 release; existing experiences' looks preserved.
+[3] Unified Lighting Beta: "ShadowSoftness" does not appear when LightingStyle is Soft — https://devforum.roblox.com/t/unified-lighting-beta-shadowsoftness-lighting-property-does-not-appear-when-lightingstyle-is-set-to-soft/3509181 — a property hidden in the Properties panel but still settable by script.
+[4] Bloxy News on Unified Lighting in Studio — https://x.com/Bloxy_News/status/1881791225822327102 — the January 2025 Studio beta; live experiences unaffected until release.
+[5] Bloxy News on Threads: Unified Lighting replaces Technology — https://www.threads.com/@bloxy.news/post/DFGZz6FSJCW?hl=en — the two new properties that replaced Technology.
+[6] Future Is Bright: Phase 3 - Studio Beta — https://devforum.roblox.com/t/future-is-bright-phase-3-studio-beta/639903 — an earlier engine feature shipped as a Studio beta first.
+[7] Lighting class reference — https://create.roblox.com/docs/reference/engine/classes/Lighting — deprecation tags in the API reference.
+[8] Technology enum — https://create.roblox.com/docs/reference/engine/enums/Technology — a deprecated enum documented with its replacement advice.
+[9] Technology enum (robloxapi.github.io) — https://robloxapi.github.io/ref/enum/Technology.html — community reference noting what superseded it.
+[10] Lighting (robloxapi.github.io, ref-temp) — https://robloxapi.github.io/ref-temp/class/Lighting.html — a changelog of added and removed API members.
+[11] Better Technology Documentation — https://devforum.roblox.com/t/better-technology-documentation/1178930 — developers asking for clearer engine documentation.
+[12] Instance streaming — https://create.roblox.com/docs/en-us/workspace/streaming — streaming is on by default for new places and can't be set from scripts.
+[13] Streaming techniques — https://create.roblox.com/docs/en-us/workspace/streaming/techniques.md — client code patterns for streamed content.
+[14] Greybox a playable area — https://create.roblox.com/docs/tutorials/curriculums/core/building/greybox-a-playable-area — Studio's part tools for greyboxing, including negate and union.
+[15] Customize global lighting (core curriculum) — https://create.roblox.com/docs/tutorials/curriculums/core/building/customize-global-lighting — working with Lighting properties in Studio.
+[16] Environmental art curriculum — https://create.roblox.com/docs/tutorials/curriculums/environmental-art — a staged production workflow with sample places.
+[17] Environmental Art: Assemble an Asset Library (sample place) — https://www.roblox.com/games/14447787049/Environmental-Art-Assemble-an-Asset-Library — a sample asset library place.
+[18] Environmental Art: Construct Your World (sample place) — https://www.roblox.com/games/14447826396/Environmental-Art-Construct-Your-World — the finished sample world.
+[19] Creator Hub tutorials index — https://create.roblox.com/docs/tutorials.md — the list of official tutorials and curricula.
+[20] Materials — https://create.roblox.com/docs/en-us/parts/materials.md — the Material Manager for editing custom materials.
+[21] MaterialVariant — https://create.roblox.com/docs/en-us/reference/engine/classes/MaterialVariant — MaterialVariants live under MaterialService.
+[22] PBR textures (SurfaceAppearance guide) — https://create.roblox.com/docs/en-us/art/modeling/surface-appearance.md — entering asset ids for maps in the Properties window.
+[23] SurfaceAppearance (robloxapi.github.io) — https://robloxapi.github.io/ref-temp/class/SurfaceAppearance.html — plugin-security properties that Studio tools can set and game scripts can't.
+[24] SurfaceAppearance class — https://create.roblox.com/docs/en-us/reference/engine/classes/SurfaceAppearance — appearance varies with device and graphics quality; preview at different settings.
+[25] Should I Restrict Game to R15? — https://devforum.roblox.com/t/should-i-restrict-game-to-r15/450516 — custom avatar scaling can be turned off in the experience settings.
+[26] SpawnLocation — https://create.roblox.com/docs/reference/engine/classes/SpawnLocation — how players spawn, which Play tests and Play Here skips.
+[27] Global lighting — https://create.roblox.com/docs/environment/lighting — lighting quality and view distance scale down with rendering quality.
+[28] Enhance indoor environments — https://create.roblox.com/docs/tutorials/use-case-tutorials/lighting/enhance-indoor-environments — Studio starts new games on Soft lighting.
+[29] Where to find the Gear Shop in Grow a Garden — https://esports.gg/news/roblox/where-to-find-the-gear-shop-in-grow-a-garden — a key building that sometimes doesn't appear; restarting suggested.
+[30] Grow a Garden Seed Shop and Gear Shop stock explained — https://deltiasgaming.com/?p=207402 — the five-minute restock.
+[31] Pet Simulator 99 areas (bloxodes wiki) — https://bloxodes.com/wiki/pet-simulator-99/areas — Spawn hub with shop, mailbox and leaderboards.
+[32] All areas in Pet Simulator 99 — https://progameguides.com/roblox/all-areas-in-pet-simulator-99-roblox/ — 99 areas as of that guide's update.
+[33] Basic Bee Gate (Bee Swarm Simulator Wiki) — https://bee-swarm-simulator.fandom.com/wiki/Basic_Bee_Gate — the 5-bee gate.
+[34] Hive Hub (Bee Swarm Simulator Wiki) — https://bee-swarm-simulator.fandom.com/wiki/Hive_Hub — an area reached through a portal.
+[35] Roblox DOORS Walkthrough – All Monsters and How to Survive Them — https://progameguides.com/roblox/roblox-doors-walkthrough-all-monsters-and-how-to-survive-them/ — Guiding Light's 20-second stuck rule.
+[36] The Mines (DOORS Wiki) — https://doors-game.fandom.com/wiki/The_Mines — a separate floor in Doors.
+[37] 99 Nights in the Forest beginner's guide — https://www.theclick.gg/99-nights-in-the-forest-beginners-guide/ — campfire upgrades expand the map.
+[38] All Endings in 99 Nights in the Forest — https://deltiasgaming.com/?p=290974 — the game's multiple endings.
+[39] Natural Disaster Survival Mega Token guide — https://dotesports.com/roblox/news/natural-disaster-survival-mega-token-guide-the-hunt-mega-edition — lobby map models and waiting for maps to rotate in.
+[40] Pet Simulator 99 biomes (GINX) — https://www.ginx.tv/en/?p=58506 — many biomes split across several worlds.
+[41] Ant Gate (Bee Swarm Simulator Wiki) — https://bee-swarm-simulator.fandom.com/wiki/Ant_Gate — the 20-bee gate.
+
+Related: [[00 Start Here]] · [[00 For Any AI]] · [[01 The First Five Minutes]] · [[05 UI and HUD]] · [[06 World and Look]] · [[07 Characters, VFX and Assets]] · [[08 Mobile]] · [[09 Shops and Monetization]] · [[10 Retention and Social]] · [[11 Thumbnails, Icons and the Store Page]] · [[12 Live Ops and Launch]] · [[13 Building It Right]] · [[15 Discovery and Growth]]

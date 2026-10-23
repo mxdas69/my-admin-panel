@@ -48,10 +48,10 @@ This chapter is the spec for input, button prompts, UI navigation, TV-sized UI, 
 ### Which API to use
 | API | Use it for | Don't use it for |
 |---|---|---|
-| `UserInputService.PreferredInput` | Which prompts, layout and hints to show [1][2] | Nothing; this is the default |
+| `UserInputService.PreferredInput` | Which prompts, layout and hints to show [1][2][3] | Nothing; this is the default |
 | `GetLastInputType()` / `LastInputTypeChanged` | Older code; low-level reactions | Choosing UI: it flickers on stray mouse moves [44] |
 | `GamepadEnabled` | Whether any pad is connected | Choosing UI: players leave pads plugged in [44] |
-| `TouchEnabled` | Whether a touchscreen exists | Choosing UI: touch laptops report true [43] |
+| `TouchEnabled` | Whether a touchscreen exists (client-only) [4] | Choosing UI: touch laptops report true [43] |
 | `GuiService:IsTenFootInterface()` | TV layout, safe area, chat policy | Input decisions |
 | `GuiService.ViewportDisplaySize` | Small / Medium / Large screen layout [20] | Input decisions |
 

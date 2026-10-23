@@ -19,6 +19,7 @@ import { fetchCharts, fetchDetails, velocity, breakouts, openings, gameDeepDive,
 import { generateImage, askGemini } from "./lib/gemini.mjs";
 import { RemoteControl } from "./lib/remote.mjs";
 import { RobloxBrowser } from "./lib/robloxBrowser.mjs";
+import { makeStoreArt } from "./lib/storeArt.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(process.env.ROCREW_ROOT ?? path.join(HERE, ".."));
@@ -391,10 +392,18 @@ function closeClientsFor(personId) {
   }
 }
 let lastChangeAt = Date.now();
+// Recent events for long-polling clients. Cloudflare's quick tunnels (Remote Control) don't
+// pass event streams through, so browsers coming in that way ask for changes instead.
+const recent = [];
+let eventSeq = 0;
+const waiters = new Set();
 crew.on("change", (e) => {
   lastChangeAt = Date.now();
   const data = `data: ${JSON.stringify(e)}\n\n`;
   for (const res of clients) res.write(data);
+  recent.push({ seq: ++eventSeq, e });
+  if (recent.length > 200) recent.shift();
+  for (const w of waiters) w();
 });
 setInterval(() => {
   for (const res of clients) res.write(": ping\n\n");
@@ -475,6 +484,41 @@ route("POST", /^\/api\/reviews$/, async (req) => {
   crew.feed(review.agent, "owner", `Review: ${review.title}`);
   crew.changed();
   return review;
+});
+route("POST", /^\/api\/store-art$/, async (req) => {
+  const b = await readJson(req);
+  const kind = b.kind === "icon" ? "icon" : "thumb";
+  const cfg = config.get().gemini;
+  need(cfg.apiKey, "Add a Gemini API key in Settings first.");
+  const game = b.game && store.data.games.find((g) => g.slug === b.game);
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+  const dir = inside(ROOT, game ? path.join("games", game.slug, "art", `${kind}s-${stamp}`) : path.join(".rocrew", "media", `${kind}s-${stamp}`));
+  let set;
+  try {
+    set = await makeStoreArt({ apiKey: cfg.apiKey, imageModel: cfg.imageModel, textModel: cfg.textModel, kind, variants: b.variants ?? [], refs: (b.refs ?? []).map((r) => inside(ROOT, r)), dir, text: b.text ?? "", hasFfmpeg });
+  } catch (err) {
+    throw new HttpError(400, err.message);
+  }
+  const group = `${game?.name ?? "Store art"}: ${kind === "icon" ? "icons" : "thumbnails"} ${new Date().toLocaleDateString()}`;
+  const from = isAgent(b.from) ? b.from : "splash";
+  const rel = (f) => path.relative(ROOT, f).split(path.sep).join("/");
+  const ready = set.candidates.filter((c) => c.file);
+  for (const c of ready) {
+    const s = c.score;
+    const label = s ? ` · clicks ${s.ctr}/10 · hand-made look ${s.ai_clean}/10${s.textMismatch ? " · TEXT WRONG" : ""}` : "";
+    const media = ingest(rel(c.file), `${kind}-${c.id}`);
+    store.push("reviews", {
+      id: store.id("r"), agent: from, game: game?.slug ?? null, title: `${kind === "icon" ? "Icon" : "Thumbnail"} ${c.id}${label}`.slice(0, 120),
+      question: b.question?.trim() || (kind === "icon" ? "Which icon would you tap at phone size? Anything that looks fake?" : "Which thumbnails should go into Roblox's thumbnail test? Anything that looks fake?"),
+      file: rel(c.file), media, kind: "image", group, status: "pending", note: s?.worst ? `Judge: ${s.worst}. Fix: ${s.fix}` : "", createdAt: Date.now(),
+    });
+  }
+  crew.feed(from, "owner", `${ready.length} ${kind === "icon" ? "icons" : "thumbnails"} ready to review`);
+  crew.changed();
+  return {
+    dir: rel(set.dir), sheet: set.sheet ? rel(set.sheet) : null, finished: set.finished, group,
+    candidates: set.candidates.map((c) => ({ id: c.id, variant: c.line, file: c.file ? rel(c.file) : null, error: c.error ?? null, score: c.score ?? null })),
+  };
 });
 route("POST", /^\/api\/reviews\/([\w]+)\/decision$/, async (req, url, [id]) => crew.decideReview(id, { ...(await readJson(req)), by: personName(req) }));
 
@@ -850,6 +894,33 @@ const server = http.createServer(async (req, res) => {
       res.personId = personFor(requestToken(req, url))?.id;
       clients.add(res);
       req.on("close", () => clients.delete(res));
+      return;
+    }
+
+    if (url.pathname === "/api/changes") {
+      if (!tokenOk(req, url)) throw new HttpError(401, "Missing or wrong token.");
+      const since = Number(url.searchParams.get("since") ?? -1);
+      const reply = () => send(res, 200, { seq: eventSeq, events: since < 0 ? [] : recent.filter((r) => r.seq > since).map((r) => r.e) });
+      if (since < 0 || eventSeq > since) return reply();
+      const personId = personFor(requestToken(req, url))?.id;
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        waiters.delete(wake);
+        clearTimeout(timer);
+        // Access ended while waiting (Remote Control turned off): say so.
+        if (personId && personId !== "owner" && !(store.data.people ?? []).some((p) => p.id === personId)) return send(res, 401, { error: "Missing or wrong token." });
+        reply();
+      };
+      const wake = () => setTimeout(finish, 50);
+      const timer = setTimeout(finish, 25000);
+      waiters.add(wake);
+      req.on("close", () => {
+        done = true;
+        waiters.delete(wake);
+        clearTimeout(timer);
+      });
       return;
     }
 

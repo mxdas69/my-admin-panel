@@ -32,7 +32,7 @@ export const AGENTS = [
   { id: "balance", name: "Balance", icon: "scale", color: "#9be15d", studio: false,
     blurb: "Simulates the economy so upgrades feel right.",
     detail: "Checks reward rates, upgrade costs and pacing, and flags where players would get stuck or finish too quickly." },
-  { id: "splash", name: "Splash", icon: "image", color: "#ff9f43", studio: false,
+  { id: "splash", name: "Splash", icon: "image", color: "#ff9f43", studio: true,
     blurb: "Makes thumbnails and icons.",
     detail: "Turns the game's hook into icon and thumbnail concepts with clear subjects and compositions that read at small sizes." },
   { id: "reviewer", name: "Reviewer", icon: "shield", color: "#8fa2ff", studio: true,

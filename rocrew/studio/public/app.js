@@ -1787,25 +1787,53 @@ function scheduleRefresh() {
   pending = setTimeout(refresh, 200);
 }
 
-function connectEvents() {
-  const es = new EventSource(`/api/events?token=${TOKEN}`);
-  es.onmessage = (e) => {
-    const ev = JSON.parse(e.data);
-    if (ev.kind === "message") {
-      const list = S.msgs[ev.agent];
-      if (list) {
-        list.push(ev.message);
-        const r = route();
-        const viewing = (r.page === "lead" && ev.agent === "lead") || (r.page === "team" && document.querySelector(".agent-row.active")?.getAttribute("href") === `#/team/${ev.agent}`);
-        if (viewing) refreshChat(ev.agent);
-      }
+function handleEvent(ev) {
+  if (ev.kind === "message") {
+    const list = S.msgs[ev.agent];
+    if (list) {
+      list.push(ev.message);
+      const r = route();
+      const viewing = (r.page === "lead" && ev.agent === "lead") || (r.page === "team" && document.querySelector(".agent-row.active")?.getAttribute("href") === `#/team/${ev.agent}`);
+      if (viewing) refreshChat(ev.agent);
     }
-    scheduleRefresh();
-  };
+  }
+  scheduleRefresh();
+}
+
+// Live updates: an event stream normally; long-polling through Cloudflare's tunnel (Remote
+// Control), which doesn't pass event streams, or whenever the stream keeps failing.
+let streamFailures = 0;
+function connectEvents() {
+  if (location.hostname.endsWith(".trycloudflare.com") || streamFailures >= 3) return pollChanges();
+  const es = new EventSource(`/api/events?token=${TOKEN}`);
+  es.onopen = () => (streamFailures = 0);
+  es.onmessage = (e) => handleEvent(JSON.parse(e.data));
   es.onerror = () => {
     es.close();
+    streamFailures += 1;
     setTimeout(connectEvents, 3000);
   };
+}
+
+async function pollChanges() {
+  let since = -1;
+  for (;;) {
+    try {
+      const res = await fetch(`/api/changes?since=${since}`, { headers: { "x-rocrew-token": TOKEN } });
+      if (res.status === 401) {
+        if (S.state?.me?.remote) {
+          S.ui.remoteEnded = true;
+          renderRemoteLayer();
+        }
+        return;
+      }
+      const j = await res.json();
+      if (since >= 0) for (const ev of j.events) handleEvent(ev);
+      since = j.seq;
+    } catch {
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
 }
 
 setInterval(() => {
