@@ -309,7 +309,7 @@ test("the vault is read in small pieces: cards, sections and search", () => {
   const long = Array.from({ length: 400 }, () => "Explaining why in many words.").join(" ");
   fs.writeFileSync(
     path.join(dir, "05 UI and HUD.md"),
-    `---\nfor: [frame]\n---\n# 05 UI and HUD\n\nUI that fits phones.\n\n## Rules\n\n### Layout\n\n1. **Tap targets are at least 44 px.**\n   Why: ${long}\n\n## Shop screens\n\nShop cards show the price on a big button. ${long}\n\n## Checklist\n\n- [ ] Targets are 44 px\n\n## Sources\n\n1. https://example.com\n`,
+    `---\nfor: [frame]\n---\n# 05 UI and HUD\n\nUI that fits phones.\n\n## Rules\n\n### Layout\n\n1. **Tap targets are at least 44 px.**\n   Why: ${long}\n\n**2. Buttons react within 0.1 s.**\nWhy: ${long}\n\n## Shop screens\n\nShop cards show the price on a big button. ${long}\n\n## Checklist\n\n- [ ] Targets are 44 px\n\n## Sources\n\n1. https://example.com\n`,
   );
   const pages = listPages(dir);
   const page = findPage(pages, "ui");
@@ -317,6 +317,7 @@ test("the vault is read in small pieces: cards, sections and search", () => {
   assert.deepEqual(page.readers, ["frame"]);
   const c = card(page);
   assert.match(c, /1\. Tap targets are at least 44 px\./);
+  assert.match(c, /2\. Buttons react within 0\.1 s\./, "bold-number rule style is read too");
   assert.match(c, /- \[ \] Targets are 44 px/);
   assert.ok(!c.includes("Explaining why"), "the card leaves out the long explanations");
   assert.match(readSections(page, "shop")[0].text, /price on a big button/);

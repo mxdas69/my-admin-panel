@@ -124,7 +124,8 @@ function digestRules(text) {
   for (const line of text.split("\n")) {
     if (/^#{2,4} /.test(line)) out.push(out.length ? `\n${line}` : line);
     else {
-      const m = /^\s*(\d+)\.\s+\*\*(.+?)\*\*/.exec(line);
+      // "1. **Rule.**" or "**1. Rule.**"
+      const m = /^\s*(\d+)\.\s+\*\*(.+?)\*\*/.exec(line) ?? /^\s*\*\*(\d+)\.\s+(.+?)\*\*/.exec(line);
       if (m) out.push(`${m[1]}. ${m[2]}`);
     }
   }
