@@ -8,9 +8,7 @@ also: [merchant, liveops, splash, reviewer, producer, librarian]
 
 A tower defense (TD) game sends enemies down a fixed path and asks players to stop them by placing and upgrading towers ("units") beside it, wave after wave. On Roblox it has two big shapes: **classic TD** (a map, a co-op squad of up to four, towers bought with match cash, a long unlock tree; the Tower Defense Simulator shape) and **anime/gacha TD** (the same match loop, but towers are collectible characters pulled from rotating summon banners, with traits, levels and evolutions; the Anime Defenders, Anime Last Stand and Anime Vanguards shape). Anime TD is among the platform's biggest earners: Beebom reported Anime Vanguards passing Blox Fruits as the top-earning Roblox game [1].
 
-This page also covers hybrids: **themed TD** (gardens, toys, retro), **hero TD** (a walking hero plus towers), **reverse TD** (you send the waves) and **TD modes inside other genres**.
-
-TD looks like a spreadsheet game, and that is the trap. It lives on **readable placement** (a new player knows where a tower can go and what it will hit before paying), **a wave curve that bends at the right moment** (the first match is won; by wave 10 upgrades matter), and **a meta loop that keeps paying** (new towers, maps, modes). The engineering trap is just as real: hundreds of Humanoid enemies will melt a phone server. Section 11 shows the data-driven alternative.
+TD looks like a spreadsheet game, and that is the trap. It lives on **readable placement** (a new player knows where a tower can go and what it will hit before paying), **a wave curve that bends at the right moment** (the first match is won; by wave 10 upgrades matter), and **a meta loop that keeps paying** (new towers, maps, modes). The engineering trap is just as real: hundreds of Humanoid enemies will melt a phone server. Section 11 shows the data-driven alternative; section 12 covers hybrids (hero, reverse, themed TD).
 
 Read this page before pitching or planning any TD or TD mode, and before building enemy paths, wave spawners or placement systems in any genre. Pair it with [[02 The Core Loop]], [[03 Rarity and RNG]], [[04 Progression and Economy]], [[09 Shops and Monetization]] and [[17 Security and Anti-Cheat]].
 
@@ -155,15 +153,10 @@ Read this page before pitching or planning any TD or TD mode, and before buildin
 **Steal:** Proof the polished anime TD market is large.
 **Avoid:** Entering it without a fresh hook; incumbents have deep rosters.
 
-### Tower Defense X
-**What it does:** Classic-style TD whose beginner guide advises placing towers near the entrance and checking range first [22].
-**Steal:** Teach "kill early" placement on the first map.
-**Avoid:** Maps where one spot is always right.
-
-### Themed TDs (Garden Tower Defense, Retro Tower Defense)
-**What it does:** TD on a trending theme, with beginner guides of their own [23][24]; their systems are unverified.
-**Steal:** A theme kids love, applied to towers, enemies and map.
-**Avoid:** A theme that's only paint; towers should play differently because of it.
+### Tower Defense X and themed TDs
+**What it does:** Tower Defense X's beginner guide advises placing towers near the entrance and checking range first [22]. Themed TDs (Garden Tower Defense, Retro Tower Defense) put the loop on a trending theme [23][24]; their systems are unverified.
+**Steal:** Teach "kill early" placement on map 1; a theme kids love applied to towers, enemies and map.
+**Avoid:** Maps where one spot is always right; a theme that's only paint.
 
 ## 4. The first five minutes, second by second
 
@@ -185,8 +178,6 @@ Opening rules:
 1. **No summon, shop or daily modal before match 1 ends.**
 2. **The tutorial is the first match**, taught with world arrows and tips of ≤ 8 words.
 3. **Waves 1-5 can't be lost** even with one badly placed tower.
-4. **A second tower type by wave 6** so the player makes a real choice.
-5. **One-thumb placement on phones**, hotbar clear of the thumbstick.
 
 ## 5. Progression and economy
 
@@ -219,7 +210,6 @@ Balance check: the DPS that cumulative cash buys must kill the wave within its p
 - Studio default rates (shown on screen): Rare 70%, Epic 25%, Legendary 4.5%, Mythic 0.5%; pity Legendary 50, Mythic 400. This copies the *shape* guides describe [5][17], not any game's exact values.
 - Duplicates feed unit levels or trait currency (the Trait Crystal pattern [9]). Levels 1-50 at +2% stats per level; evolution at 50 needs materials from a specific stage, which sends players back to replay.
 - Traits: 5-8, weighted (common +10% range up to rare +50% damage); rerolls always have a free route.
-- Free-player check: ~10 summons a day in week 1, first Legendary pity inside a week.
 
 ## 6. Monetization that fits
 
@@ -288,10 +278,8 @@ Rules:
 4. **Friends join between waves** (up to 4) with the current wave's starting cash.
 5. **Damage per player and an MVP title** on the result screen.
 6. **Endless boards** (best wave per map) on ordered data stores [32][33], refreshed every 60 s, seasonal keys.
-7. **Unit stands** in the lobby show each player's best unit. Trading only with a Reviewer-approved design (scam and dupe risk).
-8. **Group bonus** +10% coins, checked on the server.
-9. **Lobby board** shows the current and next banner and new maps.
-10. **Codes** in Settings, never as a popup.
+7. **Unit stands** show each player's best unit; trading only with a Reviewer-approved design (dupe and scam risk).
+8. **Lobby board** shows the current and next banner and new maps; codes live in Settings, never a popup.
 
 ## 10. Live ops and update cadence
 
@@ -371,7 +359,7 @@ Validate type, range and ownership; never take cost, damage, reward or rarity fr
 	settings = { dmgNumbers = true, music = true },
 }
 ```
-Session-lock, autosave every 60 s, save on leave, on `BindToClose` and before teleport; `pcall` every call and respect limits [37][38].
+Session-lock; save every 60 s, on leave, on `BindToClose` and before teleport; `pcall` every call [37][38].
 
 ### Luau: the path (shared)
 ```lua
@@ -530,25 +518,8 @@ Players.PlayerRemoving:Connect(function(p) lastCall[p] = nil end)
 ```
 `pos ~= pos` is a NaN check (a Vector3 containing NaN is never equal to itself).
 
-### Luau: targeting (server)
-```lua
---!strict
-local function pickTarget(origin: Vector3, range: number, mode: string, flags: { [string]: boolean },
-	alive: { [number]: any }, path: any): any?
-	local best, bestScore = nil, -math.huge
-	for _, e in alive do
-		local def = Config.Enemies[e.kind]
-		if (def.flying and not flags.HitsFlying) or (def.hidden and not flags.HitsHidden) then continue end
-		local d = (path:positionAt(e.dist) - origin).Magnitude
-		if d > range then continue end
-		local score = if mode == "First" then e.dist elseif mode == "Last" then -e.dist
-			elseif mode == "Strongest" then e.hp else -d
-		if score > bestScore then best, bestScore = e, score end
-	end
-	return best
-end
-```
-One Heartbeat loop walks all towers, skips those before `nextFire`, picks a target, calls `EnemyService.damage`, and batches `TowerFired(towerId, enemyId)` into one event per frame for client VFX. Splash towers hit every enemy within `splashRadius` of the target. With many towers, bucket enemies by path distance.
+### Targeting (server)
+`pickTarget` loops over `EnemyService.alive`, skips flying or hidden enemies the tower can't hit, skips any whose `Path.positionAt(dist)` is out of range, and keeps the best score: First = `dist`, Last = `-dist`, Strongest = `hp`, Closest = `-distance`. One Heartbeat loop walks all towers, skips those before `nextFire`, picks a target, calls `EnemyService.damage`, and batches `TowerFired(towerId, enemyId)` into one event per frame for client VFX. Splash towers hit every enemy within `splashRadius` of the target. With many towers, bucket enemies by path distance.
 
 **Waves:** `WaveService` builds each wave from the section 5 formulas (`n(w)` entries, traits mixed in from their intro wave, spawn gap `max(0.35, 1.2 − 0.02·w)` s, a boss every 10th wave), spawns with `task.wait(gap / timeScale)`, ends the wave when all are dead or a 20 s timer runs out (skippable by vote), then pays the bonus to every player. Endless mode caps live enemies at 250 and queues the rest.
 
@@ -591,7 +562,6 @@ end
 7. **AFK room:** capped gem trickle for time spent, as Anime Defenders offers [5].
 8. **Simulator crossover:** units level from use; an index of every unit ([[Genre - Simulator]]).
 9. **Endless with mutators:** every 10 waves a server-picked mutator (fast enemies, no selling, double cash).
-10. **Convoy defense:** the base moves along a track; towers ride on it.
 
 ## 13. Failure modes
 
@@ -605,10 +575,8 @@ end
 8. **Pay-to-progress walls** on story maps.
 9. **Co-op griefing:** best spots blocked, shared cash spent by one player.
 10. **Teleport failures:** party split, data unsaved before teleport.
-11. **Gamepad-impossible placement.**
-12. **A frozen meta:** one unit tops every tier list for months.
-13. **Effects spam** on phones in late waves.
-14. **Copied IP:** real anime characters or another game's towers.
+11. **A frozen meta:** one unit tops every tier list for months.
+12. **Copied IP:** real anime characters or another game's towers.
 
 ## 14. Pitch checklist: is this genre right for us right now?
 
@@ -648,50 +616,46 @@ end
 
 1. Humanoid enemies walking waypoints with `MoveTo` [12].
 2. A reliable remote per enemy per frame instead of batched unreliable snapshots [13][14].
-3. Trusting the client's tower position or cost, or validating only the client ghost.
+3. Validating placement only on the client ghost.
 4. Range rings sized by radius (Cylinder size is a diameter).
-5. Waves tuned on PC at 2× by a designer, never on a phone at 1×.
-6. Upgrades that only change numbers.
-7. Shared team cash.
-8. A summon button with no odds screen [16]; pity stored on the client.
-9. Two scripts setting `ProcessReceipt` in one place [26].
-10. Teleporting before saving, or trusting teleport data.
-11. Banner timers from each server's own clock.
-12. Tower selection impossible on gamepad.
-13. An endless spawn queue with no live-enemy cap.
-14. Event units that never return.
+5. Waves tuned on PC at 2×, never on a phone at 1×.
+6. Pity stored on the client or reset on rejoin [16].
+7. Two scripts setting `ProcessReceipt` in one place [26].
+8. Teleporting before saving, or trusting teleport data.
+9. Banner timers from each server's own clock.
+10. An endless spawn queue with no live-enemy cap.
 
 ## References
 
 [1] Anime Vanguards surpasses Blox Fruits to become top-earning Roblox game (Beebom) — https://beebom.com/anime-vanguards-surpasses-blox-fruits-top-earning-roblox-game/amp/
-[2] Tower Defense Simulator: A Beginner's Guide (Sportskeeda) — https://www.sportskeeda.com/roblox-news/tower-defense-simulator-a-beginner-s-guide — cash from waves and mission end; Starter to Hardcore tiers; Easy 25 waves.
-[3] Anime Defenders: A Beginner's Guide (Sportskeeda) — https://www.sportskeeda.com/roblox-news/anime-defenders-a-beginner-s-guide — rarities Rare to Secret; gem summons.
-[4] TDS beginner's guide (BlueStacks, Russian) — https://www.bluestacks.com/ru/blog/game-guides/roblox/rl-tds-beginners-guide-ru.html — forgiving only early; start in co-op; do the tutorial.
-[5] Anime Defenders banners guide (DroidGamers) — https://www.droidgamers.com/guides/anime-defenders-banners-guide/ — banners rotate every few hours; pity 50/400; gem sources incl. AFK.
-[6] Anime Last Stand Units (Gamezebo) — https://www.gamezebo.com/walkthroughs/anime-last-stand-units/ — banners change through the day; summon timer.
+[2] Tower Defense Simulator: A Beginner's Guide (Sportskeeda) — https://www.sportskeeda.com/roblox-news/tower-defense-simulator-a-beginner-s-guide
+[3] Anime Defenders: A Beginner's Guide (Sportskeeda) — https://www.sportskeeda.com/roblox-news/anime-defenders-a-beginner-s-guide
+[4] TDS beginner's guide (BlueStacks, Russian) — https://www.bluestacks.com/ru/blog/game-guides/roblox/rl-tds-beginners-guide-ru.html
+[5] Anime Defenders banners guide (DroidGamers) — https://www.droidgamers.com/guides/anime-defenders-banners-guide/
+[6] Anime Last Stand Units (Gamezebo) — https://www.gamezebo.com/walkthroughs/anime-last-stand-units/
 [7] Anime Last Stand Summer Event 2024 guide (Sportskeeda) — https://www.sportskeeda.com/roblox-news/anime-last-stand-summer-event-2024-guide
 [8] Tower Defense Simulator complete beginners guide (ItemLevel) — https://itemlevel.net/tower-defense-simulator-complete-beginners-guide/
-[9] Anime Defenders Trait Tier List (Sportskeeda) — https://www.sportskeeda.com/roblox-news/anime-defenders-trait-tier-list — Trait Reroll portal; Trait Crystals.
-[10] Tower Defense Simulator modes (Bloxodes) — https://bloxodes.com/wiki/tower-defense-simulator/modes — three-wave tutorial run.
-[11] Tower Defense Simulator (Bloxodes wiki) — https://bloxodes.com/wiki/tower-defense-simulator — reading range and enemy paths.
-[12] Tower Defense: Enemy System (DevForum) — https://devforum.roblox.com/t/tower-defense-enemy-system/2667346/9 — Humanoid overhead at high NPC counts.
-[13] Reducing bandwidth of an enemy system (DevForum) — https://devforum.roblox.com/t/how-can-i-heavily-reduce-the-bandwidth-of-this-enemy-system-foundation-code/4052181 — hundreds of enemies, no Humanoids, throttled path updates.
+[9] Anime Defenders Trait Tier List (Sportskeeda) — https://www.sportskeeda.com/roblox-news/anime-defenders-trait-tier-list
+[10] Tower Defense Simulator modes (Bloxodes) — https://bloxodes.com/wiki/tower-defense-simulator/modes
+[11] Tower Defense Simulator (Bloxodes wiki) — https://bloxodes.com/wiki/tower-defense-simulator
+[12] Tower Defense: Enemy System (DevForum) — https://devforum.roblox.com/t/tower-defense-enemy-system/2667346/9
+[13] Reducing bandwidth of an enemy system (DevForum) — https://devforum.roblox.com/t/how-can-i-heavily-reduce-the-bandwidth-of-this-enemy-system-foundation-code/4052181
 [14] UnreliableRemoteEvent reference (Creator Docs) — https://create.roblox.com/docs/reference/engine/classes/UnreliableRemoteEvent
-[15] jTDF - High-Performance Tower Defense Framework (DevForum) — https://devforum.roblox.com/t/jtdf-high-performance-tower-defense-framework-parallel-luau/4061864 — 300 enemies, 50 towers, ~6 ms.
-[16] Paid random items policy — https://create.roblox.com/docs/en-us/production/monetization/paid-random-items — all outcomes, numeric odds totaling 100%.
-[17] Anime Last Stand Summon Chances and Pity System (GINX) — https://www.ginx.tv/en/anime-last-stand-summon-chances-pity-system — base rates and pity.
+[15] jTDF - High-Performance Tower Defense Framework (DevForum) — https://devforum.roblox.com/t/jtdf-high-performance-tower-defense-framework-parallel-luau/4061864
+[16] Paid random items policy — https://create.roblox.com/docs/en-us/production/monetization/paid-random-items
+[17] Anime Last Stand Summon Chances and Pity System (GINX) — https://www.ginx.tv/en/anime-last-stand-summon-chances-pity-system
 [18] TeleportOptions (engine reference) — https://create.roblox.com/docs/reference/engine/classes/TeleportOptions.md
 [19] Anime Defenders: Support Units Guide (Sportskeeda) — https://www.sportskeeda.com/roblox-news/anime-defenders-support-units-guide
-[20] Anime Last Stand Time King guide (Sportskeeda) — https://www.sportskeeda.com/roblox-news/anime-last-stand-time-king-guide-unit-overview-get — featured-unit chance; VIP summon discount.
-[21] Anime Last Stand tier list (Twinfinite) — https://twinfinite.net/guides/anime-last-stand-tier-list/ — odds cited differently over time.
-[22] Beginner's guide to Roblox Tower Defense X (Sportskeeda) — https://sportskeeda.com/roblox-news/beginner-s-guide-roblox-tower-defense-x — place near the entrance; check range.
+[20] Anime Last Stand Time King guide (Sportskeeda) — https://www.sportskeeda.com/roblox-news/anime-last-stand-time-king-guide-unit-overview-get
+[21] Anime Last Stand tier list (Twinfinite) — https://twinfinite.net/guides/anime-last-stand-tier-list/
+[22] Beginner's guide to Roblox Tower Defense X (Sportskeeda) — https://sportskeeda.com/roblox-news/beginner-s-guide-roblox-tower-defense-x
 [23] Garden Tower Defense: A Beginner's Guide (Deltia's Gaming) — https://deltiasgaming.com/?p=360791
 [24] Retro Tower Defense: A Beginner's Guide (Deltia's Gaming) — https://deltiasgaming.com/?p=367420
 [25] Private servers — https://create.roblox.com/docs/production/monetization/private-servers
-[26] Developer products — https://create.roblox.com/docs/production/monetization/developer-products — ProcessReceipt; test purchases.
+[26] Developer products — https://create.roblox.com/docs/production/monetization/developer-products
 [27] MarketplaceService.ProcessReceipt — https://create.roblox.com/docs/reference/engine/classes/MarketplaceService/ProcessReceipt
-[28] PolicyService (engine reference) — https://create.roblox.com/docs/reference/engine/classes/PolicyService.md — ArePaidRandomItemsRestricted.
-[29] Passes — https://create.roblox.com/docs/production/monetization/passes — UserOwnsGamePassAsync in a pcall.
+[28] PolicyService (engine reference) — https://create.roblox.com/docs/reference/engine/classes/PolicyService.md
+[29] Passes — https://create.roblox.com/docs/production/monetization/passes
 [30] ContextActionService reference (Creator Docs) — https://create.roblox.com/docs/en-us/reference/engine/classes/ContextActionService
 [31] GuiService (engine reference) — https://create.roblox.com/docs/reference/engine/classes/GuiService
 [32] OrderedDataStore (engine reference) — https://create.roblox.com/docs/reference/engine/classes/OrderedDataStore
@@ -701,6 +665,6 @@ end
 [36] Remote events and callbacks (Creator Docs) — https://create.roblox.com/docs/en-us/scripting/events/remote
 [37] Data stores error codes and limits (Creator Docs) — https://create.roblox.com/docs/cloud-services/data-stores/error-codes-and-limits
 [38] Data stores (Roblox creator-docs on GitHub) — https://github.com/Roblox/creator-docs/blob/main/content/en-us/cloud-services/data-stores/index.md
-[39] Welds or tweens? (DevForum) — https://devforum.roblox.com/t/welds-or-tweens/2652613 — one movement driver per enemy.
+[39] Welds or tweens? (DevForum) — https://devforum.roblox.com/t/welds-or-tweens/2652613
 
 Related: [[00 Start Here]] · [[02 The Core Loop]] · [[03 Rarity and RNG]] · [[04 Progression and Economy]] · [[05 UI and HUD]] · [[08 Mobile]] · [[09 Shops and Monetization]] · [[10 Retention and Social]] · [[12 Live Ops and Launch]] · [[13 Building It Right]] · [[16 Console and Controllers]] · [[17 Security and Anti-Cheat]] · [[Genre - RNG and Collection]] · [[Genre - Simulator]] · [[Genre - Obby]]

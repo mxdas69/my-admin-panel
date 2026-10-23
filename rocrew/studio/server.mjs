@@ -874,8 +874,8 @@ route("POST", /^\/api\/autostart$/, async (req) => {
   const file = startupFile();
   need(file, "Starting with your computer is only set up for Windows.");
   if (enabled) {
-    const bat = path.join(ROOT, "Start RoCrew.bat");
-    fs.writeFileSync(file, `@echo off\r\nrem Starts RoCrew when you sign in to Windows. Turn it off in RoCrew Settings.\r\nstart "RoCrew studio" /min cmd /c ""${bat}" nobrowser"\r\n`);
+    const vbs = path.join(ROOT, "Start RoCrew.vbs");
+    fs.writeFileSync(file, `@echo off\r\nrem Starts RoCrew (in the system tray) when you sign in to Windows. Turn it off in RoCrew Settings.\r\nstart "" wscript "${vbs}" nobrowser\r\n`);
   } else if (fs.existsSync(file)) {
     fs.unlinkSync(file);
   }

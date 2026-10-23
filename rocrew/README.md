@@ -54,7 +54,7 @@ How the automation works:
 
 ## It's an app
 
-Double-click **Start RoCrew.bat**. RoCrew opens in its own window (Edge or Chrome app mode, no browser tabs or address bar), which you can minimize like any app; the crew keeps working. You can also pin it: in that window's menu choose **Install RoCrew** to get a Start-menu and taskbar icon. The first time, a short setup walks you through your name, Claude Code, Roblox Studio, how much of your plan to use, optional extras (Roblox sign-in, Gemini key, pairing with a friend) and your first idea.
+Double-click **Start RoCrew.vbs**. RoCrew runs with no extra windows and puts an icon in the **system tray** (bottom right, by the clock): double-click it to open RoCrew, right-click → **Quit RoCrew** to close everything. Close or minimize the RoCrew window and alt-tab freely; the crew keeps working in the tray. (`Start RoCrew.bat` does the same with a visible log window, handy if something goes wrong.) RoCrew opens in its own window (Edge or Chrome app mode, no browser tabs or address bar), which you can minimize like any app; the crew keeps working. You can also pin it: in that window's menu choose **Install RoCrew** to get a Start-menu and taskbar icon. The first time, a short setup walks you through your name, Claude Code, Roblox Studio, how much of your plan to use, optional extras (Roblox sign-in, Gemini key, pairing with a friend) and your first idea.
 
 ## Test requests you can do from your phone
 
