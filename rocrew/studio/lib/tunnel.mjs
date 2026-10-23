@@ -42,7 +42,14 @@ export class Tunnel {
   }
 
   /** Download cloudflared from Cloudflare's GitHub releases into .rocrew/bin. */
-  async install() {
+  install() {
+    // One download at a time, even if the button is pressed twice.
+    this.installing ??= this.download().finally(() => (this.installing = null));
+    return this.installing;
+  }
+
+  async download() {
+    if (fs.existsSync(this.localBinary())) return this.localBinary();
     const name = DOWNLOADS[`${process.platform}-${process.arch}`];
     if (!name) throw new Error(process.platform === "darwin" ? "On a Mac, install it with: brew install cloudflared" : "No cloudflared download for this computer. Install it from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/");
     const res = await fetch(RELEASES + name, { redirect: "follow" });
@@ -52,8 +59,23 @@ export class Tunnel {
     fs.mkdirSync(this.binDir, { recursive: true });
     const tmp = `${this.localBinary()}.download`;
     fs.writeFileSync(tmp, bytes, { mode: 0o755 });
-    fs.renameSync(tmp, this.localBinary());
-    return this.localBinary();
+    // Windows antivirus scans a new .exe and locks it for a few seconds: retry, then copy.
+    for (let i = 0; i < 20; i++) {
+      try {
+        fs.renameSync(tmp, this.localBinary());
+        return this.localBinary();
+      } catch (err) {
+        if (!["EPERM", "EBUSY", "EACCES"].includes(err.code)) throw err;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+    try {
+      fs.copyFileSync(tmp, this.localBinary());
+      fs.rmSync(tmp, { force: true });
+      return this.localBinary();
+    } catch {
+      throw new Error("Windows is blocking the tunnel helper (usually the antivirus checking it). Wait a minute and press the button again.");
+    }
   }
 
   /** Start the tunnel and resolve with its https address. */
@@ -72,10 +94,14 @@ export class Tunnel {
       const onData = (chunk) => {
         log = (log + chunk.toString()).slice(-4000);
         const m = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/.exec(log);
-        if (m && !this.url) {
+        // The address is printed before Cloudflare can route to it ("Error 1033" until then):
+        // wait for a registered connection, then for the address to actually answer.
+        if (m && !this.url && /Registered tunnel connection/i.test(log)) {
           this.url = m[0];
-          clearTimeout(timer);
-          resolve(this.url);
+          waitUntilReachable(this.url).then(() => {
+            clearTimeout(timer);
+            resolve(this.url);
+          });
         }
       };
       child.stdout.on("data", onData);
@@ -110,4 +136,16 @@ export class Tunnel {
       child.kill("SIGTERM");
     }
   }
+}
+
+/** Poll the public address until Cloudflare routes it (HTTP 530 = not yet), up to about 45 s. */
+async function waitUntilReachable(url, tries = 15) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await fetch(`${url}/favicon.ico`, { signal: AbortSignal.timeout(5000) });
+      if (res.status !== 530 && res.status !== 502) return true;
+    } catch {}
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  return false;
 }

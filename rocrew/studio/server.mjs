@@ -871,12 +871,22 @@ route("POST", /^\/api\/people$/, async (req) => {
   crew.changed();
   return { people: peopleView(), lan: lanMode(), addresses: networkAddresses(), port };
 });
+// If the friends' tunnel drops, start a new one (the link changes; the Friends card shows the new one).
+let friendTunnel = false;
+const remoteOnExit = remote.tunnel.onExit;
+remote.tunnel.onExit = (code) => {
+  remoteOnExit?.(code);
+  if (!friendTunnel) return;
+  setTimeout(() => remote.tunnel.start(port).then(() => crew.changed()).catch(() => {}), 5000);
+};
+
 // One click for a link that works from any house: start (or reuse) the Cloudflare tunnel.
 route("POST", /^\/api\/people\/anywhere$/, async (req) => {
   ownerOnly(req);
   try {
     if (!remote.tunnel.find()) await remote.tunnel.install();
     await remote.tunnel.start(port);
+    friendTunnel = true;
   } catch (err) {
     throw new HttpError(502, `Couldn't make the link: ${err.message}`);
   }
