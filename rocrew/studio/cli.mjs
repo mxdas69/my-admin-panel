@@ -153,6 +153,7 @@ switch (cmd) {
       if (c.error) console.log(`${c.id}: failed — ${c.error}`);
       else console.log(`${c.id}: ${c.file}${c.score ? `  clicks ${c.score.ctr}/10, hand-made ${c.score.ai_clean}/10${c.score.textMismatch ? ", TEXT WRONG" : ""}${c.score.worst ? ` — worst: ${c.score.worst}; fix: ${c.score.fix}` : ""}` : ""}`);
     }
+    if (r.freeMode) console.log("Free mode: Gemini's image model isn't available on this key, so these are your Studio captures graded and finished with ffmpeg (no AI).");
     if (r.styleFrom) console.log(`Style references (top games right now): ${r.styleFrom}`);
     console.log(`\nSent to the owner's Review as "${r.group}".${r.sheet ? ` Phone-size sheet: ${r.sheet}` : ""}${r.finished ? "" : " (ffmpeg isn't installed, so no resizing, title text or scores.)"}`);
     break;

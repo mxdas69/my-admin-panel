@@ -119,6 +119,23 @@ function styleNote(own, style) {
   return `${range} current top Roblox ${own ? "thumbnails" : "store images"}, for style only: match their energy, saturation, contrast, exaggeration and how boldly they frame one subject. Never copy their characters, logos, text or game content; everything shown must come from this game${own ? " (image 1)" : ""}.`;
 }
 
+// Free mode: no image AI. The Studio capture is graded with ffmpeg (colour, contrast,
+// sharpening, vignette, crop) into a few looks, then gets real text like the AI path.
+const LOOKS = [
+  "eq=saturation=1.38:contrast=1.12:brightness=0.03,colorbalance=rs=0.07:gs=0.02:bs=-0.06,unsharp=5:5:0.9,vignette=PI/5",
+  "eq=saturation=1.32:contrast=1.16,colorbalance=rs=-0.04:bs=0.08,unsharp=5:5:0.9,vignette=PI/5",
+  "crop=iw*0.74:ih*0.74,eq=saturation=1.42:contrast=1.14:brightness=0.02,unsharp=5:5:1.0,vignette=PI/4.5",
+  "eq=saturation=1.6:contrast=1.22:gamma=0.96,unsharp=7:7:1.1,vignette=PI/4",
+];
+
+async function gradeCapture(src, out, look, square) {
+  const crop = square ? "crop='min(iw,ih)':'min(iw,ih)'," : "";
+  await run("ffmpeg", ["-y", "-loglevel", "error", "-i", src, "-vf", crop + look, out]);
+  return out;
+}
+
+export const isQuotaError = (msg) => /\b429\b|quota|RESOURCE_EXHAUSTED|billing/i.test(String(msg));
+
 export function parseJudge(text) {
   const out = {};
   for (const line of String(text).split("\n")) {
@@ -154,7 +171,9 @@ export async function makeStoreArt({ apiKey, imageModel, textModel, kind, varian
   const ending = refs.length ? `${ENDINGS.edit} ${square ? ENDINGS[kind] : ""}` : ENDINGS[kind];
   const aspect = square ? "1:1" : "16:9";
 
-  const raw = await Promise.all(
+  // No key, or Google's image model has no free quota: grade the real Studio captures instead.
+  let freeMode = !apiKey && refs.length > 0;
+  let raw = freeMode ? [] : await Promise.all(
     list.map(async (line, i) => {
       const id = LETTERS[i];
       try {
@@ -165,10 +184,16 @@ export async function makeStoreArt({ apiKey, imageModel, textModel, kind, varian
       }
     }),
   );
+  const canFinish = await hasFfmpeg();
+  if (!freeMode && !raw.some((r) => r.raw) && refs.length && canFinish && isQuotaError(raw[0]?.error)) freeMode = true;
+  if (freeMode) {
+    if (!refs.length) throw new Error("Free mode needs a Studio capture: pass --ref with a screenshot of the staged shot.");
+    if (!canFinish) throw new Error("Free mode needs ffmpeg installed.");
+    raw = await Promise.all(list.map(async (line, i) => ({ id: LETTERS[i], line: `${line} (graded Studio capture)`, raw: await gradeCapture(refs[0], path.join(dir, `${kind}_${LETTERS[i]}_raw.png`), LOOKS[i % LOOKS.length], square) })));
+  }
   const ok = raw.filter((r) => r.raw);
   if (!ok.length) throw new Error(`Gemini made no images: ${raw[0]?.error ?? "unknown error"}`);
 
-  const canFinish = await hasFfmpeg();
   for (const r of ok) {
     r.file = canFinish ? await finish(r.raw, path.join(dir, `${kind}_${r.id}.${square ? "png" : "jpg"}`), square ? "icon" : "thumb", kind === "pass" ? "" : text, fmt?.labels ?? []).catch(() => r.raw) : r.raw;
   }
@@ -178,7 +203,7 @@ export async function makeStoreArt({ apiKey, imageModel, textModel, kind, varian
   if (canFinish) {
     sheet = await contactSheet(ok.map((r) => r.file), square ? "icon" : "thumb", path.join(dir, `${kind}_sheet.png`)).catch(() => null);
     if (sheet) {
-      const verdict = await ask({ apiKey, model: textModel, prompt: JUDGE, images: [sheet] }).catch(() => "");
+      const verdict = !apiKey ? "" : await ask({ apiKey, model: textModel, prompt: JUDGE, images: [sheet] }).catch(() => "");
       scores = parseJudge(verdict);
     }
   }
@@ -186,5 +211,5 @@ export async function makeStoreArt({ apiKey, imageModel, textModel, kind, varian
     r.score = scores[r.id] ?? null;
     if (text && r.score?.text_seen && r.score.text_seen.replace(/\W/g, "").toUpperCase() !== text.replace(/\W/g, "").toUpperCase()) r.score.textMismatch = true;
   }
-  return { kind, dir, sheet, candidates: raw.map((r) => ok.find((x) => x.id === r.id) ?? r), finished: canFinish };
+  return { kind, dir, sheet, freeMode, candidates: raw.map((r) => ok.find((x) => x.id === r.id) ?? r), finished: canFinish };
 }

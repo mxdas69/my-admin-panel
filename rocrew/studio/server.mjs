@@ -502,7 +502,7 @@ route("POST", /^\/api\/store-art$/, async (req) => {
   const b = await readJson(req);
   const kind = ["icon", "pass"].includes(b.kind) ? b.kind : "thumb";
   const cfg = config.get().gemini;
-  need(cfg.apiKey, "Add a Gemini API key in Settings first.");
+  need(cfg.apiKey || (b.refs ?? []).length, "Pass a Studio capture with --ref (free mode), or add a Gemini key in Settings.");
   const game = b.game && store.data.games.find((g) => g.slug === b.game);
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
   const dir = inside(ROOT, game ? path.join("games", game.slug, "art", `${kind}s-${stamp}`) : path.join(".rocrew", "media", `${kind}s-${stamp}`));
@@ -539,7 +539,7 @@ route("POST", /^\/api\/store-art$/, async (req) => {
   crew.feed(from, "owner", `${ready.length} ${kind === "icon" ? "icons" : "thumbnails"} ready to review`);
   crew.changed();
   return {
-    styleFrom, dir: rel(set.dir), sheet: set.sheet ? rel(set.sheet) : null, finished: set.finished, group,
+    freeMode: set.freeMode, styleFrom, dir: rel(set.dir), sheet: set.sheet ? rel(set.sheet) : null, finished: set.finished, group,
     candidates: set.candidates.map((c) => ({ id: c.id, variant: c.line, file: c.file ? rel(c.file) : null, error: c.error ?? null, score: c.score ?? null })),
   };
 });
