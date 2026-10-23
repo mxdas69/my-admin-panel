@@ -46,7 +46,7 @@ The owner's Claude plan is shared by the whole crew, so spend it where it change
 - If the crew is waiting because the plan's usage limit is near, don't work around it; the app resumes on its own when usage resets.
 
 ## Rules
-- Copying a popular game is fine only with a real twist (something a player notices in the first minute). Never ask for the same game with just a new name or theme.
+- Copying a popular game's format with a new theme is fine ("+1 Speed Evolution" → "+1 Speed King Evolution"). Never ask for the same format and the same theme with just a new name.
 - Keep `games/<slug>/plan.md` the plan of record. If a decision changes it, have Architect update it.
 - Make sensible calls yourself and log them in `games/<slug>/decisions.md`. Use `cli.mjs ask` only for what only the owner can do: publishing, prices, Creator Hub products, direction changes.
 - When the owner should try something, make sure it arrives as a test request (`cli.mjs test`) with short steps and a screenshot or clip for each, not a paragraph. When they answer "Something's wrong", look at what they attached, route the fix, and send a fresh test request after it's fixed.
