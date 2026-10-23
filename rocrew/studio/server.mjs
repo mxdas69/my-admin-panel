@@ -482,7 +482,7 @@ async function explainTask(t) {
   let text = "";
   if (cfg.gemini.apiKey) text = await Promise.race([askGemini({ apiKey: cfg.gemini.apiKey, model: cfg.gemini.textModel, prompt }), new Promise((r) => setTimeout(() => r(""), 30000))]).catch(() => "");
   if (!text) {
-    const res = await runClaude({ command: cfg.claudeCommand, cwd: os.tmpdir(), prompt, model: "haiku", effort: "low", permissionMode: "safe", allowedTools: [], timeoutMs: 90000 }).done;
+    const res = await runClaude({ command: cfg.claudeCommand, cwd: os.tmpdir(), prompt, model: "haiku", effort: "low", permissionMode: "safe", allowedTools: [], timeoutMs: 90000, onEvent: usageEvent }).done;
     text = res.ok ? res.text : "";
   }
   if (!text.trim() || /permission|denied|couldn't read|can't read|cannot read|paste (those|them)/i.test(text)) throw new Error("Couldn't write the explanation right now.");
@@ -887,6 +887,19 @@ route("DELETE", /^\/api\/people\/([\w]+)$/, (req, url, [id]) => {
   store.data.people = (store.data.people ?? []).filter((p) => p.id !== id);
   crew.changed();
   return { people: peopleView() };
+});
+
+// ---------- plan usage ----------
+
+// Claude Code only reports plan usage while it runs, so the meter freezes when the crew is idle.
+const usageEvent = (e) => e.type === "usage" && crew.recordUsage(e.info);
+let usageRefresh = null;
+route("POST", /^\/api\/usage\/refresh$/, async (req) => {
+  ownerOnly(req);
+  // The smallest possible run (Haiku, no tools, a one-word reply) just to read the live numbers.
+  usageRefresh ??= runClaude({ command: config.get().claudeCommand, cwd: os.tmpdir(), prompt: "Reply with OK.", model: "haiku", effort: "low", permissionMode: "safe", allowedTools: [], timeoutMs: 60000, onEvent: usageEvent }).done.finally(() => (usageRefresh = null));
+  await usageRefresh;
+  return { usage: store.data.usage ?? null };
 });
 
 // ---------- Remote Control ----------

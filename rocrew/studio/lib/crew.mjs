@@ -170,7 +170,7 @@ export class Crew extends EventEmitter {
   // ---------- plan usage ----------
 
   recordUsage(info) {
-    const win = (w) => (w ? { pct: Math.round((w.utilization ?? 0) * 100), resetsAt: w.resetsAt ? w.resetsAt * 1000 : null } : null);
+    const win = (w) => (w ? { pct: Math.round((w.utilization ?? 0) > 1 ? w.utilization : (w.utilization ?? 0) * 100), resetsAt: w.resetsAt ? w.resetsAt * 1000 : null } : null);
     const u = info.unifiedWindows ?? {};
     const fallback = info.rateLimitType && info.utilization !== undefined ? { utilization: info.utilization, resetsAt: info.resetsAt } : null;
     const prev = this.db.usage ?? {};

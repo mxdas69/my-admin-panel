@@ -129,9 +129,11 @@ function untilText(ts) {
 function usageBars(u) {
   if (!u || (!u.fiveHour && !u.week)) return "";
   const ceiling = S.state.usageCeilingPct ?? 90;
-  const bar = (label, w) =>
+  // A window whose reset time has passed is back to 0, even if no run has reported it yet.
+  const fresh = (w) => (w && w.resetsAt && Date.now() >= w.resetsAt ? { pct: 0, resetsAt: null } : w);
+  const bar = (label, raw, w = fresh(raw)) =>
     w ? `<div class="usage-row"><span>${label}</span><span class="meter"><span style="width:${Math.min(100, w.pct)}%;background:${w.pct >= ceiling ? "var(--red)" : w.pct >= 70 ? "var(--amber)" : "var(--green)"}"></span></span><b>${w.pct}%</b>${w.resetsAt ? `<small class="faint">resets in ${untilText(w.resetsAt)}</small>` : ""}</div>` : "";
-  return bar("5-hour", u.fiveHour) + bar("Week", u.week);
+  return bar("5-hour", u.fiveHour) + bar("Week", u.week) + (u.at ? `<div class="usage-at"><small class="faint">Updated ${ago(u.at)}</small>${isOwner() ? `<button class="link-btn" data-act="usage-refresh" title="Check now (a tiny Haiku run, almost no usage)">${icon("refresh")}</button>` : ""}</div>` : "");
 }
 
 const counts = () => {
@@ -1633,6 +1635,13 @@ const ACTIONS = {
     const ids = [...document.querySelectorAll("[data-propose]")].map((b) => b.dataset.propose);
     document.querySelector(".approve-list")?.closest(".card")?.remove();
     if (await attempt(() => api("POST", "/api/tasks/decide", { ids, approve: false }), "Skipped. The Lead will be told.")) await refresh();
+  },
+  "usage-refresh": async (el) => {
+    el.disabled = true;
+    el.classList.add("spin");
+    if (await attempt(() => api("POST", "/api/usage/refresh"))) await refresh();
+    el.disabled = false;
+    el.classList.remove("spin");
   },
   "update-now": async (el) => {
     el.disabled = true;
