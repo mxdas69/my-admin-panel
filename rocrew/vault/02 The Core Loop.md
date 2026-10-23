@@ -8,7 +8,7 @@ also: [frame, librarian, scenic, kid-tester, merchant, liveops, reviewer]
 
 The core loop is the cycle a player repeats for most of their time in the game: do the main action, get a reward, spend it on something that makes the action stronger, and do the action again, bigger. This chapter covers how to state the loop in one sentence, how to build its four layers (seconds, minutes, a session, days), how to make every step of it feel good with feedback ("juice"), how to lay out its stations in the world, how to pace rewards and upgrades, how to measure whether it works and how to diagnose and fix it when it doesn't. It ends with how the loop looks in each genre and the Luau to build it.
 
-A satisfying loop survives rough edges; a broken one cannot be rescued by more content, better UI or monetization. Roblox's onboarding guidance centers on getting players to the fun quickly [2], and the fun is the loop: [[01 The First Five Minutes]] is the loop taught slowly, [[04 Progression and Economy]] is the loop's numbers, [[10 Retention and Social]] is the loop's long layer. Roblox's analytics overview names D1 retention and average session time as the first metrics to look at [4]; a weak micro loop shows up as short sessions, and a weak long loop as poor D7 and D30 [4].
+A satisfying loop survives rough edges; a broken one cannot be rescued by more content, better UI or monetization. Roblox's game-design guides [1] start from the same place: the experience has to be fun quickly. Roblox's onboarding guidance centers on getting players to the fun quickly [2], and the fun is the loop: [[01 The First Five Minutes]] is the loop taught slowly, [[04 Progression and Economy]] is the loop's numbers, [[10 Retention and Social]] is the loop's long layer. Roblox's analytics overview names D1 retention and average session time as the first metrics to look at [4]; a weak micro loop shows up as short sessions, and a weak long loop as poor D7 and D30 [4].
 
 Read this chapter first when pitching (Pulse and Lead must be able to write the loop sentence), when planning (Architect puts the sentence at the top of `plan.md` and names a mechanic for each layer), when building the main action (Builder) and its feedback (Builder, Frame, Librarian), when tuning (Balance) and in every playtest (Playtest runs the three-question test). Re-read it before adding any feature: if a feature does not strengthen one step of the loop, it waits.
 
@@ -20,7 +20,7 @@ Timings and counts in this chapter are this studio's design targets unless a sou
 
 1. **Every game has one loop sentence with one main verb, written before anything is built.**
    Why: a team that cannot state the loop builds features that pull in different directions. One main verb means one thing the player gets better at.
-   How: template: "Players **[verb] [thing]** to earn **[reward]**, which they spend on **[upgrade]** so they can **[bigger verb / new place]**." Put it on line 1 of `plan.md`. Reviewer rejects plans with two sentences or no sentence. Example from guide descriptions of Grow a Garden: players buy seeds, plant them, and sell the harvest for money to buy more and better seeds [12][13][14].
+   How: template: "Players **[verb] [thing]** to earn **[reward]**, which they spend on **[upgrade]** so they can **[bigger verb / new place]**." Put it on line 1 of `plan.md`. Reviewer rejects plans with two sentences or no sentence. Example from guide descriptions of Grow a Garden: players buy seeds, plant them, and sell the harvest for money to buy more and better seeds [12][13][14][16][17].
    Done right: "Players break crystals to earn gems, which they spend on pickaxes and backpacks so they can break rarer crystals in new caves."
    Done wrong: "An open-world adventure with pets, building, trading, racing and minigames."
 
@@ -38,7 +38,7 @@ Timings and counts in this chapter are this studio's design targets unless a sou
 
 4. **The first thing a player touches is the main verb, and it is the most fun thing in the game.**
    Why: Unity's FTUE advice is that the first thing players touch should be the most engaging mechanic [8]. If the main verb is dull, every later layer is built on a dull base.
-   How: prototype the micro loop alone in an empty baseplate before any zones, pets or shops. It must be fun for 3 minutes with nothing else in the game. Use the juice spec below.
+   How: benchmarks of successful mobile FTUEs found they get players playing as quickly as possible [10], which only helps if what they play is fun. Prototype the micro loop alone in an empty baseplate before any zones, pets or shops. It must be fun for 3 minutes with nothing else in the game. Use the juice spec below.
    Done right: the team keeps hitting crystals in the empty prototype for fun.
    Done wrong: "it'll be fun once we add the pets."
 
@@ -57,7 +57,7 @@ Timings and counts in this chapter are this studio's design targets unless a sou
    Done wrong: tap → nothing until the server answers, then everything at once.
 
 7. **Every action has at least three feedback channels, and every reward at least four.**
-   Why: one channel is easy to miss; layered feedback is what makes a simple click feel good.
+   Why: one channel is easy to miss; layered feedback is what makes a simple click feel good. Instant rewards are a standard engagement tool in mobile onboarding [11], and early positive feedback keeps new players engaged [38].
    How: action = animation + sound + particle. Reward = sound + particles + floating number + counter pop, plus an icon flying to the counter for currency. Specs in "Juice spec".
    Done right: swing, tink, sparks; then coin jingle, "+5", coin icon flies to a bouncing counter.
    Done wrong: the counter changes and nothing else happens.
@@ -70,7 +70,7 @@ Timings and counts in this chapter are this studio's design targets unless a sou
 
 9. **Feedback escalates with value: bigger rewards get bigger, louder, longer effects.**
    Why: escalation teaches value without words and makes rare moments memorable.
-   How: map value tiers to effects: normal (+N, 12 particles, small sound), crit/bonus (gold "+N!", 25 particles, brighter sound, 0.1 s camera shake of 0.2 studs), rare drop (rarity color, 40 particles, unique sound, 0.8 s), legendary (screen flash, 60+ particles, server message). Use the tier colors from [[03 Rarity and RNG]].
+   How: map value tiers to effects: normal (+N, 12 particles, small sound), crit/bonus (gold "+N!", 25 particles, brighter sound, 0.1 s camera shake of 0.2 studs), rare drop (rarity color, 40 particles, unique sound, 0.8 s), legendary (screen flash, 60+ particles, light rays from a Beam [35], a short tier-colored Highlight [36], server message). Use the tier colors from [[03 Rarity and RNG]].
    Done right: a normal hit is a tink; a crit is a gold burst; a rare drop stops the eye.
    Done wrong: a legendary drop with the same effect as a common.
 
@@ -158,7 +158,7 @@ Timings and counts in this chapter are this studio's design targets unless a sou
 
 23. **Quests guide the loop with small concrete counts near the quest giver.**
    Why: quests turn the loop into named goals with an extra reward, and point the player at the next target type.
-   How: quest = verb + count + target + reward, e.g. "Defeat 5 bandits". Blox Fruits guides describe the first quests asking new players to defeat five bandits or five trainees near the quest giver [23][24]. Counts start at 3-5, rise slowly; quest rewards pay toward the next upgrade, not past it.
+   How: quest = verb + count + target + reward, e.g. "Defeat 5 bandits". Blox Fruits guides describe the first quests asking new players to defeat five bandits or five trainees near the quest giver [23][24]. Quests also teach each new target type at the moment it matters, which is contextual teaching [9]. Counts start at 3-5, rise slowly; quest rewards pay toward the next upgrade, not past it.
    Done right: "Break 20 gold crystals → 500 coins" in a zone with gold crystals.
    Done wrong: "Collect 10,000 of something that doesn't exist in this zone".
 
@@ -202,7 +202,7 @@ Timings and counts in this chapter are this studio's design targets unless a sou
 
 30. **Juice fits a phone's budget: at most ~60 particles per burst, one sound per category at a time, and effects pooled.**
    Why: most players are on phones ([[08 Mobile]]); a loop that stutters stops being fun.
-   How: reuse one ParticleEmitter per effect and call `Emit(n)` instead of creating new emitters; cap floating numbers at ~8 on screen (merge extras into one "+N"); throttle hit sounds to one every 50 ms; disable camera shake in a settings toggle. Profile with the MicroProfiler on a low-end device profile.
+   How: reuse one ParticleEmitter per effect and call `Emit(n)` instead of creating new emitters; cap floating numbers at ~8 on screen (merge extras into one "+N"); throttle hit sounds to one every 50 ms; disable camera shake in a settings toggle. Profile with the MicroProfiler and check layout and feel on phone profiles in the Device Simulator [39].
    Done right: 30 hits per second still run smoothly on a small phone.
    Done wrong: each hit creates a new emitter, a new sound and a new BillboardGui that are never destroyed.
 

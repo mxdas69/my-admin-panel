@@ -39,10 +39,10 @@ Start it with `node studio/server.mjs` and open **http://localhost:4600**.
 - **Review** — screenshots, renders and icons the agents want your opinion on. Approve, ask for changes (with a note), or reject; the agent picks up your verdict.
 - **Games** — each game's open work, pipeline, files (plan, economy, reports, art) and live Roblox numbers.
 - **Pitches** — game ideas Pulse found in the charts. Nothing gets built until you approve one.
-- **Market** — Roblox charts with rank moves between snapshots, a reference corpus, benchmarks and breakout games.
 - **Library** — models, icons and sounds with their Roblox ids, plus reusable game systems.
 - **Vault** — the knowledge the agents study before they build (also an Obsidian vault).
-- **Settings** — Claude Code, Studio, Blender, Gemini and Open Cloud connections, which model each agent uses, your usage limit, friends, and how much the crew may do alone.
+- **Market** — ideas first: genres where young games are winning, breakouts, every Roblox chart, and a deep dive on any game (players over 14 days, pass prices, badges, similar games).
+- **Settings** — Claude Code, Studio, Blender, Gemini and Open Cloud connections, Roblox sign-in, Remote Control, which model each agent uses, your usage limit, friends, and how much the crew may do alone.
 
 How the automation works:
 
@@ -62,6 +62,10 @@ When an agent needs you to try something, it doesn't send a wall of text. You ge
 
 Your answer and anything you attach go back to the Lead, who routes the fix and sends you a fresh test when it's done. Videos you upload also reach the agents as a frame sheet so they can see what happened.
 
+## Store art that gets clicked
+
+Splash poses your real characters in Studio, captures the shot, and runs one command (`store-art`) that has Gemini finish the capture in four variants, sets the title text with a real font (so it's never misspelled), sizes everything for Roblox, scores each one at phone size for "would a kid tap this?" and "does it look hand-made?", and sends you the set in Review. You pick; then Roblox's thumbnail test picks the winner. Because the look comes from your actual game, it doesn't have the AI look players dislike, and it costs Claude almost nothing.
+
 ## Saving your Claude plan's usage
 
 Every agent run counts toward your Claude plan (Max included), so RoCrew spends Opus where it changes the result and lighter models elsewhere. Pick a preset in **Settings → Models and usage**:
@@ -73,9 +77,36 @@ Every agent run counts toward your Claude plan (Max included), so RoCrew spends 
 | **Save usage** | Lead, Builder | Pulse, Architect, Librarian, Frame, Scenic, Balance, Splash, Reviewer, Merchant | Playtest, Kid Tester, Liveops, Producer |
 | **Pick per agent** | you choose | | |
 
+The vault is huge (over a million characters), but agents never load whole pages: they read a page's **card** (its rules as one-liners plus its checklist, about a tenth of the page) and pull only the sections a task needs. Reading whole vault pages is blocked for crew runs.
+
 On top of that, the Lead marks quick, mechanical tasks `small` (one model lighter, low effort) and hard ones `big` (Opus, extra thinking). If Opus is busy, a run falls back to Sonnet instead of failing.
 
 The sidebar shows your 5-hour and weekly usage as Claude Code reports it. When either passes **Stop new work at** (90% by default), agents wait until it resets and pick up on their own; messages you send the Lead still go through. If a run hits the limit anyway, its task goes back in the queue instead of failing.
+
+## Remote Control (mxdas and Othman)
+
+Each of you runs RoCrew on your own PC. Pair once, then either of you can share your studio live with the other.
+
+1. **Pair (once).** One of you opens **Settings → Remote Control** and presses **Make a pair code**. The other pastes that code in the same place and presses **Pair**. Each app now shows the other's name.
+2. **Share.** Whoever wants to share turns on **Share my studio live**. The first time, press **Install it** for Cloudflare's free tunnel helper (about 40 MB).
+3. **Join.** The other person's RoCrew pops up "*name* wants you in their studio". **Join now** takes them straight to the host's Lead chat. They see everything live and can do everything except change Settings, while it all runs on the host's PC (and the host's Claude plan).
+4. **Send it again** by turning the switch off and on. **Turning it off** disconnects them at once.
+5. **To leave**, press **Leave** in the bar at the top, or close the tab and open RoCrew again.
+
+Requests are encrypted with your pair code and pass through a free public relay (ntfy.sh), so only your two apps can read them. Each share uses a fresh one-time key that dies when sharing is turned off.
+
+## Signing the crew in to Roblox
+
+**Settings → Roblox account → Sign in to Roblox** opens Edge or Chrome on this PC with a separate RoCrew profile. Sign in there (with your 2-step code if asked) and close the window. It stays signed in.
+
+After that, Liveops and Merchant can read your game's retention, funnels and money on the Creator Hub, and set up game passes and products for you. The browser runs hidden with the sound off; turn on **Show the browser while agents use it** to watch and take over. The sign-in stays in `.rocrew/browser` on your PC and is never sent anywhere; agents can't open those files, and they're told never to spend or trade Robux or change account settings.
+
+## Never losing work
+
+- Saves are written safely with a backup copy, so a crash or power cut loses at most a second.
+- If the app stops mid-task, the task picks up where it stopped when RoCrew starts again (it resumes the same Claude conversation).
+- `Start RoCrew.bat` restarts RoCrew by itself if it ever stops unexpectedly. Turn on **Settings → Start RoCrew when I turn on my PC** so it comes back after a restart.
+- Use **Team Create** in Roblox Studio so every change in the place is saved to Roblox's cloud straight away.
 
 ## Making games with a friend
 

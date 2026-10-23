@@ -38,17 +38,19 @@ Everything goes through the CLI. Run it from the project root:
 
 ```
 node studio/cli.mjs status                                   # games, open tasks, what waits on the owner
-node studio/cli.mjs task add --agent builder --title "…" --brief "…" --game <slug> [--after t3,t4] [--size small|big]
+node studio/cli.mjs task add --agent builder --title "…" --brief "…" --game <slug> [--after t3,t4] [--size small|big] [--browser yes]
 node studio/cli.mjs ask --title "…" --body "…"                # a "Needs you" question for the owner
 node studio/cli.mjs test --title "Try the shop on your phone" --steps "Open the game|Tap Shop|Buy the small pack" --media s1.png,s2.png,s3.png
                                                              # ask the owner to try something (see "Asking the owner to test")
 node studio/cli.mjs clip --images s1.png,s2.png,s3.png --out games/<slug>/media/how-to-test.mp4   # turn step screenshots into a short video
 node studio/cli.mjs review --file <png|jpg|mp4> --question "…" --title "…"
+node studio/cli.mjs store-art icon|thumb --ref <captures> --variants "A: …|B: …|C: …|D: …" [--text "2 WORDS"]   # Splash: store art
 node studio/cli.mjs image --prompt "…" --out games/<slug>/art/icon.png --aspect 1:1 --review "Use this icon?"
 node studio/cli.mjs gemini --prompt "…" [--image a.png]       # second opinion from Gemini
 node studio/cli.mjs asset add --kind model --name "…" --roblox-id 123 --tags a,b
 node studio/cli.mjs system add --name "…" --summary "…" --path games/<slug>/…
-node studio/cli.mjs market --refresh                          # Roblox charts, rank moves, breakouts
+node studio/cli.mjs market                                    # openings by genre, breakouts, rank moves (auto-refreshed every 3 h)
+node studio/cli.mjs market game <universeId>                  # one game: players over 14 days, prices, badges, similar games
 node studio/cli.mjs say --to lead "…"                         # short note on the team feed
 node studio/cli.mjs vault card <page>                         # read the vault in small pieces (see "The vault")
 node studio/cli.mjs help
@@ -106,6 +108,10 @@ games/<slug>/
   decisions.md    every call made without the owner, with the reason
 vault/            the knowledge vault — read the pages your role lists before you start
 ```
+
+## The Roblox browser
+
+When the owner has signed the crew in to Roblox (Settings → Roblox account), Liveops and Merchant tasks, and any task queued with `--browser yes`, get a browser signed in to the owner's account (the `roblox-browser` tools). Use it for the Creator Hub: analytics (retention, funnels, engagement, monetization), game passes and developer products, thumbnails. Read pages as text snapshots rather than screenshots. Accept cookie banners yourself. Never spend or trade Robux, buy anything, change account or security settings, or message anyone. If Roblox asks to sign in again or for a code, ask the owner.
 
 ## Working while the owner is away
 

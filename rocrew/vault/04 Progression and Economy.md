@@ -6,7 +6,7 @@ also: [lead, pulse, frame, playtest, producer, kid-tester]
 
 # 04 Progression and Economy
 
-Progression is how fast the game hands out new goals; the economy is the plumbing that controls that speed: currencies, where they come from (sources), where they go (sinks), what things cost (curves), how multipliers stack, how prestige resets work, and how all of it is simulated before playtests and measured after launch. Too fast and players run out of things to want; too slow and they hit a wall. Either way they leave.
+Progression is how fast the game hands out new goals; the economy is the plumbing that controls that speed: currencies, where they come from (sources), where they go (sinks), what things cost (curves), how multipliers stack, how prestige resets work, and how all of it is simulated before playtests and measured after launch. Too fast and players run out of things to want; too slow and they hit a wall. Either way they leave. Roblox's game-design guides [5] and its onboarding guidance [6] both measure the first minutes by whether players come back, and pacing is what those minutes are made of.
 
 The economy decides the shape of every session. It sets when the first upgrade lands ([[01 The First Five Minutes]]), how often the short loop pays out ([[02 The Core Loop]]), how long rare rolls take ([[03 Rarity and RNG]]), and what the shop can fairly sell ([[09 Shops and Monetization]]). Roblox's analytics overview points to D1 retention and session time first and D7/D30 for long-term return [3]; walls show up as sessions that end at the same point for everyone, and inflation shows up as prices that stop mattering.
 
@@ -97,7 +97,7 @@ All curves, targets and ratios here are this studio's starting points to tune wi
 13. **Price zone gates and milestones by time-to-afford at the expected income at that point, not by round numbers.**
    Why: a "nice" number like 2,500 can be a 20-minute goal or a 10-second one depending on income. Only time tells you what the player feels.
    How: `gateCost = expectedIncomePerSecond(targetTime) × secondsOfIncome`, where secondsOfIncome is 180-480 for zone gates (rule of thumb). Get expected income from the sim at the target time. Worked example in "Worked example: the sim catches a mispriced gate".
-   Done right: "Desert target minute 8; sim income at minute 8 ≈ 200/s; gate = 200 × 300 = 60,000."
+   Done right: "Desert target minute 8; sim income at minute 5 ≈ 155/s; gate ≈ 155 × 190 s ≈ 30,000; the sim reaches it at 8:03."
    Done wrong: Desert at 2,500 when the player earns 200/s by then.
 
 14. **Show the next three prices of an upgrade track, rounded to 3 significant digits.**
@@ -121,7 +121,7 @@ All curves, targets and ratios here are this studio's starting points to tune wi
    Done wrong: no targets, so a 40-minute zone 2 ships unnoticed.
 
 17. **The first upgrade lands at 45-90 s, early upgrades every 30-90 s, and there is always a goal reachable within about 10 minutes.**
-   Why: early fast rewards teach the loop; a reachable goal at every moment keeps the player in the session ([[02 The Core Loop]]).
+   Why: early fast rewards teach the loop; a reachable goal at every moment keeps the player in the session ([[02 The Core Loop]]). Instant rewards and progress tracking are standard early-engagement tools [29].
    How: price the first upgrade from the first goal's reward ([[01 The First Five Minutes]]); fill gaps over ~4 minutes in the first hour with small upgrades, quests or cosmetics.
    Done right: the sim's longest gap in the first hour is 3.5 minutes.
    Done wrong: a 12-minute gap at minute 20 with nothing affordable.
@@ -232,7 +232,7 @@ All curves, targets and ratios here are this studio's starting points to tune wi
 
 34. **Robux sells time and convenience, not first-session power, and paid multipliers sit inside the capped categories.**
    Why: pay-to-win drives away free players, who make up most of every server and are the audience paying players want to show off to. Adopt Me guides describe a Robux option that hatches eggs immediately instead of waiting through objectives [25][31]: speed, not a different outcome.
-   How: game passes like 2x coins add to the boost category (capped, Rule 27); Developer Products sell boosts, skips and premium currency; no Robux-only zone gates; check pass ownership on the server with `MarketplaceService:UserOwnsGamePassAsync` and cache it. Pricing ladders live in [[09 Shops and Monetization]].
+   How: starter offers are studied as part of the first experience [28], so keep them out of the first minutes ([[01 The First Five Minutes]]). Game passes like 2x coins add to the boost category (capped, Rule 27); Developer Products sell boosts, skips and premium currency; no Robux-only zone gates; check pass ownership on the server with `MarketplaceService:UserOwnsGamePassAsync` and cache it. Pricing ladders live in [[09 Shops and Monetization]].
    Done right: a 2x coins pass that adds +1 to the boost category, with the total still capped.
    Done wrong: a pass that multiplies everything by 10 and skips zones.
 
@@ -371,7 +371,9 @@ Running the greedy sim on the starting Config (base income 1/s; Shovel +1/s per 
 | 20 min | 278/s | 97 | Gaps ~1-2 min |
 | 60 min | 351/s | 120 | ~46K coins unspent: maxed-out cheap levels, nothing left worth buying |
 
-Two problems show up at once. First, the Desert gate at 2,500 costs about 11 seconds of income at minute 10, so it isn't a milestone (Rule 13): at ~200/s, five minutes of income is about 60,000, which is where a zone gate belongs. Second, coins pile up after minute 30 because the upgrade tracks flatten and there's no sink (Rules 8, 11): add the next zone's upgrades and an egg priced at a few minutes of that zone's income. The first upgrade at 15 s is earlier than the 45-90 s target (Rule 17) because this model has passive base income; in an active-action game the first buy comes from the first goal's reward instead.
+Two problems show up at once. First, the Desert gate at 2,500 costs about 11 seconds of income at minute 10, so it isn't a milestone (Rule 13): at ~150-200/s, 3-5 minutes of income is roughly 30,000-60,000, which is where a zone gate belongs. Second, coins pile up after minute 30 because the upgrade tracks flatten and there's no sink (Rules 8, 11): add the next zone's upgrades and an egg priced at a few minutes of that zone's income. The first upgrade at 15 s is earlier than the 45-90 s target (Rule 17) because this model has passive base income; in an active-action game the first buy comes from the first goal's reward instead.
+
+**After retuning (Config v2 in "Luau"):** Desert 30,000 (x2), Snow 200,000 (x4), rebirth at 400,000 with cost x2 and +1 multiplier per rebirth, and a sim bot that starts saving when a gate is within 5 minutes of income. This studio's run gave: first buy 15 s, Desert at 8:03, Snow at 24:52, rebirth ready at 31:30. The longest gap (5:34) is the saving run before Snow, over the 4-minute target, so the next change is a Desert-tier upgrade track to fill it. The second run, at x2, reached the Desert at 5:34, Snow at 11:18 (55% faster) and its 800,000 rebirth at 20:17, so rebirth passes Rule 24.
 
 ## Time-to-X targets
 
@@ -411,8 +413,6 @@ Rule of thumb: aim for 1.0-1.5x per step for the first 3-5 rebirths, then let re
 | D1 / D7 / session time | Analytics dashboard [3][4] | Near or above benchmark bands | Session time drops after an economy change |
 | Largest balance | Server sampling | < 1e15 | Approaching 2^53 |
 
-**After retuning (Config v2 in "Luau"):** Desert 30,000 (x2), Snow 200,000 (x4), rebirth at 400,000 with cost x2 and +1 multiplier per rebirth, and a sim bot that starts saving when a gate is within 5 minutes of income. This studio's run gave: first buy 15 s, Desert at 8:03, Snow at 24:52, rebirth ready at 31:30. The longest gap (5:34) is the saving run before Snow, over the 4-minute target, so the next change is a Desert-tier upgrade track to fill it. The second run, at x2, reached the Desert at 5:34, Snow at 11:18 (55% faster) and its 800,000 rebirth at 20:17, so rebirth passes Rule 24.
-
 ## Examples from top games
 
 ### Two ways to pay for the same thing
@@ -437,7 +437,7 @@ Rule of thumb: aim for 1.0-1.5x per step for the first 3-5 rebirths, then let re
 **Avoid:** a repeating option so good that the cheap one is never worth buying.
 
 ### Reinvest everything early
-**Game:** Grow a Garden ([10][11][12])
+**Game:** Grow a Garden ([10][11][12][13])
 **Shows:** beginner guides recommend starting with a couple of cheap seeds and reinvesting sales into more seeds, moving to multi-harvest crops when possible.
 **Why it works:** the early economy rewards reinvestment, so the first minutes feel like compounding growth.
 **Steal:** make the obvious early strategy (reinvest) also the right one.

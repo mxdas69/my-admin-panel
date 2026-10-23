@@ -63,6 +63,7 @@ export async function fetchCharts({ perSort = 30, gapMs = 1300 } = {}) {
 }
 
 function prettySort(id) {
+  if (id === "rpg") return "RPG";
   return id.replace(/-/g, " ").replace(/\b(and)\b/g, "&").replace(/^\w/, (c) => c.toUpperCase());
 }
 

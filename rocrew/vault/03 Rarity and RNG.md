@@ -49,7 +49,7 @@ Odds, timings and thresholds in this chapter are this studio's design targets un
    Done wrong: "1 in 1,000 at one roll per minute is fine, that's about 16 hours."
 
 6. **Every tier that exists is reachable, and the rarest tier's existence is shown in the world.**
-   Why: a tier nobody sees might as well not exist, and it can't create desire. The top tier is the hook ([[01 The First Five Minutes]]).
+   Why: a tier nobody sees might as well not exist, and it can't create desire. The top tier is the hook ([[01 The First Five Minutes]]), the "leave players wanting more" part of onboarding [27].
    How: show the top items on pedestals with their odds ("1 in 5,000"), trigger server messages when someone hits them (Rule 21), and check in the sim that at least a few percent of active players can reach the top tier of each pool within a week of normal play (rule of thumb; Balance sets the exact target).
    Done right: a Mythic dragon statue in the hub labeled "1 in 1,000".
    Done wrong: a Secret tier at 1 in 50,000,000 in a game where players roll 200 times a day.
@@ -96,7 +96,7 @@ Odds, timings and thresholds in this chapter are this studio's design targets un
 
 13. **Rarity is visible on the item in the world: size, aura, particles, a nametag color.**
    Why: rarity is social. Others seeing your Legendary is half the value and creates goals for them ([[10 Retention and Social]]).
-   How: rarer pets are slightly larger (+10-20% per tier at the top), have tier-colored particles from Epic up, and a tier-colored name above them. Keep effects performant on phones ([[08 Mobile]]).
+   How: rarer pets are slightly larger (+10-20% per tier at the top), have tier-colored particles from Epic up, and a tier-colored name above them; top tiers can add a tier-colored Highlight outline [22][23] or Beam light rays [24]. Keep effects performant on phones ([[08 Mobile]]).
    Done right: a Mythic pet glows red and trails sparkles; players ask how to get it.
    Done wrong: a Mythic pet that looks like a recolored Common.
 
@@ -154,7 +154,7 @@ Odds, timings and thresholds in this chapter are this studio's design targets un
 
 22. **Give the collection an index with silhouettes, per-pool completion and rewards.**
    Why: the index turns random results into a long-term goal and shows what exists without spoiling the look of rare items.
-   How: one index page per pool or world; unknown entries as dark silhouettes with tier color frames and odds; completion bar per page; rewards at 25/50/75/100% (luck boosts, titles, a cosmetic). See [[10 Retention and Social]].
+   How: one index page per pool or world; unknown entries as dark silhouettes with tier color frames and odds; completion bar per page; rewards at 25/50/75/100% (luck boosts, titles, a cosmetic). Pair the random chase with a deterministic track (ranks, levels) so progress never depends only on luck; Pet Simulator 99 documents a ranks system [11]. See [[10 Retention and Social]].
    Done right: "Meadow Egg index 6/8 — complete for +10% luck".
    Done wrong: a plain list of names with no progress.
 
@@ -172,13 +172,13 @@ Odds, timings and thresholds in this chapter are this studio's design targets un
 
 25. **Rare items are stronger within their tier band but never required for first-session progress.**
    Why: the chase must matter (rare = better), but if early progress depends on luck, unlucky players hit a wall. In a Pet Simulator 99 event, the first egg's lowest-rate pets were described as the most powerful and stayed effective into the following areas [7].
-   How: power within a pool scales with rarity (e.g. Common 1x, Rare 1.5x, Legendary 3x, Mythic 5x of the pool's base), while zone gates are tuned (in the sim) for players with only common-tier pets plus upgrades ([[04 Progression and Economy]]).
+   How: Pet Simulator 99 beginner guides tie moving to the next area to how fast your pets break things and to buying the gate [9][10], so pace gates with ordinary pets in mind. Power within a pool scales with rarity (e.g. Common 1x, Rare 1.5x, Legendary 3x, Mythic 5x of the pool's base), while zone gates are tuned (in the sim) for players with only common-tier pets plus upgrades ([[04 Progression and Economy]]).
    Done right: a Legendary speeds you up; a full team of commons still reaches zone 3 in session 1.
    Done wrong: zone 2's gate requires a power level only Legendary owners reach.
 
 26. **The first free rolls are curated from a starter table that can never be bought.**
    Why: a new player's first roll sets their trust in the game's RNG. Free starter pets are a common opening: Adopt Me's tutorial walks new players through hatching their first pet [12], a Pet Simulator 99 event gave a free Fate egg on entry [7], and Pet Simulator 99's tutorial quests give free pets [8].
-   How: `StarterEgg` table with Rare as the floor and a guaranteed full reveal; flag `NeverPaid = true` so the shop code refuses to sell it. After the starter rolls, normal odds apply. See [[01 The First Five Minutes]].
+   How: `StarterEgg` table with Rare as the floor and a guaranteed full reveal; flag `NeverPaid = true` so the shop code refuses to sell it. After the starter rolls, normal odds apply. The first experience has to convince players the game is worth their time [28]. See [[01 The First Five Minutes]].
    Done right: the free first hatch is always Rare or better.
    Done wrong: the starter egg's odds quietly applied to a Robux egg.
 
@@ -196,7 +196,7 @@ Odds, timings and thresholds in this chapter are this studio's design targets un
 
 29. **Paid random items are priced in soft currency first; Robux paths are optional shortcuts and never the only way to the best tier.**
    Why: the chase should be playable for free; paid rolls that are the only route to top items read as pay-to-win and invite policy trouble.
-   How: every pool has a soft-currency price; Robux sells luck boosts, auto-roll or bulk opens, with odds disclosed. Exclusive paid-only pools contain cosmetic variants, not stronger items ([[09 Shops and Monetization]]). Adopt Me guides describe eggs hatching through completing objectives, with a Robux option to hatch immediately [12][13]: time is what's sold, not odds.
+   How: every pool has a soft-currency price; Robux sells luck boosts, auto-roll or bulk opens, with odds disclosed. Exclusive paid-only pools contain cosmetic variants, not stronger items ([[09 Shops and Monetization]]). Free routes into a collection matter enough to players that guides are written about them [15]. Adopt Me guides describe eggs hatching through completing objectives, with a Robux option to hatch immediately [12][13]: time is what's sold, not odds.
    Done right: "Open: 500 coins" and "Open x3: 1,350 coins" with a Robux luck potion on the side.
    Done wrong: the Mythic-containing egg is Robux-only.
 
@@ -228,12 +228,12 @@ Odds, timings and thresholds in this chapter are this studio's design targets un
 
 34. **Never change odds silently: every change goes in the changelog and the in-game update notes.**
    Why: players notice changes in drop rates; silent nerfs destroy trust and, for paid items, the disclosed odds must match.
-   How: odds changes are Config diffs reviewed by Reviewer, with a line in `games/<slug>/changelog.md` and the update log. Paid pools never get worse odds without notice ([[12 Live Ops and Launch]]).
+   How: odds changes are Config diffs reviewed by Reviewer, with a line in `games/<slug>/changelog.md` and the update log. Paid pools never get worse odds without notice ([[12 Live Ops and Launch]]). After any odds change, Liveops watches monetization and retention KPIs in the analytics dashboard [21].
    Done right: "Update 4: Mythic in Lava Egg 1 in 2,000 → 1 in 1,500."
    Done wrong: quietly halving a Legendary weight after launch.
 
 35. **Time-limited pools show a real end time and never fake urgency.**
-   Why: limited pools create excitement; fake countdowns that reset are manipulative and erode trust.
+   Why: limited pools create excitement, and pools rotate over a game's life (guides even recount which egg Adopt Me started with [16]); fake countdowns that reset are manipulative and erode trust.
    How: end times are server timestamps in Config (`EndsAt = os.time{...}`), shown as a countdown; when it ends, the pool is gone or returns only as announced. Don't put limited paid pools in front of first-session players ([[09 Shops and Monetization]]).
    Done right: "Halloween Egg leaves in 3d 4h", and it actually leaves.
    Done wrong: a "Last chance! 10:00" timer that restarts every join.
@@ -271,7 +271,7 @@ Odds, timings and thresholds in this chapter are this studio's design targets un
 
 ### Changing odds after launch in 6 steps
 
-1. Write the reason and the new weights in a Config diff.
+1. Write the reason and the new weights in a Config diff; for risky changes, test on a share of players with Configs and Experiments where available [26].
 2. Run the audit and pity sims; save the outputs.
 3. Reviewer checks the diff, the sim and any paid disclosure text.
 4. Update the in-game odds (automatic if UI reads Config) and the update notes (Rule 34).
@@ -423,7 +423,7 @@ All times are skippable after 1 s (Rule 12). Respect the camera-shake and flash 
 **Avoid:** starter seeds going out of stock for new players.
 
 ### Guides disagree when the game doesn't show tiers clearly
-**Game:** Grow a Garden ([1][2][4])
+**Game:** Grow a Garden ([1][2][4][5][6])
 **Shows:** beginner guides list seed rarity tiers differently (for example, which seeds count as Legendary).
 **Why it works (as a lesson):** players and guide writers rely on the game's own tier display; if it is unclear or changes, the community's information splits.
 **Steal:** a clear tier label and color on every item card, in the shop and in the index, read from Config.
