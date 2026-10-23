@@ -1272,7 +1272,7 @@ function robloxCardHtml() {
     <div class="row">${status}<span class="grow"></span>
       ${r.signedIn ? `<button class="btn small" data-act="roblox-check">${icon("refresh")}Check</button><button class="btn ghost small" data-act="roblox-signout">Sign out</button>` : `<button class="btn primary" data-act="roblox-signin" ${r.windowOpen || !r.browser ? "disabled" : ""}>${icon("lock")}Sign in to Roblox</button>`}</div>
     ${r.windowOpen ? `<div class="banner blue" style="margin:10px 0 0"><b>A browser window opened on this PC.</b>Sign in to Roblox there (with your 2-step code if asked), then close that window. RoCrew checks it worked.</div>` : ""}
-    ${!r.browser ? `<p class="faint" style="font-size:12px">Needs Microsoft Edge or Google Chrome on this PC.</p>` : ""}
+    ${!r.browser ? `<p class="faint" style="font-size:12px">Needs Brave, Microsoft Edge or Google Chrome on this PC.</p>` : ""}
     ${r.error && !r.windowOpen ? `<p class="faint" style="font-size:12px">${esc(r.error)}</p>` : ""}
     <label class="switch-row"><input type="checkbox" data-change="roblox-visible" ${r.show ? "checked" : ""}><span class="switch"></span><span><b>Show the browser while agents use it</b><br><small class="muted">Off: it runs hidden with the sound off. On: you can watch and take over at any time.</small></span></label>
     <p class="faint" style="font-size:12px;margin-bottom:0">Your sign-in is kept in a separate browser profile in <span class="mono">.rocrew/browser</span>, never sent anywhere, and agents can't open its files. They're told never to spend or trade Robux or change account settings, and to ask you if Roblox wants a code.</p>`;

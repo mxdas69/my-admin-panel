@@ -19,15 +19,18 @@ const CANDIDATES = {
   win32: () => {
     const pf = [process.env["ProgramFiles(x86)"], process.env.ProgramFiles, process.env.LOCALAPPDATA].filter(Boolean);
     return [
+      // Brave first (the owner's browser), then Edge (always on Windows), then Chrome.
+      ...pf.map((d) => ({ channel: "brave", file: path.join(d, "BraveSoftware", "Brave-Browser", "Application", "brave.exe") })),
       ...pf.map((d) => ({ channel: "msedge", file: path.join(d, "Microsoft", "Edge", "Application", "msedge.exe") })),
       ...pf.map((d) => ({ channel: "chrome", file: path.join(d, "Google", "Chrome", "Application", "chrome.exe") })),
     ];
   },
   darwin: () => [
+    { channel: "brave", file: "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" },
     { channel: "chrome", file: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" },
     { channel: "msedge", file: "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" },
   ],
-  linux: () => ["google-chrome", "google-chrome-stable", "microsoft-edge", "chromium", "chromium-browser"].map((bin) => ({ channel: bin.includes("edge") ? "msedge" : bin.startsWith("google") ? "chrome" : "chromium", bin })),
+  linux: () => ["brave-browser", "brave", "google-chrome", "google-chrome-stable", "microsoft-edge", "chromium", "chromium-browser"].map((bin) => ({ channel: bin.includes("edge") ? "msedge" : bin.startsWith("google") ? "chrome" : bin.startsWith("brave") ? "brave" : "chromium", bin })),
 };
 
 export class RobloxBrowser {
@@ -67,7 +70,7 @@ export class RobloxBrowser {
   /** Open a normal browser window on the Roblox sign-in page, using the crew's profile. */
   openSignIn() {
     const b = this.browser();
-    if (!b) throw new Error("No Microsoft Edge or Google Chrome found on this PC. Install one and try again.");
+    if (!b) throw new Error("No Brave, Microsoft Edge or Google Chrome found on this PC. Install one and try again.");
     if (this.window) return;
     fs.mkdirSync(this.profile, { recursive: true });
     const child = spawn(b.file, [`--user-data-dir=${this.profile}`, "--no-first-run", "--no-default-browser-check", "--mute-audio", "--new-window", "https://www.roblox.com/login"], { stdio: "ignore", detached: false });
@@ -127,7 +130,8 @@ export class RobloxBrowser {
       browser: {
         browserName: "chromium",
         userDataDir: this.profile,
-        launchOptions: { channel: b.channel === "chromium" ? undefined : b.channel, executablePath: b.channel === "chromium" ? b.file : undefined, headless: !this.getShow(), args: ["--mute-audio", "--no-first-run", "--no-default-browser-check"] },
+        // Playwright knows Edge and Chrome by channel; Brave and plain Chromium go by their exe path.
+        launchOptions: { channel: ["msedge", "chrome"].includes(b.channel) ? b.channel : undefined, executablePath: ["msedge", "chrome"].includes(b.channel) ? undefined : b.file, headless: !this.getShow(), args: ["--mute-audio", "--no-first-run", "--no-default-browser-check"] },
         contextOptions: { viewport: { width: 1440, height: 900 } },
       },
       outputDir: path.join(this.dir, "output"),

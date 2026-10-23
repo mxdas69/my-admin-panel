@@ -27,7 +27,9 @@ $icon.ContextMenuStrip = $menu
 $openApp = {
   $port = 4600
   try { $port = (Get-Runtime).port } catch {}
-  try { Start-Process 'msedge' "--app=http://localhost:$port" } catch { Start-Process "http://localhost:$port" }
+  $brave = @("$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe", "${env:ProgramFiles(x86)}\BraveSoftware\Brave-Browser\Application\brave.exe", "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\Application\brave.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if ($brave) { Start-Process $brave "--app=http://localhost:$port" }
+  else { try { Start-Process 'msedge' "--app=http://localhost:$port" } catch { Start-Process "http://localhost:$port" } }
 }
 $openItem.add_Click($openApp)
 $icon.add_DoubleClick($openApp)
