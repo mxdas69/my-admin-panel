@@ -468,7 +468,16 @@ route("POST", /^\/api\/tasks$/, async (req) => {
 // Waiting tasks without a plain summary are explained automatically, one at a time.
 async function explainTask(t) {
   const game = t.game ? store.data.games.find((g) => g.slug === t.game) : null;
-  const prompt = `Explain this game-dev task to a 12-year-old Roblox player who owns the game${game ? ` "${game.name}"` : ""}. Write 3-6 very short steps describing what will change in the game, as a player would see it, then a last step starting "Why:". No code words, no file names, no jargon (say what things are, e.g. "a pop-up message" not "toast", "a button bar at the bottom" not "hotbar"). Reply with only the steps, separated by " | ", nothing else.\n\nTask: ${t.title}\n\nDetails:\n${String(t.brief).slice(0, 4000)}`;
+  // Paste in the files the brief points to, so the model never needs to open anything.
+  const brief = String(t.brief);
+  const extra = [];
+  for (const m of new Set(brief.match(/games\/[\w./-]+\.md/g) ?? [])) {
+    try {
+      const f = inside(ROOT, m);
+      if (fs.existsSync(f)) extra.push(`--- ${m} ---\n${fs.readFileSync(f, "utf8").slice(0, 6000)}`);
+    } catch {}
+  }
+  const prompt = `You have no tools and must not try to read files: everything you need is below. Explain this game-dev task to a 12-year-old Roblox player who owns the game${game ? ` "${game.name}"` : ""}. Write 3-6 very short steps describing what will change in the game, as a player would see it, then a last step starting "Why:". No code words, no file names, no jargon (say what things are, e.g. "a pop-up message" not "toast", "a button bar at the bottom" not "hotbar"). If the details are thin, explain from the task title as best you can. Reply with only the steps, separated by " | ", nothing else.\n\nTask: ${t.title}\n\nDetails:\n${brief.slice(0, 4000)}${extra.length ? `\n\nFiles the task refers to:\n${extra.join("\n\n").slice(0, 12000)}` : ""}`;
   const cfg = config.get();
   let text = "";
   if (cfg.gemini.apiKey) text = await Promise.race([askGemini({ apiKey: cfg.gemini.apiKey, model: cfg.gemini.textModel, prompt }), new Promise((r) => setTimeout(() => r(""), 30000))]).catch(() => "");
@@ -476,11 +485,14 @@ async function explainTask(t) {
     const res = await runClaude({ command: cfg.claudeCommand, cwd: os.tmpdir(), prompt, model: "haiku", effort: "low", permissionMode: "safe", allowedTools: [], timeoutMs: 90000 }).done;
     text = res.ok ? res.text : "";
   }
-  if (!text.trim()) throw new Error("Couldn't write the explanation right now.");
+  if (!text.trim() || /permission|denied|couldn't read|can't read|cannot read|paste (those|them)/i.test(text)) throw new Error("Couldn't write the explanation right now.");
   t.plain = text.replace(/\n+/g, " | ").replace(/\bStep \d+:\s*/gi, "").replace(/(^|\|)\s*\d+[.)]\s*/g, "$1 ").trim().slice(0, 800);
   crew.changed();
   return t.plain;
 }
+
+// Drop explanations that came back as "I couldn't read the files" instead of steps.
+for (const t of store.data.tasks) if (t.plain && /permission|denied|couldn't read|paste (those|them)/i.test(t.plain)) t.plain = "";
 
 let explaining = false;
 async function explainWaiting() {
