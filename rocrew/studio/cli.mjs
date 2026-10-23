@@ -63,6 +63,8 @@ Store art (Splash) — the cheap, high-quality way to make icons and thumbnails
                                             to the owner's Review. Each variant changes ONE thing.
            --format day1-vs-day999|before-after|1-vs-100|giant-item|reaction|rarity-reveal   (thumbnails)
                                             Proven clickable layouts; split formats get "DAY 1 / DAY 999" style labels.
+           --chart trending-in-simulation   use that chart's top thumbnails/icons as style references (default top-trending)
+           --style-refs 2|3|4|none          how many top-game references to send (default 2)
 
 Generators and intel
   image --prompt "…" --out <path> [--aspect 16:9] [--ref img.png,…] [--review "question"] [--title "…"]
@@ -144,11 +146,12 @@ switch (cmd) {
       fail('Usage: store-art icon|thumb|pass --variants "A line|B line|C line|D line" [--ref shot.png,hero.png] [--text "2 WORDS"] [--game slug]');
     }
     console.log(`Making ${o.variants.split("|").length} ${kind === "icon" ? "icons" : "thumbnails"} with Gemini (about a minute)…`);
-    const r = await api("POST", "/api/store-art", { kind, variants: o.variants.split("|"), refs: list(o.ref), text: typeof o.text === "string" ? o.text : "", format: typeof o.format === "string" ? o.format : "", game, question: typeof o.question === "string" ? o.question : "", from: ME });
+    const r = await api("POST", "/api/store-art", { kind, variants: o.variants.split("|"), refs: list(o.ref), text: typeof o.text === "string" ? o.text : "", format: typeof o.format === "string" ? o.format : "", chart: typeof o.chart === "string" ? o.chart : "", styleRefs: o["style-refs"] === "none" ? "none" : Number(o["style-refs"]) || 2, game, question: typeof o.question === "string" ? o.question : "", from: ME });
     for (const c of r.candidates) {
       if (c.error) console.log(`${c.id}: failed — ${c.error}`);
       else console.log(`${c.id}: ${c.file}${c.score ? `  clicks ${c.score.ctr}/10, hand-made ${c.score.ai_clean}/10${c.score.textMismatch ? ", TEXT WRONG" : ""}${c.score.worst ? ` — worst: ${c.score.worst}; fix: ${c.score.fix}` : ""}` : ""}`);
     }
+    if (r.styleFrom) console.log(`Style references (top games right now): ${r.styleFrom}`);
     console.log(`\nSent to the owner's Review as "${r.group}".${r.sheet ? ` Phone-size sheet: ${r.sheet}` : ""}${r.finished ? "" : " (ffmpeg isn't installed, so no resizing, title text or scores.)"}`);
     break;
   }

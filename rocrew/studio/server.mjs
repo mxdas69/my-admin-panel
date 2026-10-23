@@ -15,7 +15,7 @@ import { Crew, slugify } from "./lib/crew.mjs";
 import { AGENTS, isAgent } from "./lib/agents.mjs";
 import { probeClaude } from "./lib/claude.mjs";
 import { presetTable } from "./lib/models.mjs";
-import { fetchCharts, fetchDetails, velocity, breakouts, openings, gameDeepDive, liveNumbers, uploadDecal } from "./lib/roblox.mjs";
+import { fetchCharts, fetchDetails, velocity, breakouts, openings, gameDeepDive, topStoreArt, liveNumbers, uploadDecal } from "./lib/roblox.mjs";
 import { generateImage, askGemini } from "./lib/gemini.mjs";
 import { RemoteControl } from "./lib/remote.mjs";
 import { RobloxBrowser } from "./lib/robloxBrowser.mjs";
@@ -493,9 +493,19 @@ route("POST", /^\/api\/store-art$/, async (req) => {
   const game = b.game && store.data.games.find((g) => g.slug === b.game);
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
   const dir = inside(ROOT, game ? path.join("games", game.slug, "art", `${kind}s-${stamp}`) : path.join(".rocrew", "media", `${kind}s-${stamp}`));
+  // Style references: what the top games in this genre's chart use right now.
+  let styleRefs = [];
+  let styleFrom = null;
+  if (b.styleRefs !== 0 && b.styleRefs !== "none" && kind !== "pass") {
+    try {
+      const top = await topStoreArt({ snapshot: store.data.market.snapshots.at(-1), sortId: b.chart || "top-trending", kind: kind === "icon" ? "icon" : "thumb", count: Math.min(4, Number(b.styleRefs) || 2), cacheDir: path.join(DATA, "style-refs") });
+      styleRefs = top.refs.map((r) => r.file);
+      styleFrom = `${top.chart}: ${top.refs.map((r) => r.name).join(", ")}`;
+    } catch {}
+  }
   let set;
   try {
-    set = await makeStoreArt({ apiKey: cfg.apiKey, imageModel: cfg.imageModel, textModel: cfg.textModel, kind, variants: b.variants ?? [], refs: (b.refs ?? []).map((r) => inside(ROOT, r)), dir, text: b.text ?? "", format: b.format ?? "", hasFfmpeg });
+    set = await makeStoreArt({ styleRefs, apiKey: cfg.apiKey, imageModel: cfg.imageModel, textModel: cfg.textModel, kind, variants: b.variants ?? [], refs: (b.refs ?? []).map((r) => inside(ROOT, r)), dir, text: b.text ?? "", format: b.format ?? "", hasFfmpeg });
   } catch (err) {
     throw new HttpError(400, err.message);
   }
@@ -516,7 +526,7 @@ route("POST", /^\/api\/store-art$/, async (req) => {
   crew.feed(from, "owner", `${ready.length} ${kind === "icon" ? "icons" : "thumbnails"} ready to review`);
   crew.changed();
   return {
-    dir: rel(set.dir), sheet: set.sheet ? rel(set.sheet) : null, finished: set.finished, group,
+    styleFrom, dir: rel(set.dir), sheet: set.sheet ? rel(set.sheet) : null, finished: set.finished, group,
     candidates: set.candidates.map((c) => ({ id: c.id, variant: c.line, file: c.file ? rel(c.file) : null, error: c.error ?? null, score: c.score ?? null })),
   };
 });

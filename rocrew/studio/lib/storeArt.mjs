@@ -112,6 +112,13 @@ async function contactSheet(files, kind, out) {
   return out;
 }
 
+/** Tells the model which images are style references from top games, and what not to copy. */
+function styleNote(own, style) {
+  const first = own + 1;
+  const range = style === 1 ? `Image ${first} is` : `Images ${first}-${own + style} are`;
+  return `${range} current top Roblox ${own ? "thumbnails" : "store images"}, for style only: match their energy, saturation, contrast, exaggeration and how boldly they frame one subject. Never copy their characters, logos, text or game content; everything shown must come from this game${own ? " (image 1)" : ""}.`;
+}
+
 export function parseJudge(text) {
   const out = {};
   for (const line of String(text).split("\n")) {
@@ -134,7 +141,7 @@ export function parseJudge(text) {
  * @param {string} o.dir          where to write (games/<slug>/art/<kind>s-<date>)
  * @param {string} [o.text]       1-3 words of title text, set with ffmpeg
  */
-export async function makeStoreArt({ apiKey, imageModel, textModel, kind, variants, refs = [], dir, text = "", format = "", hasFfmpeg, generate = generateImage, ask = askGemini }) {
+export async function makeStoreArt({ apiKey, imageModel, textModel, kind, variants, refs = [], styleRefs = [], dir, text = "", format = "", hasFfmpeg, generate = generateImage, ask = askGemini }) {
   if (!["icon", "thumb", "pass"].includes(kind)) throw new Error('kind must be "icon", "thumb" or "pass".');
   const list = variants.map((v) => v.trim()).filter(Boolean).slice(0, 6);
   if (!list.length) throw new Error("Give at least one variant line.");
@@ -151,7 +158,7 @@ export async function makeStoreArt({ apiKey, imageModel, textModel, kind, varian
     list.map(async (line, i) => {
       const id = LETTERS[i];
       try {
-        const { file } = await generate({ apiKey, model: imageModel, prompt: `${fmt ? `${fmt.prompt} ` : ""}${line} ${ending}`, aspect, refs, out: path.join(dir, `${kind}_${id}_raw`) });
+        const { file } = await generate({ apiKey, model: imageModel, prompt: `${fmt ? `${fmt.prompt} ` : ""}${line} ${ending}${styleRefs.length ? ` ${styleNote(refs.length, styleRefs.length)}` : ""}`, aspect, refs: [...refs, ...styleRefs], out: path.join(dir, `${kind}_${id}_raw`) });
         return { id, line, raw: file };
       } catch (err) {
         return { id, line, error: err.message };

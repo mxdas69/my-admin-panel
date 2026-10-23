@@ -225,6 +225,36 @@ export async function gameDeepDive(id) {
   };
 }
 
+/**
+ * Download the current thumbnails (or icons) of the top games in a chart, to use as style
+ * references for Splash: what's winning clicks right now. Cached for a day.
+ */
+export async function topStoreArt({ snapshot, sortId = "top-trending", kind = "thumb", count = 3, cacheDir }) {
+  const sort = snapshot?.sorts?.[sortId] ?? snapshot?.sorts?.["top-trending"] ?? Object.values(snapshot?.sorts ?? {})[0];
+  if (!sort) throw new Error("No chart data yet. Run: node studio/cli.mjs market --refresh");
+  const games = sort.games.filter((g) => !g.sponsored).slice(0, count);
+  const ids = games.map((g) => g.universeId).join(",");
+  const url = kind === "thumb"
+    ? `https://thumbnails.roblox.com/v1/games/multiget/thumbnails?universeIds=${ids}&countPerUniverse=1&defaults=true&size=768x432&format=Png&isCircular=false`
+    : `https://thumbnails.roblox.com/v1/games/icons?universeIds=${ids}&returnPolicy=PlaceHolder&size=512x512&format=Png&isCircular=false`;
+  const data = (await getJson(url)).data ?? [];
+  fs.mkdirSync(cacheDir, { recursive: true });
+  const out = [];
+  for (const g of games) {
+    const row = data.find((d) => String(d.universeId ?? d.targetId) === String(g.universeId));
+    const img = kind === "thumb" ? row?.thumbnails?.[0] : row;
+    if (!img?.imageUrl || img.state !== "Completed") continue;
+    const file = path.join(cacheDir, `${kind}-${g.universeId}-${new Date().toISOString().slice(0, 10)}.png`);
+    if (!fs.existsSync(file)) {
+      const res = await fetch(img.imageUrl, { signal: AbortSignal.timeout(20000) });
+      if (!res.ok) continue;
+      fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+    }
+    out.push({ name: g.name, universeId: g.universeId, file });
+  }
+  return { chart: sort.name, refs: out };
+}
+
 /** Live numbers for one of your own games. */
 export async function liveNumbers(universeId) {
   const d = await fetchDetails([universeId]);
