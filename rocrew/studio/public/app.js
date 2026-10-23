@@ -1860,5 +1860,106 @@ setInterval(() => {
   if (!document.hidden) render();
 }, 15000);
 
+// ---------- first-run setup ----------
+
+const OB_STEPS = ["name", "claude", "studio", "usage", "extras", "idea"];
+
+function onboardingDue() {
+  try {
+    if (localStorage.getItem("rocrew-onboarded")) return false;
+  } catch {}
+  return S.state?.me?.owner !== false && !S.state?.owner;
+}
+
+function obHtml() {
+  const step = OB_STEPS[S.ui.ob ?? 0];
+  const c = S.state.connections;
+  const ok = (b) => `<span class="pill ${b ? "green" : "amber"}">${b ? "Ready" : "Not yet"}</span>`;
+  const body = {
+    name: `<h3>Welcome to RoCrew</h3><p class="muted">15 AI agents that plan, build, test and fix Roblox games while you sleep. Let's set it up in about 2 minutes.</p>
+      <label class="field">What should the crew call you?<input class="input" id="ob-name" placeholder="mxdas" value="${esc(S.ui.drafts["ob-name"] ?? "")}"></label>`,
+    claude: `<h3>Claude Code ${ok(c.claude?.installed)}</h3><p class="muted">Every agent runs on Claude Code with your Claude plan.</p>
+      ${c.claude?.installed ? `<p>Found ${esc(c.claude.version ?? "")}. You're good.</p>` : `<ol class="steps"><li>Install Claude Code from <span class="mono">claude.ai/download</span>.</li><li>Open a terminal, type <span class="mono">claude</span>, and sign in once.</li><li>Press Check again.</li></ol>`}
+      <button class="btn small" data-act="ob-check">${icon("refresh")}Check again</button>`,
+    studio: `<h3>Roblox Studio ${ok(c.studio?.status === "connected")}</h3><p class="muted">Agents build inside Studio through its MCP connection.</p>
+      <ol class="steps"><li>Open Roblox Studio with your place (turn on <b>Team Create</b> so every change is saved to the cloud).</li><li>Open the Assistant → its settings → <b>MCP Servers</b>.</li><li>Quick connect <b>Claude Code</b>, then press Check again.</li></ol>
+      <button class="btn small" data-act="ob-check">${icon("refresh")}Check again</button> <span class="faint" style="font-size:12px">You can skip this and connect later.</span>`,
+    usage: `<h3>How much of your plan to use</h3><p class="muted">You can change this any time in Settings.</p>
+      ${[["balanced", "Balanced (recommended)", "Opus where quality matters, Sonnet for the rest."], ["saver", "Save usage", "For when you're low on your weekly limit."], ["quality", "Best quality", "Opus for everyone. Uses your plan fastest."]].map(([k, l, d]) => `<label class="check" style="margin-top:8px"><input type="radio" name="ob-preset" value="${k}" ${k === (S.ui.obPreset ?? "balanced") ? "checked" : ""}><span><b>${l}</b><br><small class="muted">${d}</small></span></label>`).join("")}
+      <label class="check" style="margin-top:12px"><input type="checkbox" id="ob-autostart" checked><span><b>Start RoCrew when I turn on my PC</b><br><small class="muted">So the crew carries on after a restart.</small></span></label>`,
+    extras: `<h3>Optional extras</h3><p class="muted">Skip any of these; they're all in Settings later.</p>
+      <div class="ob-extra"><b>${icon("lock")} Sign in to Roblox</b><small>Lets the crew read your stats and set up game passes.</small><button class="btn small" data-act="roblox-signin">${S.state.roblox?.signedIn ? "Signed in ✓" : "Sign in"}</button></div>
+      <div class="ob-extra"><b>${icon("image")} Gemini key</b><small>For icons, thumbnails and UI art (free from Google AI Studio).</small><input class="input mono small" id="ob-gemini" placeholder="AIza…" type="password"></div>
+      <div class="ob-extra"><b>${icon("users")} Remote Control with a friend</b><small>Paste their pair code, or make one in Settings later.</small><input class="input mono small" id="ob-pair" placeholder="RC-XXXX-…"></div>`,
+    idea: `<h3>What do you want to make?</h3><p class="muted">Tell the Lead your idea in your own words, or let Pulse find one from the charts.</p>
+      <textarea class="input" id="ob-idea" rows="3" placeholder="A survival game where you defend a campfire at night…">${esc(S.ui.drafts["ob-idea"] ?? "")}</textarea>`,
+  }[step];
+  const last = S.ui.ob === OB_STEPS.length - 1;
+  return `<div class="ob-dots">${OB_STEPS.map((_, i) => `<span class="${i <= (S.ui.ob ?? 0) ? "on" : ""}"></span>`).join("")}</div>${body}
+    <div class="row end" style="margin-top:18px">${S.ui.ob ? `<button class="btn ghost" data-act="ob-back">Back</button>` : `<button class="btn ghost" data-act="ob-skip">Skip setup</button>`}
+    ${last ? `<button class="btn" data-act="ob-finish" data-id="pulse">${icon("bulb")}Find me an idea</button><button class="btn primary" data-act="ob-finish" data-id="lead">${icon("sparkle")}Start building</button>` : `<button class="btn primary" data-act="ob-next">Next ${icon("arrow")}</button>`}</div>`;
+}
+
+function showOnboarding() {
+  document.getElementById("overlay").innerHTML = `<div class="modal-back"><div class="modal onboarding" role="dialog">${obHtml()}</div></div>`;
+}
+
+async function obSaveStep() {
+  const step = OB_STEPS[S.ui.ob ?? 0];
+  const val = (id) => document.getElementById(id)?.value.trim() ?? "";
+  if (step === "name") {
+    if (!val("ob-name")) return toast("Type a name first.", true), false;
+    return Boolean(await attempt(() => api("POST", "/api/settings", { ownerName: val("ob-name") })));
+  }
+  if (step === "usage") {
+    S.ui.obPreset = document.querySelector('input[name="ob-preset"]:checked')?.value ?? "balanced";
+    await attempt(() => api("POST", "/api/settings", { modelPreset: S.ui.obPreset }));
+    if (document.getElementById("ob-autostart")?.checked) await api("POST", "/api/autostart", { enabled: true }).catch(() => {});
+  }
+  if (step === "extras") {
+    if (val("ob-gemini")) await attempt(() => api("POST", "/api/settings", { gemini: { apiKey: val("ob-gemini") } }));
+    if (val("ob-pair")) await attempt(() => api("POST", "/api/remote/pair", { code: val("ob-pair") }));
+  }
+  return true;
+}
+
+Object.assign(ACTIONS, {
+  "ob-next": async () => {
+    if (!(await obSaveStep())) return;
+    S.ui.ob = (S.ui.ob ?? 0) + 1;
+    await refresh();
+    showOnboarding();
+  },
+  "ob-back": () => {
+    S.ui.ob = Math.max(0, (S.ui.ob ?? 0) - 1);
+    showOnboarding();
+  },
+  "ob-check": async () => {
+    await attempt(() => api("POST", "/api/connections/check"));
+    await refresh();
+    showOnboarding();
+  },
+  "ob-skip": () => {
+    try {
+      localStorage.setItem("rocrew-onboarded", "1");
+    } catch {}
+    closeOverlay();
+  },
+  "ob-finish": async (el) => {
+    const idea = document.getElementById("ob-idea")?.value.trim();
+    if (el.dataset.id === "lead") {
+      if (!idea) return toast("Describe your idea first, or press Find me an idea.", true);
+      await attempt(() => api("POST", "/api/lead/message", { text: idea }));
+    } else {
+      await attempt(() => api("POST", "/api/tasks", { agent: "pulse", from: "owner", title: "Find me game ideas from the market", brief: "Look at `node studio/cli.mjs market --refresh`, deep-dive the best young games, and send me 2-3 pitches to approve." }));
+    }
+    ACTIONS["ob-skip"]();
+    toast(el.dataset.id === "lead" ? "The Lead is planning it. Watch it on Home." : "Pulse is hunting for ideas. They'll show up under Pitches.");
+    await refresh();
+  },
+});
+
 await refresh();
 connectEvents();
+if (onboardingDue()) showOnboarding();
+if ("serviceWorker" in navigator && location.hostname === "localhost") navigator.serviceWorker.register("/sw.js").catch(() => {});

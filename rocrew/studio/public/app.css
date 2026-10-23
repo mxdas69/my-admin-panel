@@ -438,3 +438,12 @@ body.with-remote-bar .app { padding-top: 42px; }
 .quick-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: -6px 0 18px; }
 .chip-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.04); color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
 .chip-btn:hover { border-color: rgba(167, 139, 250, 0.6); background: rgba(139, 92, 246, 0.14); }
+
+/* first-run setup */
+.modal.onboarding { max-width: 560px; animation: pop 0.25s ease-out; }
+.ob-dots { display: flex; gap: 6px; margin-bottom: 14px; }
+.ob-dots span { height: 4px; flex: 1; border-radius: 4px; background: rgba(255, 255, 255, 0.1); }
+.ob-dots span.on { background: var(--grad); }
+.ob-extra { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.ob-extra small { grid-column: 1; color: var(--muted); }
+.ob-extra .btn, .ob-extra .input { grid-column: 2; grid-row: 1 / span 2; width: 180px; }

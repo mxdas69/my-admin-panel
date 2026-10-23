@@ -52,6 +52,10 @@ How the automation works:
 4. When the crew goes quiet, the app wakes the Lead with everyone's handoffs. It plans the next round, so work keeps moving while you sleep, up to a limit you set.
 5. Anything only you can do (publish, set prices, create game passes on the Creator Hub) lands in **Needs you**.
 
+## It's an app
+
+Double-click **Start RoCrew.bat**. RoCrew opens in its own window (Edge or Chrome app mode, no browser tabs or address bar), which you can minimize like any app; the crew keeps working. You can also pin it: in that window's menu choose **Install RoCrew** to get a Start-menu and taskbar icon. The first time, a short setup walks you through your name, Claude Code, Roblox Studio, how much of your plan to use, optional extras (Roblox sign-in, Gemini key, pairing with a friend) and your first idea.
+
 ## Test requests you can do from your phone
 
 When an agent needs you to try something, it doesn't send a wall of text. You get a **Try it** card on Home with:

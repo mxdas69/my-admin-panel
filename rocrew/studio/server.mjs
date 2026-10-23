@@ -879,7 +879,7 @@ route("POST", /^\/api\/connections\/blender$/, async (req) => {
   return checkConnections();
 });
 
-const STATIC_TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
+const STATIC_TYPES = { ".webmanifest": "application/manifest+json", ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
 const MEDIA_TYPES = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif", ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime" };
 
 const server = http.createServer(async (req, res) => {
@@ -999,7 +999,13 @@ server.on("error", (err) => {
   throw err;
 });
 
+/** Open RoCrew in its own app window (Edge or Chrome app mode), or a normal tab if neither is found. */
 function openInBrowser(url) {
+  const app = robloxBrowser.browser();
+  if (app && process.platform !== "linux") {
+    execFile(app.file, [`--app=${url}`, "--window-size=1360,880"], { windowsHide: true }, () => {});
+    return;
+  }
   const [cmd, args] = process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];
   execFile(cmd, args, { windowsHide: true }, () => {});
 }

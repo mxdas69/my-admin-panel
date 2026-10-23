@@ -1,0 +1,10 @@
+{
+  "name": "RoCrew Studio",
+  "short_name": "RoCrew",
+  "description": "Your Roblox agent studio",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0911",
+  "theme_color": "#0b0911",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
