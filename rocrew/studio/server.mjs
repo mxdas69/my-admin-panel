@@ -13,7 +13,7 @@ import { Store } from "./lib/db.mjs";
 import { Config } from "./lib/config.mjs";
 import { Crew, slugify } from "./lib/crew.mjs";
 import { AGENTS, isAgent } from "./lib/agents.mjs";
-import { probeClaude } from "./lib/claude.mjs";
+import { probeClaude, runClaude } from "./lib/claude.mjs";
 import { presetTable } from "./lib/models.mjs";
 import { fetchCharts, fetchDetails, velocity, breakouts, openings, gameDeepDive, topStoreArt, searchGames, saveGameArt, liveNumbers, uploadDecal } from "./lib/roblox.mjs";
 import { generateImage, askGemini } from "./lib/gemini.mjs";
@@ -463,6 +463,25 @@ route("POST", /^\/api\/tasks$/, async (req) => {
     size: b.size || "normal",
     model: b.model || null,
   });
+});
+// Rewrite a task as plain-English steps for the owner (Gemini's free text model, else Haiku).
+route("POST", /^\/api\/tasks\/([\w]+)\/explain$/, async (req, url, [id]) => {
+  const t = store.data.tasks.find((x) => x.id === id);
+  need(t, "No such task.");
+  const game = t.game ? store.data.games.find((g) => g.slug === t.game) : null;
+  const prompt = `Explain this game-dev task to a 12-year-old Roblox player who owns the game${game ? ` "${game.name}"` : ""}. Write 3-6 very short steps describing what will change in the game, as a player would see it, then a last step starting "Why:". No code words, no file names, no jargon (say what things are, e.g. "a pop-up message" not "toast", "a button bar at the bottom" not "hotbar"). Reply with only the steps, separated by " | ", nothing else.\n\nTask: ${t.title}\n\nDetails:\n${t.brief.slice(0, 4000)}`;
+  const cfg = config.get();
+  let text = "";
+  if (cfg.gemini.apiKey) text = await askGemini({ apiKey: cfg.gemini.apiKey, model: cfg.gemini.textModel, prompt }).catch(() => "");
+  if (!text) {
+    const run = runClaude({ command: cfg.claudeCommand, cwd: DATA, prompt, model: "haiku", effort: "low", permissionMode: "safe", allowedTools: [], timeoutMs: 120000 });
+    const res = await run.done;
+    text = res.ok ? res.text : "";
+  }
+  need(text.trim(), "Couldn't write the explanation right now. Try again in a minute.");
+  t.plain = text.replace(/\n+/g, " | ").replace(/^\s*\d+[.)]\s*/gm, "").replace(/\|\s*\d+[.)]\s*/g, "| ").replace(/\bStep \d+:\s*/gi, "").trim().slice(0, 800);
+  crew.changed();
+  return { plain: t.plain };
 });
 route("POST", /^\/api\/tasks\/decide$/, async (req) => {
   const { ids, approve } = await readJson(req);

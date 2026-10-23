@@ -468,7 +468,7 @@ PAGES.home = {
       cards.push(`<div class="card glow"><div class="card-head">${tile("lead", "lg")}<div class="grow">
         <div class="eyebrow">Approve work</div><h3>The crew wants to start ${proposed.length} task${proposed.length > 1 ? "s" : ""}</h3>
         <p class="muted" style="margin-top:0">Untick anything you don't want. Nothing starts until you press Start.</p>
-        <div class="approve-list">${proposed.map((t) => `<label class="check approve-item"><input type="checkbox" data-propose="${t.id}" checked><span>${tile(t.agent)} <b>${esc(agent(t.agent).name)}</b>${plainSteps(t.plain || plainTitle(t.title))}</span></label>${t.brief ? `<details class="brief-more"><summary>Technical details (for the crew)</summary><div class="md">${renderMarkdown(t.brief)}</div></details>` : ""}`).join("")}</div>
+        <div class="approve-list">${proposed.map((t) => `<label class="check approve-item"><input type="checkbox" data-propose="${t.id}" checked><span>${tile(t.agent)} <b>${esc(agent(t.agent).name)}</b>${plainSteps(t.plain || plainTitle(t.title))}${t.plain ? "" : `<br><button class="btn small" data-act="explain-task" data-id="${t.id}">${icon("sparkle")}Explain in plain English</button>`}</span></label>${t.brief ? `<details class="brief-more"><summary>Technical details (for the crew)</summary><div class="md">${renderMarkdown(t.brief)}</div></details>` : ""}`).join("")}</div>
         <div class="row" style="margin-top:10px"><button class="btn primary" data-act="approve-tasks">${icon("play")}Start ticked</button><button class="btn" data-act="skip-tasks">Skip all</button></div>
       </div></div></div>`);
     }
@@ -1544,6 +1544,16 @@ const ACTIONS = {
     await refresh();
   },
   "select-all": (el) => el.select(),
+  "explain-task": async (el, e) => {
+    e?.preventDefault();
+    el.disabled = true;
+    el.innerHTML = '<span class="spinner"></span> Explaining…';
+    if (await attempt(() => api("POST", `/api/tasks/${el.dataset.id}/explain`))) await refresh();
+    else {
+      el.disabled = false;
+      el.textContent = "Explain in plain English";
+    }
+  },
   "go-approve": () => {
     location.hash = "#/home";
     setTimeout(() => document.querySelector(".approve-list")?.closest(".card")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
