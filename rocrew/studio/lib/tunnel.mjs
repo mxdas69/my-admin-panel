@@ -84,7 +84,7 @@ export class Tunnel {
     const bin = this.find();
     if (!bin) return Promise.reject(Object.assign(new Error("The tunnel helper (cloudflared) isn't installed yet."), { code: "NO_CLOUDFLARED" }));
     return new Promise((resolve, reject) => {
-      const child = spawn(bin, ["tunnel", "--no-autoupdate", "--url", `http://localhost:${port}`], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn(bin, ["tunnel", "--no-autoupdate", "--url", `http://127.0.0.1:${port}`], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
       this.child = child;
       let log = "";
       const timer = setTimeout(() => {

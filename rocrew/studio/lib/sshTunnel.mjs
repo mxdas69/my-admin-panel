@@ -10,9 +10,9 @@ import { waitUntilReachable } from "./tunnel.mjs";
 // Each pattern finds the address host (with or without "https://"; localhost.run's JSON has none).
 const SERVICES = [
   // "--output json" asks localhost.run for a plain line with the address instead of a QR code.
-  { name: "localhost.run", args: (port) => ["-R", `80:localhost:${port}`, "nokey@localhost.run", "--", "--output", "json"], host: /\b([a-z0-9-]+\.lhr\.(?:life|pro))\b/ },
-  { name: "Pinggy", args: (port) => ["-p", "443", `-R0:localhost:${port}`, "free.pinggy.io"], host: /https:\/\/([a-z0-9.-]+\.pinggy\.(?:link|online))/ },
-  { name: "Serveo", args: (port) => ["-R", `80:localhost:${port}`, "serveo.net"], host: /Forwarding HTTP traffic from https?:\/\/([a-z0-9.-]+)/i },
+  { name: "localhost.run", args: (port) => ["-R", `80:127.0.0.1:${port}`, "nokey@localhost.run", "--", "--output", "json"], host: /\b([a-z0-9-]+\.lhr\.(?:life|pro))\b/ },
+  { name: "Pinggy", args: (port) => ["-p", "443", `-R0:127.0.0.1:${port}`, "free.pinggy.io"], host: /https:\/\/([a-z0-9.-]+\.pinggy\.(?:link|online))/ },
+  { name: "Serveo", args: (port) => ["-R", `80:127.0.0.1:${port}`, "serveo.net"], host: /Forwarding HTTP traffic from https?:\/\/([a-z0-9.-]+)/i },
 ];
 
 export class SshTunnel {
