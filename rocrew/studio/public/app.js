@@ -1474,7 +1474,7 @@ const ACTIONS = {
   quit: async () => {
     if (!confirm("Quit RoCrew? Running agents stop (their tasks pick up again next time), and Blender, the Roblox sign-in window and Remote Control close.")) return;
     await api("POST", "/api/quit").catch(() => {});
-    document.body.innerHTML = `<div style="display:grid;place-items:center;height:100vh;font:16px system-ui;color:#ccc;background:#0b0911;text-align:center"><div><h2>RoCrew is closed</h2><p>Start it again with Start RoCrew.bat. You can close this window.</p></div></div>`;
+    document.body.innerHTML = `<div style="display:grid;place-items:center;height:100vh;font:16px system-ui;color:#ccc;background:#0b0911;text-align:center"><div><h2>RoCrew is closed</h2><p>Open it again from Start RoCrew (or your Start menu if you installed it). You can close this window.</p></div></div>`;
     setTimeout(() => window.close(), 800);
   },
   "deep-dive": (el) => deepDive(el.dataset.id),

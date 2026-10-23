@@ -54,7 +54,7 @@ How the automation works:
 
 ## It's an app
 
-Double-click **Start RoCrew.vbs**. RoCrew runs with no extra windows and puts an icon in the **system tray** (bottom right, by the clock): double-click it to open RoCrew, right-click → **Quit RoCrew** to close everything. Close or minimize the RoCrew window and alt-tab freely; the crew keeps working in the tray. (`Start RoCrew.bat` does the same with a visible log window, handy if something goes wrong.) RoCrew opens in its own window (Edge or Chrome app mode, no browser tabs or address bar), which you can minimize like any app; the crew keeps working. You can also pin it: in that window's menu choose **Install RoCrew** to get a Start-menu and taskbar icon. The first time, a short setup walks you through your name, Claude Code, Roblox Studio, how much of your plan to use, optional extras (Roblox sign-in, Gemini key, pairing with a friend) and your first idea.
+Double-click **Start RoCrew.vbs**. RoCrew runs with no extra windows and puts an icon in the **system tray** (bottom right, by the clock): double-click it to open RoCrew, right-click → **Quit RoCrew** to close everything. Close or minimize the RoCrew window and alt-tab freely; the crew keeps working in the tray. Closing the window with the X only hides it: the crew keeps going, and the tray icon brings it back. Nothing shows a black window; if you ever need a log to send me, use `Start RoCrew (with log window).bat`. RoCrew opens in its own window (Edge or Chrome app mode, no browser tabs or address bar), which you can minimize like any app; the crew keeps working. You can also pin it: in that window's menu choose **Install RoCrew** to get a Start-menu and taskbar icon. The first time, a short setup walks you through your name, Claude Code, Roblox Studio, how much of your plan to use, optional extras (Roblox sign-in, Gemini key, pairing with a friend) and your first idea.
 
 ## Test requests you can do from your phone
 
@@ -109,7 +109,7 @@ After that, Liveops and Merchant can read your game's retention, funnels and mon
 
 - Saves are written safely with a backup copy, so a crash or power cut loses at most a second.
 - If the app stops mid-task, the task picks up where it stopped when RoCrew starts again (it resumes the same Claude conversation).
-- `Start RoCrew.bat` restarts RoCrew by itself if it ever stops unexpectedly. Turn on **Settings → Start RoCrew when I turn on my PC** so it comes back after a restart.
+- RoCrew restarts by itself (from the tray) if it ever stops unexpectedly. Turn on **Settings → Start RoCrew when I turn on my PC** so it comes back after a restart.
 - Use **Team Create** in Roblox Studio so every change in the place is saved to Roblox's cloud straight away.
 
 ## Making games with a friend
@@ -156,7 +156,7 @@ Steps:
    cd my-admin-panel/rocrew
    ```
 2. **Connect Roblox Studio to Claude Code.** Open your place in Studio, open the Assistant, then its settings, then **MCP Servers**, and use quick connect for **Claude Code**. Check it worked with `claude mcp list`.
-3. **Start the studio.** On Windows, double-click **`Start RoCrew.bat`**. Anywhere else:
+3. **Start the studio.** On Windows, double-click **`Start RoCrew.vbs`** (or `Start RoCrew.bat`; both run hidden in the tray). Anywhere else:
    ```
    node studio/server.mjs
    ```
