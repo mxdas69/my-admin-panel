@@ -15,7 +15,7 @@ import { Crew, slugify } from "./lib/crew.mjs";
 import { AGENTS, isAgent } from "./lib/agents.mjs";
 import { probeClaude } from "./lib/claude.mjs";
 import { presetTable } from "./lib/models.mjs";
-import { fetchCharts, fetchDetails, velocity, breakouts, openings, gameDeepDive, topStoreArt, searchGames, liveNumbers, uploadDecal } from "./lib/roblox.mjs";
+import { fetchCharts, fetchDetails, velocity, breakouts, openings, gameDeepDive, topStoreArt, searchGames, saveGameArt, liveNumbers, uploadDecal } from "./lib/roblox.mjs";
 import { generateImage, askGemini } from "./lib/gemini.mjs";
 import { RemoteControl } from "./lib/remote.mjs";
 import { RobloxBrowser } from "./lib/robloxBrowser.mjs";
@@ -681,6 +681,14 @@ route("POST", /^\/api\/upload$/, async (req) => {
 
 route("GET", /^\/api\/market$/, () => marketView());
 route("POST", /^\/api\/market\/refresh$/, () => refreshMarket());
+route("GET", /^\/api\/market\/art\/([\d,]+)$/, async (req, url, [ids]) => {
+  try {
+    const files = await saveGameArt(ids.split(",").filter(Boolean), path.join(MEDIA, "game-art"));
+    return { files };
+  } catch (err) {
+    throw new HttpError(502, err.message);
+  }
+});
 route("GET", /^\/api\/market\/search$/, async (req, url) => {
   try {
     return await searchGames(url.searchParams.get("q") ?? "");

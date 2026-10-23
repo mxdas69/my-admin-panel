@@ -72,6 +72,7 @@ Generators and intel
   gemini --prompt "…" [--image a.png,…]    Ask Gemini for a second opinion
   market [--refresh] [--json]              Openings by genre, breakouts, rank moves, top charts (compact)
   market --sort <chart>                    One full chart, e.g. --sort trending-in-survival
+  market art <id>[,<id>,…]                 Save games' icons and thumbnails as images you can look at (Read them)
   market search "<words>"                 Top games for a keyword or format ("+1 speed", "climb"), biggest first
   market game <id>[,<id>,…]                Deep dive (up to 8 games in one command; don't loop): numbers, like ratio, pass and product prices,
                                            badge activity, similar games, 14 days of player counts
@@ -356,6 +357,13 @@ switch (cmd) {
   }
 
   case "market": {
+    if (sub === "art") {
+      const ids = o._.slice(2).join(",").replace(/[^\d,]/g, "").replace(/,+/g, ",").replace(/^,|,$/g, "");
+      if (!ids) fail("Usage: market art <universeId>[,<universeId>…]");
+      const r = await api("GET", `/api/market/art/${ids}`);
+      console.log(r.files.length ? `Saved ${r.files.length} image(s). Look at them with the Read tool:\n${r.files.join("\n")}` : "Roblox returned no images.");
+      break;
+    }
     if (sub === "search") {
       const q = o._.slice(2).join(" ");
       if (!q) fail('Usage: market search "+1 speed"');

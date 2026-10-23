@@ -282,6 +282,28 @@ export async function topStoreArt({ snapshot, sortId = "top-trending", kind = "t
   return { chart: sort.name, refs: out };
 }
 
+/** Save the icon and first thumbnails of some games as PNGs, so agents can look at them. */
+export async function saveGameArt(universeIds, dir) {
+  const ids = universeIds.slice(0, 10).join(",");
+  const [icons, thumbs] = await Promise.all([
+    getJson(`https://thumbnails.roblox.com/v1/games/icons?universeIds=${ids}&returnPolicy=PlaceHolder&size=512x512&format=Png&isCircular=false`),
+    getJson(`https://thumbnails.roblox.com/v1/games/multiget/thumbnails?universeIds=${ids}&countPerUniverse=2&defaults=true&size=768x432&format=Png&isCircular=false`),
+  ]);
+  fs.mkdirSync(dir, { recursive: true });
+  const out = [];
+  const save = async (url, file) => {
+    const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!res.ok) return null;
+    fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+    return file;
+  };
+  for (const i of icons.data ?? []) if (i.state === "Completed" && i.imageUrl) out.push(await save(i.imageUrl, path.join(dir, `${i.targetId}-icon.png`)));
+  for (const g of thumbs.data ?? []) {
+    for (const [n, t] of (g.thumbnails ?? []).entries()) if (t.state === "Completed" && t.imageUrl) out.push(await save(t.imageUrl, path.join(dir, `${g.universeId}-thumb${n + 1}.png`)));
+  }
+  return out.filter(Boolean);
+}
+
 /** Search Roblox games by keyword ("+1 speed", "climb"), biggest first, with numbers. */
 export async function searchGames(query, limit = 15) {
   const url = `https://apis.roblox.com/search-api/omni-search?searchQuery=${encodeURIComponent(query)}&sessionId=${randomUUID()}&pageType=all`;
