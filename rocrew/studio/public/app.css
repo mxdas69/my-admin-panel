@@ -454,3 +454,11 @@ body.with-remote-bar .app { padding-top: 42px; }
 .nav-item.quit { width: 100%; background: none; border: 0; color: var(--muted); font: inherit; cursor: pointer; text-align: left; }
 .nav-item.quit:hover { color: #fecdd3; }
 .setup-log { background: #0d0b14; border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: 12px; white-space: pre-wrap; max-height: 160px; overflow: auto; }
+
+.steps-fold { max-width: 860px; margin: 0 auto 12px; }
+.steps-fold > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--faint); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); }
+.steps-fold > summary::-webkit-details-marker { display: none; }
+.steps-fold > summary svg { transition: transform 0.15s; }
+.steps-fold[open] > summary svg { transform: rotate(90deg); }
+.steps-fold > summary .err { color: #fca5a5; }
+.steps-fold[open] > summary { margin-bottom: 6px; }

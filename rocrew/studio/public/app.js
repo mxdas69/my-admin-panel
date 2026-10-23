@@ -250,7 +250,22 @@ function chatInner(id) {
       ? `<div class="empty">Tell the Lead what you want built. They plan it, hand out the work, and come back with results.<br><br><span class="faint">Try: "Make me a rooftop delivery game with quick rounds and upgrades that keep players coming back."</span></div>`
       : `<div class="empty">${esc(agent(id).name)} hasn't worked yet. Their tasks and replies show up here.</div>`;
   }
-  return list.map(messageHtml).join("");
+  // Fold each run of tool lines into one collapsed "N steps" row; click it to see them.
+  const out = [];
+  for (let i = 0; i < list.length; ) {
+    if (list[i].role === "tool" || list[i].role === "tool-error") {
+      let j = i;
+      while (j < list.length && (list[j].role === "tool" || list[j].role === "tool-error")) j++;
+      const run = list.slice(i, j);
+      const errors = run.filter((m) => m.role === "tool-error").length;
+      out.push(`<details class="steps-fold"><summary>${icon("right")}${run.length} step${run.length > 1 ? "s" : ""}${errors ? ` · <span class="err">${errors} problem${errors > 1 ? "s" : ""}</span>` : ""}</summary>${run.map(messageHtml).join("")}</details>`);
+      i = j;
+    } else {
+      out.push(messageHtml(list[i]));
+      i++;
+    }
+  }
+  return out.join("");
 }
 
 function composerHtml(key, placeholder, hint = "Enter to send · Shift+Enter for a new line · Ctrl+V pastes screenshots") {
