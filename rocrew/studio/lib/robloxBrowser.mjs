@@ -68,12 +68,18 @@ export class RobloxBrowser {
   }
 
   /** Open a normal browser window on the Roblox sign-in page, using the crew's profile. */
+  /** Whether a browser already has the crew's profile open (Chromium leaves a lock file). */
+  profileInUse() {
+    return ["lockfile", "SingletonLock", "SingletonCookie"].some((f) => fs.existsSync(path.join(this.profile, f)));
+  }
+
   openSignIn() {
     const b = this.browser();
     if (!b) throw new Error("No Brave, Microsoft Edge or Google Chrome found on this PC. Install one and try again.");
     if (this.window) return;
+    if (this.profileInUse()) throw new Error("The RoCrew Roblox window is already open (or an agent is using it). Sign in there, close it, then press Check.");
     fs.mkdirSync(this.profile, { recursive: true });
-    const child = spawn(b.file, [`--user-data-dir=${this.profile}`, "--no-first-run", "--no-default-browser-check", "--mute-audio", "--new-window", "https://www.roblox.com/login"], { stdio: "ignore", detached: false });
+    const child = spawn(b.file, [`--user-data-dir=${this.profile}`, "--no-first-run", "--no-default-browser-check", "--mute-audio", "https://www.roblox.com/login"], { stdio: "ignore", detached: false });
     this.window = child;
     child.on("exit", () => {
       this.window = null;
@@ -95,7 +101,8 @@ export class RobloxBrowser {
   check({ timeoutMs = 45000, busy = false } = {}) {
     const b = this.browser();
     if (!b) return Promise.resolve(this.saveStatus({ signedIn: false, error: "No Edge or Chrome found." }));
-    if (this.window || busy) return Promise.resolve(this.status);
+    // Never start a second copy on a profile that's open: it would just open tabs in that window.
+    if (this.window || busy || this.profileInUse()) return Promise.resolve(this.status);
     if (!fs.existsSync(this.profile)) return Promise.resolve(this.saveStatus({ signedIn: false, name: null, userId: null, error: null }));
     return new Promise((resolve) => {
       const child = spawn(b.file, ["--headless=new", `--user-data-dir=${this.profile}`, "--mute-audio", "--disable-gpu", "--no-first-run", "--dump-dom", "https://users.roblox.com/v1/users/authenticated"], { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });

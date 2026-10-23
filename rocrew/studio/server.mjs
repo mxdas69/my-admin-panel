@@ -1170,7 +1170,8 @@ server.on("error", (err) => {
 function openInBrowser(url) {
   const app = robloxBrowser.browser();
   if (app && process.platform !== "linux") {
-    execFile(app.file, [`--app=${url}`, "--window-size=1360,880"], { windowsHide: true }, () => {});
+    // Its own small profile, so it opens as a separate app window instead of a tab in your browser.
+    execFile(app.file, [`--app=${url}`, `--user-data-dir=${path.join(DATA, "app-window")}`, "--no-first-run", "--no-default-browser-check", "--window-size=1360,880"], { windowsHide: true }, () => {});
     return;
   }
   const [cmd, args] = process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];
