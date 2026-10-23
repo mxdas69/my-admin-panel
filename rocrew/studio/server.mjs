@@ -463,6 +463,11 @@ route("POST", /^\/api\/tasks$/, async (req) => {
     model: b.model || null,
   });
 });
+route("POST", /^\/api\/tasks\/decide$/, async (req) => {
+  const { ids, approve } = await readJson(req);
+  need(Array.isArray(ids) && ids.length, "Pick at least one task.");
+  return { changed: crew.decideProposed(ids.map(String), Boolean(approve), personName(req)) };
+});
 route("POST", /^\/api\/tasks\/([\w]+)\/cancel$/, (req, url, [id]) => crew.cancel(id));
 route("POST", /^\/api\/pause$/, async (req) => {
   crew.setPaused((await readJson(req)).paused);

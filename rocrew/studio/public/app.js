@@ -87,8 +87,8 @@ function tile(id, size = "", link = false) {
 }
 
 function statusPill(s) {
-  const map = { working: "green", queued: "blue", done: "purple", failed: "red", blocked: "amber", cancelled: "", pending: "amber", approved: "green", changes: "amber", rejected: "red", open: "amber", idle: "" };
-  const label = { working: "Working now", changes: "Changes asked" }[s] ?? s[0].toUpperCase() + s.slice(1);
+  const map = { proposed: "amber", working: "green", queued: "blue", done: "purple", failed: "red", blocked: "amber", cancelled: "", pending: "amber", approved: "green", changes: "amber", rejected: "red", open: "amber", idle: "" };
+  const label = { working: "Working now", changes: "Changes asked", proposed: "Waiting for you" }[s] ?? s[0].toUpperCase() + s.slice(1);
   return `<span class="pill ${map[s] ?? ""}">${s === "working" ? '<span class="dot live"></span>' : ""}${esc(label)}</span>`;
 }
 
@@ -125,7 +125,8 @@ const counts = () => {
   const pitches = s.pitches.filter((p) => p.status === "pending").length;
   const working = s.statuses.filter((x) => x.status === "working").length;
   const queued = s.tasks.filter((t) => t.status === "queued").length;
-  return { asks, reviews, pitches, needYou: asks + reviews + pitches, working, queued, open: working + queued };
+  const proposed = s.tasks.filter((t) => t.status === "proposed").length;
+  return { asks, reviews, pitches, proposed, needYou: asks + reviews + pitches + (proposed ? 1 : 0), working, queued, open: working + queued };
 };
 
 // ---------- routing ----------
@@ -437,6 +438,15 @@ PAGES.home = {
     }
     if (c.reviews) cards.push(card("review", "Review", `${c.reviews} new item${c.reviews > 1 ? "s" : ""} from the agents`, "", `<a class="btn" href="#/review">Review them</a>`));
     if (c.pitches) cards.push(card("bulb", "Pitches", `${c.pitches} pitch${c.pitches > 1 ? "es need" : " needs"} your decision`, "Nothing gets built until you approve one.", `<a class="btn" href="#/pitches">Open pitches</a>`));
+    const proposed = s.tasks.filter((t) => t.status === "proposed");
+    if (proposed.length) {
+      cards.push(`<div class="card glow"><div class="card-head">${tile("lead", "lg")}<div class="grow">
+        <div class="eyebrow">Approve work</div><h3>The crew wants to start ${proposed.length} task${proposed.length > 1 ? "s" : ""}</h3>
+        <p class="muted" style="margin-top:0">Untick anything you don't want. Nothing starts until you press Start.</p>
+        <div class="approve-list">${proposed.map((t) => `<label class="check"><input type="checkbox" data-propose="${t.id}" checked><span>${tile(t.agent)} <b>${esc(agent(t.agent).name)}</b>: ${esc(t.title)}${t.brief ? `<br><small class="muted">${esc(t.brief.slice(0, 160))}${t.brief.length > 160 ? "…" : ""}</small>` : ""}</span></label>`).join("")}</div>
+        <div class="row" style="margin-top:10px"><button class="btn primary" data-act="approve-tasks">${icon("play")}Start ticked</button><button class="btn" data-act="skip-tasks">Skip all</button></div>
+      </div></div></div>`);
+    }
     for (const a of s.asks.filter((x) => x.status === "open")) cards.push(askCard(a));
     const html = cards.join("") || `<div class="empty">Nothing needs you right now. The crew will add checkpoints here.</div>`;
     // Re-render only when something changed, so videos and slideshows don't restart on every update.
@@ -1166,6 +1176,7 @@ function modelsCardHtml(v) {
     <label class="field" style="margin-top:12px">Force one model for everyone <small>Optional. Overrides the table, for example <span class="mono">sonnet</span> or a full model id. Leave empty to use the table.</small><input class="input mono" id="set-model" value="${esc(v.model)}" placeholder="use the table"></label>
     <label class="field">Stop new work at <small>When your 5-hour or weekly plan usage passes this, agents wait until it resets. What you send the Lead still runs.</small>
       <span class="row"><input class="input" type="number" min="10" max="100" id="set-usageCeilingPct" value="${v.usageCeilingPct}" style="width:90px"><span>%</span></span></label>
+    <label class="check"><input type="checkbox" id="set-approveTasks" ${v.approveTasks !== false ? "checked" : ""}><span><b>Ask me before the crew starts new work</b><br><small class="muted">Tasks the Lead hands out wait on Home until you tick which ones go ahead. Turn off to let the crew run by itself.</small></span></label>
     <label class="check"><input type="checkbox" id="set-paceWeekly" ${v.paceWeekly !== false ? "checked" : ""}><span><b>Make my weekly plan last the whole week</b><br><small class="muted">The crew never gets ahead of an even pace (about 14% a day, plus a small head start), so it can't use your whole week in one night. Your own messages to the Lead still go through.</small></span></label>
     ${u ? `<div class="usage-box">${usageBars(u)}<small class="faint">Last reported by Claude Code ${ago(u.at)}.</small></div>` : `<p class="faint" style="font-size:12px;margin:0">Usage shows here after the first agent run.</p>`}
   </div>`;
@@ -1311,6 +1322,7 @@ async function saveSettings() {
     agentModels: Object.fromEntries([...document.querySelectorAll("[data-model-agent]")].map((x) => [x.dataset.modelAgent, x.value])),
     usageCeilingPct: val("set-usageCeilingPct"),
     paceWeekly: document.getElementById("set-paceWeekly")?.checked ?? true,
+    approveTasks: document.getElementById("set-approveTasks")?.checked ?? true,
     permissionMode: document.querySelector('input[name="perm"]:checked')?.value ?? "safe",
     extraAllowedTools: val("set-extraAllowedTools").split(",").map((s) => s.trim()).filter(Boolean),
     maxParallel: val("set-maxParallel"),
@@ -1489,6 +1501,19 @@ const ACTIONS = {
     await refresh();
   },
   "select-all": (el) => el.select(),
+  "approve-tasks": async () => {
+    const boxes = [...document.querySelectorAll("[data-propose]")];
+    const yes = boxes.filter((b) => b.checked).map((b) => b.dataset.propose);
+    const no = boxes.filter((b) => !b.checked).map((b) => b.dataset.propose);
+    if (yes.length) await attempt(() => api("POST", "/api/tasks/decide", { ids: yes, approve: true }));
+    if (no.length) await attempt(() => api("POST", "/api/tasks/decide", { ids: no, approve: false }));
+    toast(`${yes.length} started${no.length ? `, ${no.length} skipped` : ""}.`);
+    await refresh();
+  },
+  "skip-tasks": async () => {
+    const ids = [...document.querySelectorAll("[data-propose]")].map((b) => b.dataset.propose);
+    if (await attempt(() => api("POST", "/api/tasks/decide", { ids, approve: false }), "Skipped. The Lead will be told.")) await refresh();
+  },
   "update-now": async (el) => {
     el.disabled = true;
     el.innerHTML = '<span class="spinner"></span> Updating…';

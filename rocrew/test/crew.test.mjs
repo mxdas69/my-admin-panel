@@ -79,7 +79,7 @@ async function until(check, ms = 15000) {
 }
 
 before(async () => {
-  fs.writeFileSync(path.join(DATA, "config.json"), JSON.stringify({ claudeCommand: "node test/fake-claude.mjs", maxParallel: 3, maxAutoRounds: 3 }));
+  fs.writeFileSync(path.join(DATA, "config.json"), JSON.stringify({ claudeCommand: "node test/fake-claude.mjs", maxParallel: 3, maxAutoRounds: 3, approveTasks: false }));
   server = spawn("node", ["studio/server.mjs"], { cwd: ROOT, env, stdio: "ignore" });
   for (let i = 0; i < 50 && !fs.existsSync(path.join(DATA, "runtime.json")); i++) await sleep(100);
   token = JSON.parse(fs.readFileSync(path.join(DATA, "runtime.json"), "utf8")).token;
@@ -423,7 +423,7 @@ test("the Roblox sign-in check reads who is signed in, and never mistakes 'offli
 test("browser tasks get the signed-in browser one at a time, and only once signed in", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rocrew-browser-"));
   const store = new Store(path.join(dir, "state.json"));
-  const config = { get: () => ({ maxParallel: 5, usageCeilingPct: 90, modelPreset: "balanced", agentModels: {}, model: "", permissionMode: "safe", extraAllowedTools: [], taskTimeoutMin: 5, maxAutoRounds: 5 }) };
+  const config = { get: () => ({ approveTasks: false, maxParallel: 5, usageCeilingPct: 90, modelPreset: "balanced", agentModels: {}, model: "", permissionMode: "safe", extraAllowedTools: [], taskTimeoutMin: 5, maxAutoRounds: 5 }) };
   const runs = [];
   const crew = new Crew({ store, config, root: ROOT, runner: (o) => (runs.push(o), { done: new Promise(() => {}), kill() {} }) });
   let signedIn = false;
@@ -510,4 +510,24 @@ test("weekly pacing spreads the plan across the week", () => {
   assert.equal(crew.usageHold(), null, "20% after 2 days is within pace (about 39%)");
   crew.recordUsage({ unifiedWindows: { seven_day: { utilization: 0.5, resetsAt: twoDaysIn } } });
   assert.equal(crew.usageHold()?.pacing, true, "50% after 2 days is ahead of pace");
+});
+
+test("with 'ask me first' on, crew tasks wait for approval and skipped ones are reported", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rocrew-approve-"));
+  const store = new Store(path.join(dir, "state.json"));
+  const config = { get: () => ({ maxParallel: 3, usageCeilingPct: 90, approveTasks: true, modelPreset: "balanced", agentModels: {}, model: "", permissionMode: "safe", extraAllowedTools: [], taskTimeoutMin: 5, maxAutoRounds: 5 }) };
+  const started = [];
+  const crew = new Crew({ store, config, root: ROOT, runner: (o) => (started.push(o.agent), { done: new Promise(() => {}), kill() {} }) });
+  const a = crew.addTask({ agent: "builder", title: "Fix shop", from: "lead" });
+  const b = crew.addTask({ agent: "splash", title: "New icon", from: "lead" });
+  crew.tick();
+  assert.deepEqual(started, []);
+  assert.equal(a.status, "proposed");
+  crew.decideProposed([a.id], true);
+  crew.decideProposed([b.id], false);
+  assert.deepEqual(started, ["builder"]);
+  assert.equal(b.status, "cancelled");
+  assert.match(store.agent("lead").verdicts.join(" "), /skipped: Splash "New icon"/);
+  const mine = crew.addTask({ agent: "frame", title: "Owner's own task", from: "owner" });
+  assert.equal(mine.status, "queued", "your own tasks never need approval");
 });

@@ -24,6 +24,8 @@ export const DEFAULTS = {
   // Spread the weekly plan over the week: new work waits whenever the crew is ahead of an even
   // pace (for example 30% used only 2 days in), so it never burns the whole week in one night.
   paceWeekly: true,
+  // New tasks the crew hands out wait for the owner to approve them in the app.
+  approveTasks: true,
   host: "127.0.0.1",
   port: 4600,
   gemini: { apiKey: "", imageModel: "gemini-3.1-flash-image-preview", textModel: "gemini-flash-latest" },

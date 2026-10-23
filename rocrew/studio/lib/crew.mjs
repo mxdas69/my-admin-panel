@@ -98,7 +98,8 @@ export class Crew extends EventEmitter {
       after,
       size,
       model: model || null,
-      status: "queued",
+      // With "ask me first" on, work the crew hands out waits for the owner's OK.
+      status: from !== "owner" && from !== "system" && this.config.get().approveTasks !== false ? "proposed" : "queued",
       createdAt: Date.now(),
       startedAt: null,
       endedAt: null,
@@ -216,7 +217,7 @@ export class Crew extends EventEmitter {
       const dep = this.db.tasks.find((t) => t.id === id);
       if (!dep) continue;
       if (dep.status === "failed" || dep.status === "cancelled" || dep.status === "blocked") return "broken";
-      if (dep.status !== "done") waiting = true;
+      if (dep.status !== "done") waiting = true; // includes "proposed": waits for approval
     }
     return waiting ? "waiting" : "ready";
   }
@@ -398,6 +399,26 @@ export class Crew extends EventEmitter {
     this.tick();
   }
 
+  /** The owner approves or skips proposed tasks. Skipped ones are reported to the Lead. */
+  decideProposed(ids, approve, by = "owner") {
+    const picked = this.db.tasks.filter((t) => ids.includes(t.id) && t.status === "proposed");
+    for (const t of picked) {
+      if (approve) t.status = "queued";
+      else {
+        t.status = "cancelled";
+        t.error = "Skipped by the owner";
+        t.endedAt = Date.now();
+        t.reported = true;
+      }
+    }
+    if (!approve && picked.length) {
+      this.store.agent("lead").verdicts.push(`${by === "owner" ? "The owner" : by} skipped: ${picked.map((t) => `${agentName(t.agent)} "${t.title}"`).join("; ")}. Don't queue these again unless asked.`);
+    }
+    this.changed();
+    this.tick();
+    return picked.length;
+  }
+
   /** When the workers go quiet, hand the Lead a digest so it can plan the next step. */
   maybeWakeLead() {
     const cfg = this.config.get();
@@ -405,6 +426,7 @@ export class Crew extends EventEmitter {
     const workerActive = tasks.some((t) => t.agent !== "lead" && (t.status === "working" || (t.status === "queued" && this.depsState(t) === "ready")));
     const leadActive = tasks.some((t) => t.agent === "lead" && (t.status === "working" || t.status === "queued"));
     if (workerActive || leadActive) return;
+    if (tasks.some((t) => t.status === "proposed")) return; // waiting for the owner to approve
     const unreported = tasks.filter((t) => t.agent !== "lead" && !t.reported && TERMINAL.has(t.status));
     if (!unreported.length) return;
 
