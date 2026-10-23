@@ -382,6 +382,13 @@ PAGES.home = {
         <button class="btn" data-act="new-task">${icon("tasks")}New task</button>
         <button class="btn" data-act="pause" id="pause-btn"></button>
       </div>
+      <div class="quick-row">
+        <span class="faint">Try:</span>
+        <button class="chip-btn" data-act="quick" data-id="ideas">${icon("bulb")}Find me a game idea</button>
+        <button class="chip-btn" data-act="quick" data-id="next">${icon("sparkle")}What should we do next?</button>
+        <button class="chip-btn" data-act="quick" data-id="stats">${icon("chart")}How is my game doing?</button>
+        <button class="chip-btn" data-act="quick" data-id="polish">${icon("star")}Polish my game for launch</button>
+      </div>
       <div id="home-banner"></div>
       <div class="cols">
         <div><div id="setup"></div><h2 class="section-title">Needs you <span id="needs-count"></span></h2><div id="needs"></div>
@@ -761,7 +768,7 @@ PAGES.games = {
       const last = live.at(-1);
       body.innerHTML = `<div class="card"><div class="row"><label class="field grow" style="margin:0">Universe id <small>From the Creator Hub, once the game is published.</small><input class="input" id="universe-${game.slug}" value="${esc(game.universeId ?? "")}" placeholder="e.g. 1234567890"></label>
         <button class="btn" data-act="save-universe" data-id="${esc(game.slug)}">Save</button><button class="btn primary" data-act="fetch-live" data-id="${esc(game.slug)}">${icon("refresh")}Fetch now</button></div></div>
-        ${last ? `<div class="stats" style="padding:16px 0">${[["Playing now", last.playing], ["Visits", last.visits], ["Favorites", last.favorites], ["Like %", last.likePct]].map(([l, v]) => `<div class="stat"><div class="l">${l}</div><div class="v">${fmt(v)}</div></div>`).join("")}</div>
+        ${last ? `<div class="kv-stats" style="padding:16px 0">${[["Playing now", last.playing], ["Visits", last.visits], ["Favorites", last.favorites], ["Like %", last.likePct]].map(([l, v]) => `<div class="stat"><div class="l">${l}</div><div class="v">${fmt(v)}</div></div>`).join("")}</div>
         <div class="table-wrap"><table class="data"><thead><tr><th>When</th><th>Playing</th><th>Visits</th><th>Favorites</th><th>Like %</th></tr></thead><tbody>${live.slice().reverse().slice(0, 50).map((x) => `<tr><td>${new Date(x.at).toLocaleString()}</td><td>${fmt(x.playing)}</td><td>${fmt(x.visits)}</td><td>${fmt(x.favorites)}</td><td>${fmt(x.likePct)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted" style="margin-top:14px">No numbers yet. Retention, session length and revenue live in the Creator Hub; Liveops will ask you for them when it needs them.</p>`}`;
     } else {
       body.innerHTML = `<div class="files"><div class="card" style="padding:8px" id="file-list">Loading…</div><div class="card" id="file-view"><p class="muted">Pick a file: the plan, economy, reports and art all live here.</p></div></div>`;
@@ -839,7 +846,7 @@ function pitchCard(p) {
       <div class="row" style="gap:6px">${(d.tags ?? []).map((t) => `<span class="pill purple">${esc(t)}</span>`).join("")}${p.status !== "pending" ? statusPill(p.status) : ""}</div>
       <h3>${esc(p.title)}</h3><div>${esc(d.summary ?? "")}</div></div></div>
     ${d.different ? `<div class="card glow" style="margin:16px 22px 0"><div class="eyebrow">How we're different</div><b>${esc(d.different)}</b><div class="row" style="margin-top:6px">${(d.versus ?? []).map((v) => `<span class="pill">vs ${esc(v)}</span>`).join("")}</div></div>` : ""}
-    ${stats.length ? `<div class="stats">${stats.map(([l, v]) => `<div class="stat"><div class="l">${esc(l)}</div><div class="v">${esc(typeof v === "number" ? fmt(v) : v)}</div></div>`).join("")}</div>` : ""}
+    ${stats.length ? `<div class="kv-stats">${stats.map(([l, v]) => `<div class="stat"><div class="l">${esc(l)}</div><div class="v">${esc(typeof v === "number" ? fmt(v) : v)}</div></div>`).join("")}</div>` : ""}
     ${rows.length ? `<div class="kv">${rows.map(([k, v]) => `<div class="k">${esc(k)}</div><div>${esc(v)}</div>`).join("")}</div>` : ""}
     ${d.risks?.length ? `<div style="padding:0 22px 8px"><div class="eyebrow">Risks</div><ul>${d.risks.map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>` : ""}
     ${ev.sources?.length ? `<div style="padding:0 22px 12px" class="row">${ev.sources.map((u) => `<a class="pill blue" href="${esc(/^https?:/.test(u) ? u : "#")}" target="_blank" rel="noopener">source</a>`).join("")}</div>` : ""}
@@ -899,7 +906,7 @@ function marketOpenings(m) {
     <div class="openings">${list
       .map(
         (x, i) => `<div class="card opening"><div class="row"><span class="rank">${i + 1}</span><b class="grow">${esc(x.genre)}</b><span class="pill ${x.score >= 40 ? "green" : x.score >= 25 ? "amber" : ""}" title="Opening score">${x.score}</span></div>
-        <div class="stats"><span><b>${x.youngShare}%</b> under 4 months</span><span><b>${fmt(x.medianPlayers)}</b> median playing</span><span><b>${x.avgLikePct ?? "–"}%</b> liked</span>${x.newcomers !== null ? `<span><b>${x.newcomers}</b> new on chart</span>` : ""}</div>
+        <div class="kv-stats"><span><b>${x.youngShare}%</b> under 4 months</span><span><b>${fmt(x.medianPlayers)}</b> median playing</span><span><b>${x.avgLikePct ?? "–"}%</b> liked</span>${x.newcomers !== null ? `<span><b>${x.newcomers}</b> new on chart</span>` : ""}</div>
         ${x.examples.length ? `<div class="faint" style="font-size:12px;margin-top:8px">Young games doing well: ${x.examples.map((e) => `<a href="#" data-act="deep-dive" data-id="${e.universeId}">${esc(e.name)}</a> (${fmt(e.players)}, ${e.ageDays ?? "?"}d)`).join(", ")}</div>` : ""}
         <div class="row" style="margin-top:8px"><button class="btn small" data-act="market-open-sort" data-id="${esc(x.sortId)}">See the chart</button></div></div>`,
       )
@@ -913,7 +920,7 @@ async function deepDive(id) {
   const spark = g.playersLast14Days.length ? sparkline(g.playersLast14Days.map((d) => d.players)) : "";
   modal(`<div class="row"><h3 class="grow" style="margin:0">${esc(g.name)}</h3><a class="btn small" href="https://www.roblox.com/games/${esc(g.placeId)}" target="_blank" rel="noopener">Open on Roblox</a></div>
     <p class="faint" style="margin-top:4px">by ${esc(g.creator)} · ${esc(g.genre || "no genre")} · ${g.ageDays ?? "?"} days old · updated ${esc(g.updated?.slice(0, 10) ?? "?")}</p>
-    <div class="stats big"><span><b>${fmt(g.playing)}</b> playing</span><span><b>${fmt(g.visits)}</b> visits</span><span><b>${g.likePct ?? "–"}%</b> liked</span><span><b>${g.favoritesPer1kVisits ?? "–"}</b> favorites / 1k visits</span></div>
+    <div class="kv-stats big"><span><b>${fmt(g.playing)}</b> playing</span><span><b>${fmt(g.visits)}</b> visits</span><span><b>${g.likePct ?? "–"}%</b> liked</span><span><b>${g.favoritesPer1kVisits ?? "–"}</b> favorites / 1k visits</span></div>
     ${spark ? `<h4>Players, last 14 days</h4>${spark}` : ""}
     ${g.passes.length ? `<h4>Game passes (${g.passes.length})</h4><div class="row" style="gap:6px">${g.passes.map((p) => `<span class="pill">${esc(p.name)} · ${p.price ?? "off sale"}</span>`).join("")}</div>` : ""}
     ${g.products.length ? `<h4>Developer products (${g.products.length})</h4><div class="row" style="gap:6px">${g.products.slice(0, 24).map((p) => `<span class="pill">${esc(p.name)} · ${p.price ?? "–"}</span>`).join("")}</div>` : ""}
@@ -1549,6 +1556,19 @@ const ACTIONS = {
       S.people = { ...S.people, people: res.people };
       document.getElementById("people").innerHTML = peopleHtml();
     }
+  },
+  quick: async (el) => {
+    const asks = {
+      ideas: ["pulse", "Find me game ideas from the market", "Look at `node studio/cli.mjs market` (Openings and Breakouts), deep-dive the best young games, and send me 2-3 pitches I can approve."],
+      next: ["lead", "What should we do next?", "Look at where every game stands and tell me in a few lines what the crew should do next. If it's obvious, start it."],
+      stats: ["liveops", "How is my game doing?", "Check how my published game is doing: players, retention, the first-session funnel and money, using the Roblox browser if I've signed in, otherwise the public numbers. Tell me the 3 biggest problems and what to do about each, in plain words."],
+      polish: ["lead", "Polish the game for launch", "Get the current game ready to launch: run the test-and-fix stage, make sure it works on phone, PC and console, check security, then store art and the launch checklist. Ask me only what only I can do."],
+    };
+    const [agentId, title, brief] = asks[el.dataset.id];
+    const t = agentId === "lead"
+      ? await attempt(() => api("POST", "/api/lead/message", { text: `${title}\n\n${brief}` }))
+      : await attempt(() => api("POST", "/api/tasks", { agent: agentId, from: "owner", title, brief }));
+    if (t) toast(`${agent(agentId).name} is on it.`);
   },
   "hide-setup": () => {
     S.ui.hideSetup = true;
