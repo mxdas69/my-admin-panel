@@ -56,7 +56,7 @@ Games and library
   upload --file <image> --name "…"         Upload an image to Roblox as a Decal (Open Cloud); prints the asset id
 
 Store art (Splash) — the cheap, high-quality way to make icons and thumbnails
-  store-art icon|thumb --variants "A: warm sunset grade|B: cool night grade|C: tighter crop|D: stronger hero glow"
+  store-art icon|thumb|pass --variants "A: warm sunset grade|B: cool night grade|C: tighter crop|D: stronger hero glow"
            [--ref games/<slug>/art/cap_wide.png,games/<slug>/art/cap_hero.png] [--text "MEGA EGGS"] [--game slug]
                                             Finishes your Studio captures into 4 variants in parallel (Gemini), sets
                                             the title text with ffmpeg, scores each at phone size, and sends the set
@@ -138,8 +138,8 @@ switch (cmd) {
 
   case "store-art": {
     const kind = sub;
-    if (!["icon", "thumb"].includes(kind) || typeof o.variants !== "string") {
-      fail('Usage: store-art icon|thumb --variants "A line|B line|C line|D line" [--ref shot.png,hero.png] [--text "2 WORDS"] [--game slug]');
+    if (!["icon", "thumb", "pass"].includes(kind) || typeof o.variants !== "string") {
+      fail('Usage: store-art icon|thumb|pass --variants "A line|B line|C line|D line" [--ref shot.png,hero.png] [--text "2 WORDS"] [--game slug]');
     }
     console.log(`Making ${o.variants.split("|").length} ${kind === "icon" ? "icons" : "thumbnails"} with Gemini (about a minute)…`);
     const r = await api("POST", "/api/store-art", { kind, variants: o.variants.split("|"), refs: list(o.ref), text: typeof o.text === "string" ? o.text : "", game, question: typeof o.question === "string" ? o.question : "", from: ME });

@@ -487,7 +487,7 @@ route("POST", /^\/api\/reviews$/, async (req) => {
 });
 route("POST", /^\/api\/store-art$/, async (req) => {
   const b = await readJson(req);
-  const kind = b.kind === "icon" ? "icon" : "thumb";
+  const kind = ["icon", "pass"].includes(b.kind) ? b.kind : "thumb";
   const cfg = config.get().gemini;
   need(cfg.apiKey, "Add a Gemini API key in Settings first.");
   const game = b.game && store.data.games.find((g) => g.slug === b.game);
@@ -499,7 +499,7 @@ route("POST", /^\/api\/store-art$/, async (req) => {
   } catch (err) {
     throw new HttpError(400, err.message);
   }
-  const group = `${game?.name ?? "Store art"}: ${kind === "icon" ? "icons" : "thumbnails"} ${new Date().toLocaleDateString()}`;
+  const group = `${game?.name ?? "Store art"}: ${{ icon: "icons", pass: "pass icons", thumb: "thumbnails" }[kind]} ${new Date().toLocaleDateString()}`;
   const from = isAgent(b.from) ? b.from : "splash";
   const rel = (f) => path.relative(ROOT, f).split(path.sep).join("/");
   const ready = set.candidates.filter((c) => c.file);
@@ -508,8 +508,8 @@ route("POST", /^\/api\/store-art$/, async (req) => {
     const label = s ? ` · clicks ${s.ctr}/10 · hand-made look ${s.ai_clean}/10${s.textMismatch ? " · TEXT WRONG" : ""}` : "";
     const media = ingest(rel(c.file), `${kind}-${c.id}`);
     store.push("reviews", {
-      id: store.id("r"), agent: from, game: game?.slug ?? null, title: `${kind === "icon" ? "Icon" : "Thumbnail"} ${c.id}${label}`.slice(0, 120),
-      question: b.question?.trim() || (kind === "icon" ? "Which icon would you tap at phone size? Anything that looks fake?" : "Which thumbnails should go into Roblox's thumbnail test? Anything that looks fake?"),
+      id: store.id("r"), agent: from, game: game?.slug ?? null, title: `${{ icon: "Icon", pass: "Pass icon", thumb: "Thumbnail" }[kind]} ${c.id}${label}`.slice(0, 120),
+      question: b.question?.trim() || (kind !== "thumb" ? "Which icon would you tap at phone size? Anything that looks fake?" : "Which thumbnails should go into Roblox's thumbnail test? Anything that looks fake?"),
       file: rel(c.file), media, kind: "image", group, status: "pending", note: s?.worst ? `Judge: ${s.worst}. Fix: ${s.fix}` : "", createdAt: Date.now(),
     });
   }

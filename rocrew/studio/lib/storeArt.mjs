@@ -16,6 +16,8 @@ export const ENDINGS = {
     "Square Roblox game icon, finished like top front-page Roblox promo art: a polished, hand-finished 3D render of chunky Roblox characters and props, matte toy-plastic surfaces with soft roughness and crisp small bevels, hand-painted highlights. One subject fills about 70% of the frame, slightly off-center with the head tilted toward the viewer, and its big expressive face and silhouette read instantly at 64 pixels. One warm key light from the upper left, a bright cool rim light from behind, soft contact shadows. The background is a clean two-tone gradient in a contrasting hue. Important parts stay away from corners. Clean, wordless image: no text, logos or UI.",
   thumb:
     "Widescreen 16:9 Roblox game thumbnail, finished like top front-page Roblox promo art: a polished, hand-finished 3D render of chunky Roblox characters and props, matte toy-plastic surfaces, crisp small bevels, hand-painted highlights, bold but controlled colors (one dominant hue, one accent). The hero sits on the left or right third, face in the upper third, with the hero item large and close to the camera. One warm key light, a strong cool rim light, grounded contact shadows. Clear depth: a sharp subject, a simpler mid-ground, and a background of a few big, softly blurred shapes. The top corner opposite the hero stays calm; the bottom fifth stays plain. No text, logos or UI.",
+  pass:
+    "Square Roblox game pass or developer product icon: one bold hero item or reward (a pet, a sword, a stack of coins, a speed boot) as a chunky stylized 3D render, matte toy-plastic surfaces with soft roughness and crisp bevels, hand-painted highlights, filling about 75% of the frame and centered for a circular crop. Very saturated, high-contrast colors with one dominant hue and a clean radial-gradient background in a contrasting hue. One warm key light, a bright rim light, a soft contact shadow. Simple, smooth shapes: no stud textures, no brick or LEGO look, no extra sparkles, lens flares or particles. Reads instantly at 64 pixels. No text, numbers or logos.",
   edit:
     "Finish image 1, a real Roblox Studio capture, into premium Roblox promo art. Image 1 is the exact layout: keep every character, pose, blocky Roblox proportion, face, outfit, item and the camera angle identical. Add no new limbs, fingers, characters or objects. Image 2, when present, shows the hero's exact look. Change only finish and light: matte toy-plastic materials with soft roughness, hand-painted highlights, one warm key light from the upper left, a bright cool rim light from behind, soft contact shadows, a richer but controlled color grade, the background simplified into a few big softly blurred shapes, and a gentle glow on the hero item only. Clean, wordless image: no text or UI.",
 };
@@ -97,13 +99,14 @@ export function parseJudge(text) {
  * @param {string} [o.text]       1-3 words of title text, set with ffmpeg
  */
 export async function makeStoreArt({ apiKey, imageModel, textModel, kind, variants, refs = [], dir, text = "", hasFfmpeg, generate = generateImage, ask = askGemini }) {
-  if (!["icon", "thumb"].includes(kind)) throw new Error('kind must be "icon" or "thumb".');
+  if (!["icon", "thumb", "pass"].includes(kind)) throw new Error('kind must be "icon", "thumb" or "pass".');
   const list = variants.map((v) => v.trim()).filter(Boolean).slice(0, 6);
   if (!list.length) throw new Error("Give at least one variant line.");
   if (text && text.trim().split(/\s+/).length > 3) throw new Error("Keep title text to 3 words or fewer; it has to read at phone size.");
   fs.mkdirSync(dir, { recursive: true });
-  const ending = refs.length ? `${ENDINGS.edit} ${kind === "icon" ? ENDINGS.icon : ""}` : ENDINGS[kind];
-  const aspect = kind === "icon" ? "1:1" : "16:9";
+  const square = kind !== "thumb";
+  const ending = refs.length ? `${ENDINGS.edit} ${square ? ENDINGS[kind] : ""}` : ENDINGS[kind];
+  const aspect = square ? "1:1" : "16:9";
 
   const raw = await Promise.all(
     list.map(async (line, i) => {
@@ -121,13 +124,13 @@ export async function makeStoreArt({ apiKey, imageModel, textModel, kind, varian
 
   const canFinish = await hasFfmpeg();
   for (const r of ok) {
-    r.file = canFinish ? await finish(r.raw, path.join(dir, `${kind}_${r.id}.${kind === "icon" ? "png" : "jpg"}`), kind, text).catch(() => r.raw) : r.raw;
+    r.file = canFinish ? await finish(r.raw, path.join(dir, `${kind}_${r.id}.${square ? "png" : "jpg"}`), square ? "icon" : "thumb", kind === "pass" ? "" : text).catch(() => r.raw) : r.raw;
   }
 
   let sheet = null;
   let scores = {};
   if (canFinish) {
-    sheet = await contactSheet(ok.map((r) => r.file), kind, path.join(dir, `${kind}_sheet.png`)).catch(() => null);
+    sheet = await contactSheet(ok.map((r) => r.file), square ? "icon" : "thumb", path.join(dir, `${kind}_sheet.png`)).catch(() => null);
     if (sheet) {
       const verdict = await ask({ apiKey, model: textModel, prompt: JUDGE, images: [sheet] }).catch(() => "");
       scores = parseJudge(verdict);
