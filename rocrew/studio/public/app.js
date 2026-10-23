@@ -475,7 +475,7 @@ PAGES.home = {
     for (const a of s.asks.filter((x) => x.status === "open")) cards.push(askCard(a));
     const html = cards.join("") || `<div class="empty">Nothing needs you right now. The crew will add checkpoints here.</div>`;
     // Re-render only when something changed, so videos and slideshows don't restart on every update.
-    const sig = `${html.length}:${s.asks.map((a) => a.id + a.status + (a.reply ?? "")).join()}:${c.reviews}:${c.pitches}:${conn.studio?.status}:${JSON.stringify(S.ui.askMedia)}`;
+    const sig = `${html.length}:${proposed.map((t) => t.id + (t.plain ? 1 : 0)).join()}:${s.asks.map((a) => a.id + a.status + (a.reply ?? "")).join()}:${c.reviews}:${c.pitches}:${conn.studio?.status}:${JSON.stringify(S.ui.askMedia)}`;
     if (el.dataset.needsSig !== sig) {
       el.dataset.needsSig = sig;
       keepDrafts(el, () => {
@@ -1623,6 +1623,7 @@ const ACTIONS = {
     const boxes = [...document.querySelectorAll("[data-propose]")];
     const yes = boxes.filter((b) => b.checked).map((b) => b.dataset.propose);
     const no = boxes.filter((b) => !b.checked).map((b) => b.dataset.propose);
+    document.querySelector(".approve-list")?.closest(".card")?.remove();
     if (yes.length) await attempt(() => api("POST", "/api/tasks/decide", { ids: yes, approve: true }));
     if (no.length) await attempt(() => api("POST", "/api/tasks/decide", { ids: no, approve: false }));
     toast(`${yes.length} started${no.length ? `, ${no.length} skipped` : ""}.`);
@@ -1630,6 +1631,7 @@ const ACTIONS = {
   },
   "skip-tasks": async () => {
     const ids = [...document.querySelectorAll("[data-propose]")].map((b) => b.dataset.propose);
+    document.querySelector(".approve-list")?.closest(".card")?.remove();
     if (await attempt(() => api("POST", "/api/tasks/decide", { ids, approve: false }), "Skipped. The Lead will be told.")) await refresh();
   },
   "update-now": async (el) => {
