@@ -26,6 +26,7 @@ export const DENIED_TOOLS = [
 ];
 
 const BROWSER_AGENTS = ["liveops", "merchant"];
+const SESSION_TASKS = 5; // tasks per agent conversation before it starts fresh with a summary
 const BROWSER_SERVER = "roblox-browser";
 
 const BASE_TOOLS = [
@@ -279,8 +280,15 @@ export class Crew extends EventEmitter {
   launch(task) {
     const cfg = this.config.get();
     const state = this.store.agent(task.agent);
+    // Long conversations get expensive: every turn re-reads the whole history. After a few tasks,
+    // start the agent fresh and hand it a short note of where it left off instead.
+    if (state.sessionId && (state.tasksInSession ?? 0) >= SESSION_TASKS) {
+      state.sessionId = null;
+      state.tasksInSession = 0;
+    }
     const fresh = !state.sessionId;
     const prompt = this.buildPrompt(task, fresh);
+    state.tasksInSession = (state.tasksInSession ?? 0) + 1;
 
     const choice = pickModel(task, cfg);
     task.status = "working";
@@ -351,7 +359,10 @@ export class Crew extends EventEmitter {
     if (this.browserHolder === task.id) this.browserHolder = null;
     const state = this.store.agent(task.agent);
     if (res.sessionId) state.sessionId = res.sessionId;
-    if (res.ok) state.verdicts = [];
+    if (res.ok) {
+      state.verdicts = [];
+      state.lastHandoff = `${task.title}: ${(res.text ?? "").trim().slice(-1200)}`;
+    }
 
     task.endedAt = Date.now();
     task.costUsd = res.costUsd ?? null;
@@ -539,6 +550,9 @@ export class Crew extends EventEmitter {
     );
 
     const state = this.store.agent(task.agent);
+    if (fresh && state.lastHandoff) {
+      parts.push(`## Where you left off\nYour last handoff (your earlier conversation was closed to save usage; files and the game folder have everything else):\n${state.lastHandoff}`);
+    }
     if (state.verdicts?.length) {
       parts.push(`## Owner verdicts since your last pass\n${state.verdicts.map((v) => `- ${v}`).join("\n")}`);
     }
