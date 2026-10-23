@@ -168,6 +168,8 @@ function render(forceMount = false) {
     mountedKey = key;
     el.className = `page${page.flush ? " flush" : ""}`;
     el.removeAttribute("style");
+    // Forget what the last page drew here, or Home thinks its cards are already on screen.
+    for (const k of Object.keys(el.dataset)) delete el.dataset[k];
     page.mount(el, r.arg);
   } else {
     page.update?.(el, r.arg);
