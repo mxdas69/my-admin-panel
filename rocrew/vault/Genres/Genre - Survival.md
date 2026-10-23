@@ -169,7 +169,7 @@ Pick exactly one sub-format as the spine. Borrowing a mechanic from a neighbour 
 
 21. **The premise fits in one line and is unusual in one way.**
     Why: the thumbnail and title have to sell the fantasy instantly. RoWatcher's listing describes Dead Rails as a co-op adventure set in an alternate 1899, where a zombie plague has struck America and players ride trains to find a cure in Mexico [23]. The Wild West part is what GameAnalytics calls the novel element [22].
-    How: write "[setting] + [threat] + [goal]" in under 12 words before anything is built. Make one of the three unusual.
+    How: write "[setting] + [threat] + [goal]" in under 12 words before anything is built. Make one of the three unusual. A story underneath the premise helps too: 99 Nights in the Forest has enough lore that outlets publish explainers of it [21]. Reveal ours through notes and landmarks, never through a cutscene before the first chop.
     Done right: "Survive 99 nights in a forest with a monster deer."
     Done wrong: "A survival game with crafting and stuff."
 
@@ -279,7 +279,7 @@ Each entry teaches one pattern. Steal patterns, not art: never reuse another gam
 
 ### Big updates ship in parts with a public countdown
 **Game:** 99 Nights in the Forest ([17][18][19][20])
-**Shows:** Sportskeeda covered a "Halloween Week 1" update set for a specific Saturday time in UTC, with a notify option on the event page [19]. Deltia's describes the Hedge Maze as the third and final part of a Halloween update, with a Carnival Games area that unlocks entry to the maze [18]. Pocket Tactics dates the Hedge Maze update to November 1, 2025 [17]. Deltia's also covered a Fishing update [20].
+**Shows:** Sportskeeda covered a "Halloween Week 1" update scheduled for an exact time in UTC, with a notify option on the event page [19]. Deltia's describes the Hedge Maze as the third and final part of a Halloween update, with a Carnival Games area that unlocks entry to the maze [18]. Pocket Tactics dates the Hedge Maze update to November 1, 2025 [17]. Deltia's also covered a Fishing update [20].
 **Why it works:** A multi-week event gives players three return dates instead of one. A public countdown gathers players at once, which helps chart placement. Side activities such as fishing add new verbs without changing the core.
 **Steal:** Split seasonal content into 2-3 weekly parts, each with a new class or area. Announce exact times and use the Roblox event page. Add one side verb (fishing, cooking, carnival games) per season.
 **Avoid:** Teasing a date and missing it. Slipped launches cost trust.
@@ -773,3 +773,1236 @@ Read [[12 Live Ops and Launch]]. Survival updates add **new ways to play a run**
 | Party size average | ≥ 2.2 | Invites hidden; solo too comfortable |
 | D1 retention | Track against our previous games | See [[12 Live Ops and Launch]] |
 | % of runs ending in a disconnect | < 10% | Runs too long or a frustration spike |
+
+## 11. Building it in Studio
+
+Read [[13 Building It Right]] and [[14 Roblox Studio Workflow]] first. This section is the survival-specific architecture. Builder owns the code, Scenic the map and lighting, Frame the HUD, Librarian the enemies and effects, and Merchant the purchase modules.
+
+### Places
+
+| Place | Role | Contents |
+|---|---|---|
+| Lobby (start place) | Social hub and store | Party pads, class wall, shop, leaderboards, code box, quest of the day |
+| Run | One reserved server per party | The map, the base, the whole run, the results screen |
+| (Disaster-round games) | Single place | Lobby tower plus map pool in `ServerStorage.Maps` |
+
+Both places are in one universe so they share DataStores. Teleports don't work in Studio; test lobby-to-run in a published test universe [63][64][65].
+
+### Systems list (camp survival)
+
+| # | System | Owner | Server or client | Depends on |
+|---|---|---|---|---|
+| 1 | PartyPads + Teleport | Builder | Server (lobby) | Profiles |
+| 2 | RunDirector (state machine) | Builder | Server (run) | Clock, all run systems |
+| 3 | Clock (shared module) | Builder | Both | `RunStart` attribute |
+| 4 | LightingClient (presets, tweens) | Scenic plus Builder | Client | Clock |
+| 5 | Campfire (fuel, level, safe radius) | Builder | Server | Inventory |
+| 6 | Needs (hunger, stamina) | Builder | Server, with client display | Inventory |
+| 7 | Inventory | Builder | Server, mirrored to Player attributes | — |
+| 8 | Gathering (resource nodes) | Builder | Server | Inventory, CollectionService tags |
+| 9 | Crafting | Builder | Server | Recipes, Inventory |
+| 10 | Placement (build mode) | Builder plus Frame | Client preview, server validate | Inventory |
+| 11 | NightDirector (waves) | Builder plus Balance | Server | Clock, Campfire |
+| 12 | EnemyAI | Builder plus Librarian | Server | Campfire |
+| 13 | Combat + Downed/Revive | Builder | Server | — |
+| 14 | NightEvents | Builder | Server, with client VFX | NightDirector |
+| 15 | Loot (chests, tables) | Builder plus Balance | Server | Inventory |
+| 16 | Quests (board, tracks) | Builder plus Frame | Server | Inventory, Loot |
+| 17 | Results + Meta payout | Builder | Server | Profiles |
+| 18 | Profiles (DataStore) | Builder (Reviewer audits) | Server | — |
+| 19 | Receipts (products, passes) | Merchant | Server | Profiles |
+| 20 | Analytics funnel | Liveops plus Builder | Server | — |
+| 21 | HUD, crafting, build mode, results UI | Frame | Client | Attributes, remotes |
+
+### Folder layout
+
+```
+ReplicatedStorage
+  Shared/            Clock, Recipes, Items, Config (all tunables), LootTables (read-only copy for UI)
+  Remotes/           Craft (RemoteFunction), Place, Eat, Sprint, Equip (RemoteEvent)
+                     PhaseChanged, Warning, Toast, RunResult (RemoteEvent, server -> client)
+                     FX (UnreliableRemoteEvent, cosmetic only)
+  Assets/            BuildPreviews (ghost copies), VFX, UI icons
+ServerScriptService
+  Run/               RunDirector, RunClock, Campfire, Needs, Inventory, Gathering, Crafting, Placement,
+                     NightDirector, EnemyAI, Combat, NightEvents, Loot, Quests, Results
+  Data/              Profiles, Receipts
+  Lobby/             PartyPads, ClassWall, Leaderboards, Codes   (lobby place only)
+ServerStorage
+  Buildables/        Wall, Spikes, Torch, Bed (Models, pivot at bottom centre, axis-aligned)
+  Enemies/           Wolf, Runner, Brute, Stalker, bosses
+  Assets/            Loot drops, chest models
+Workspace
+  Map/               Ground, Rings/Ring1..Ring5, Landmarks, Paths   (Scenic)
+  Camp/              Campfire (Flame/PointLight, FeedPrompt), Workbench (tag "Workbench"), QuestBoard
+  Builds/  Enemies/  Drops/
+StarterPlayer/StarterPlayerScripts
+  LightingClient, HudController, BuildMode, InputController, SpectateController
+StarterGui
+  HUD (ScreenGui), Crafting, Results, Settings   (Frame)
+```
+
+### Remotes
+
+| Remote | Type | Direction | Payload | Server checks |
+|---|---|---|---|---|
+| Craft | RemoteFunction | C→S | recipeId: string | Type, recipe exists, near station (14 studs), has items, bag space, 4 per s |
+| Place | RemoteEvent | C→S | itemId: string, target: Vector3, quarterTurns: number | Types, owns item, distance ≤ 24, inside build zone, ground ray, overlap box, part cap |
+| Eat | RemoteEvent | C→S | itemId: string | Owns food, cooldown 1 s, not downed |
+| Sprint | RemoteEvent | C→S | on: boolean | Stamina > 0 on server; server sets WalkSpeed |
+| Equip | RemoteEvent | C→S | slot: number | 1-6, slot has a tool |
+| PhaseChanged | RemoteEvent | S→C | phase: string, index: number | — |
+| Warning | RemoteEvent | S→C | kind, seconds, title, hint | — |
+| Toast | RemoteEvent | S→C | text, colour | — |
+| RunResult | RemoteEvent | S→C | nights, meta, badges, cause | — |
+| FX | UnreliableRemoteEvent | S→C | effect id, position | Cosmetic only; loss is fine |
+
+Chopping, looting, feeding, reviving and opening the quest board all use `ProximityPrompt.Triggered` on the server, so they need no remotes. The prompt's own distance check runs on the server too.
+
+### Data schema (profile v1)
+
+```lua
+-- One key per player: "u_<UserId>" in DataStore "Profiles_v1"
+{
+	version = 1,
+	meta = 0,                                   -- persistent currency
+	classes = { Survivor = true },              -- owned classes
+	classLevels = {},                           -- [classId] = 0..3
+	equippedClass = "Survivor",
+	vehicles = { Starter = true },              -- journey games
+	cosmetics = {},                             -- [cosmeticId] = true
+	bestNight = { Normal = 0, Hard = 0, Nightmare = 0 },
+	runs = 0,
+	badges = {},                                -- [badgeKey] = true (mirrors Roblox badges, pays meta once)
+	quests = { daily = {}, weekly = {}, resetAt = 0 },
+	codes = {},                                 -- [code] = true
+	receipts = {},                              -- [PurchaseId] = true, trimmed to the last 100
+	stats = { nightsSurvived = 0, kills = 0, revives = 0, fuelFed = 0 },
+	settings = { brightness = 0, shake = true },
+	firstJoin = 0, lastJoin = 0,
+}
+```
+
+Run state lives only in the run server's memory (Inventory, fire, builds). Don't save it. A run that crashes is lost, so pay meta on milestones as they happen (section 5).
+
+### Luau: shared clock
+
+Every client computes the time of day from shared server time, so lighting is smooth and in sync without replicating every frame [57][58]. `ClockTime` is hours as a decimal, so 18.25 is 6:15 PM [59]. `ClockTime`, `TimeOfDay` and `SetMinutesAfterMidnight` are documented on the Lighting reference [55]. DevForum examples run day and night at different speeds, which is what the separate day and night lengths below do [56].
+
+```lua
+--!strict
+-- ReplicatedStorage/Shared/Clock (ModuleScript)
+local Workspace = game:GetService("Workspace")
+
+local Clock = {}
+
+export type Phase = "Day" | "Night"
+export type Sample = { index: number, phase: Phase, clockTime: number, secondsLeft: number }
+
+local FIRST_DAY = 200 -- day 1 is 3:20
+local DAY = 240
+local NIGHT_BASE = 120
+local NIGHT_GROWTH = 5
+local NIGHT_MAX = 180
+
+function Clock.dayLength(n: number): number
+	return if n == 1 then FIRST_DAY else DAY
+end
+
+function Clock.nightLength(n: number): number
+	if n == 1 then
+		return 60
+	end
+	return math.min(NIGHT_MAX, NIGHT_BASE + NIGHT_GROWTH * (n - 2))
+end
+
+-- Returns nil until the RunDirector has set Workspace.RunStart.
+function Clock.sample(): Sample?
+	local start = Workspace:GetAttribute("RunStart")
+	if typeof(start) ~= "number" then
+		return nil
+	end
+	local elapsed = math.max(0, Workspace:GetServerTimeNow() - start)
+	local n = 1
+	while true do
+		local day = Clock.dayLength(n)
+		if elapsed < day then
+			-- day maps onto 06:00..20:00
+			return { index = n, phase = "Day", clockTime = 6 + 14 * (elapsed / day), secondsLeft = day - elapsed }
+		end
+		elapsed -= day
+		local night = Clock.nightLength(n)
+		if elapsed < night then
+			-- night maps onto 20:00..06:00
+			return { index = n, phase = "Night", clockTime = (20 + 10 * (elapsed / night)) % 24, secondsLeft = night - elapsed }
+		end
+		elapsed -= night
+		n += 1
+	end
+end
+
+return Clock
+```
+
+```lua
+--!strict
+-- StarterPlayerScripts/LightingClient (LocalScript)
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Clock = require(ReplicatedStorage.Shared.Clock)
+
+RunService.RenderStepped:Connect(function()
+	local s = Clock.sample()
+	if s then
+		Lighting.ClockTime = s.clockTime
+	end
+end)
+-- Phase presets (Ambient, Atmosphere, ColorCorrection) are tweened over 8 s in the PhaseChanged handler.
+```
+
+```lua
+--!strict
+-- ServerScriptService/Run/RunClock (Script): announces phases; RunDirector sets RunStart when the party has loaded
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local Clock = require(ReplicatedStorage.Shared.Clock)
+local Remotes = ReplicatedStorage.Remotes
+
+local lastKey = ""
+local warnedKey = ""
+while true do
+	local s = Clock.sample()
+	if s then
+		local key = s.phase .. s.index
+		if key ~= lastKey then
+			lastKey = key
+			Workspace:SetAttribute("Night", s.index)
+			Workspace:SetAttribute("Phase", s.phase) -- set last: listeners read Night when Phase changes
+			Remotes.PhaseChanged:FireAllClients(s.phase, s.index)
+		end
+		if s.phase == "Day" and s.secondsLeft <= 15 and warnedKey ~= key then
+			warnedKey = key
+			Remotes.Warning:FireAllClients("Night", math.ceil(s.secondsLeft), "Night " .. s.index, "Stay near the fire")
+		end
+	end
+	task.wait(0.2)
+end
+```
+
+### Luau: inventory (server)
+
+```lua
+--!strict
+-- ServerScriptService/Run/Inventory (ModuleScript)
+local Players = game:GetService("Players")
+
+type Bag = { slots: number, items: { [string]: number } }
+
+local Inventory = {}
+local bags: { [Player]: Bag } = {}
+local STACK: { [string]: number } = { Log = 10 }
+local DEFAULT_STACK = 20
+
+local function bag(p: Player): Bag
+	local b = bags[p]
+	if not b then
+		b = { slots = 8, items = {} }
+		bags[p] = b
+	end
+	return b
+end
+
+local function slotsUsed(b: Bag): number
+	local used = 0
+	for id, n in b.items do
+		used += math.ceil(n / (STACK[id] or DEFAULT_STACK))
+	end
+	return used
+end
+
+local function mirror(p: Player, id: string, n: number)
+	p:SetAttribute("Inv_" .. id, n) -- the HUD reads these attributes
+end
+
+function Inventory.count(p: Player, id: string): number
+	return bag(p).items[id] or 0
+end
+
+function Inventory.add(p: Player, id: string, n: number): boolean
+	local b = bag(p)
+	local before = b.items[id] or 0
+	b.items[id] = before + n
+	if slotsUsed(b) > b.slots then
+		b.items[id] = if before > 0 then before else nil
+		return false
+	end
+	mirror(p, id, before + n)
+	return true
+end
+
+function Inventory.take(p: Player, id: string, n: number): boolean
+	local b = bag(p)
+	local have = b.items[id] or 0
+	if have < n then
+		return false
+	end
+	local left = have - n
+	b.items[id] = if left > 0 then left else nil
+	mirror(p, id, left)
+	return true
+end
+
+function Inventory.takeAll(p: Player, cost: { [string]: number }): boolean
+	for id, n in cost do
+		if Inventory.count(p, id) < n then
+			return false
+		end
+	end
+	for id, n in cost do
+		Inventory.take(p, id, n)
+	end
+	return true
+end
+
+function Inventory.addSlots(p: Player, n: number)
+	bag(p).slots += n
+	p:SetAttribute("BagSlots", bag(p).slots)
+end
+
+Players.PlayerRemoving:Connect(function(p)
+	bags[p] = nil
+end)
+
+return Inventory
+```
+
+### Luau: campfire fuel and safe radius
+
+```lua
+--!strict
+-- ServerScriptService/Run/Campfire (Script)
+local ServerScriptService = game:GetService("ServerScriptService")
+local Inventory = require(ServerScriptService.Run.Inventory)
+
+local fire = workspace:WaitForChild("Camp"):WaitForChild("Campfire") :: Model
+local light = fire:WaitForChild("Flame"):WaitForChild("PointLight") :: PointLight
+local prompt = fire:WaitForChild("FeedPrompt") :: ProximityPrompt
+
+local FUEL_VALUE: { [string]: number } = { FuelCan = 150, Coal = 75, Log = 30 }
+local FEED_ORDER = { "FuelCan", "Coal", "Log" }
+local TICK = 0.25 -- attribute updates 4x per second, not every frame
+
+fire:SetAttribute("Level", 1)
+fire:SetAttribute("Fuel", 120)
+
+local function maxFuel(level: number): number
+	return 300 * level
+end
+
+local function safeRadius(fuel: number, level: number): number
+	local frac = math.clamp(fuel / maxFuel(level), 0, 1)
+	return (12 + 6 * level) + 28 * math.sqrt(frac)
+end
+
+prompt.ActionText = "Feed"
+prompt.ObjectText = "Campfire"
+prompt.HoldDuration = 0
+prompt.MaxActivationDistance = 12
+
+prompt.Triggered:Connect(function(player: Player)
+	local level = fire:GetAttribute("Level") :: number
+	local fuel = fire:GetAttribute("Fuel") :: number
+	local fed = 0
+	for _, id in FEED_ORDER do
+		while Inventory.count(player, id) > 0 and fuel < maxFuel(level) do
+			Inventory.take(player, id, 1)
+			fuel = math.min(maxFuel(level), fuel + FUEL_VALUE[id])
+			fed += 1
+		end
+	end
+	if fed > 0 then
+		fire:SetAttribute("Fuel", fuel)
+		fire:SetAttribute("LastFedBy", player.UserId)
+	end
+end)
+
+while true do
+	local level = fire:GetAttribute("Level") :: number
+	local fuel = math.max(0, (fire:GetAttribute("Fuel") :: number) - TICK)
+	fire:SetAttribute("Fuel", fuel)
+	local radius = if fuel > 0 then safeRadius(fuel, level) else 0
+	fire:SetAttribute("SafeRadius", radius)
+	light.Enabled = fuel > 0
+	light.Range = math.min(60, radius) -- PointLight range tops out at 60
+	task.wait(TICK)
+end
+```
+
+### Luau: crafting (server)
+
+```lua
+--!strict
+-- ReplicatedStorage/Shared/Recipes (ModuleScript)
+export type Recipe = { needs: { [string]: number }, gives: string, amount: number?, station: string?, tier: number }
+
+local Recipes: { [string]: Recipe } = {
+	Spear = { needs = { Log = 3, Stone = 2 }, gives = "Spear", station = "Workbench", tier = 1 },
+	StoneAxe = { needs = { Log = 3, Stone = 2 }, gives = "StoneAxe", station = "Workbench", tier = 1 },
+	Wall = { needs = { Log = 4 }, gives = "Wall", station = "Workbench", tier = 1 },
+	Bandage = { needs = { Cloth = 2 }, gives = "Bandage", amount = 2, tier = 1 },
+	IronAxe = { needs = { Log = 6, Stone = 6, Scrap = 4 }, gives = "IronAxe", station = "Workbench", tier = 2 },
+}
+
+return Recipes
+```
+
+```lua
+--!strict
+-- ServerScriptService/Run/Crafting (Script)
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+local Recipes = require(ReplicatedStorage.Shared.Recipes)
+local Inventory = require(ServerScriptService.Run.Inventory)
+
+local STATION_RANGE = 14
+local lastCraft: { [Player]: number } = {}
+
+local function nearStation(player: Player, tag: string): boolean
+	local char = player.Character
+	local root = if char then char:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
+	if not root then
+		return false
+	end
+	for _, station in CollectionService:GetTagged(tag) do
+		if station:IsA("Model") and (station:GetPivot().Position - root.Position).Magnitude <= STATION_RANGE then
+			return true
+		end
+	end
+	return false
+end
+
+ReplicatedStorage.Remotes.Craft.OnServerInvoke = function(player: Player, recipeId: unknown)
+	if typeof(recipeId) ~= "string" then
+		return false, "Bad request"
+	end
+	local recipe = Recipes[recipeId]
+	if not recipe then
+		return false, "Unknown recipe"
+	end
+	local now = os.clock()
+	if now - (lastCraft[player] or 0) < 0.25 then
+		return false, "Slow down"
+	end
+	lastCraft[player] = now
+	if recipe.station and not nearStation(player, recipe.station) then
+		return false, "Go to a " .. recipe.station
+	end
+	if not Inventory.takeAll(player, recipe.needs) then
+		return false, "Missing items"
+	end
+	if not Inventory.add(player, recipe.gives, recipe.amount or 1) then
+		for id, n in recipe.needs do
+			Inventory.add(player, id, n) -- refund: the slots we just freed fit them again
+		end
+		return false, "Bag full"
+	end
+	return true, recipe.gives
+end
+
+Players.PlayerRemoving:Connect(function(p)
+	lastCraft[p] = nil
+end)
+```
+
+### Luau: build placement (server validation)
+
+The client shows a ghost snapped to the same 4-stud grid and sends only the item, the target point and a quarter-turn count. The server snaps again, finds the ground itself, and checks distance, zone, overlap and cost. That follows the common DevForum pattern of grid snapping with `math.floor` [60][61], with the plot kept a multiple of the grid and rotation in fixed steps to avoid gaps [60][62].
+
+```lua
+--!strict
+-- ServerScriptService/Run/Placement (Script)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+local Inventory = require(ServerScriptService.Run.Inventory)
+
+local GRID = 4
+local MAX_DIST = 24
+local MAX_PARTS_PER_PLAYER = 150
+local BUILD_ZONE_RADIUS = 120
+
+local Buildables = ServerStorage:WaitForChild("Buildables")
+local buildsFolder = workspace:WaitForChild("Builds")
+local ground = workspace:WaitForChild("Map"):WaitForChild("Ground")
+local fire = workspace:WaitForChild("Camp"):WaitForChild("Campfire") :: Model
+local partsUsed: { [Player]: number } = {}
+
+local function snap(v: number): number
+	return math.floor(v / GRID + 0.5) * GRID
+end
+
+local function partCount(model: Model): number
+	local n = 0
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			n += 1
+		end
+	end
+	return n
+end
+
+ReplicatedStorage.Remotes.Place.OnServerEvent:Connect(function(player: Player, itemId: unknown, target: unknown, quarterTurns: unknown)
+	if typeof(itemId) ~= "string" or typeof(target) ~= "Vector3" or typeof(quarterTurns) ~= "number" then
+		return
+	end
+	local template = Buildables:FindFirstChild(itemId)
+	if not template or not template:IsA("Model") then
+		return
+	end
+	local char = player.Character
+	local root = if char then char:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
+	if not root or Inventory.count(player, itemId) < 1 then
+		return
+	end
+
+	-- the server finds the ground itself instead of trusting the client's Y
+	local x, z = snap(target.X), snap(target.Z)
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Include
+	rayParams.FilterDescendantsInstances = { workspace.Terrain, ground, buildsFolder }
+	local hit = workspace:Raycast(Vector3.new(x, target.Y + 20, z), Vector3.new(0, -60, 0), rayParams)
+	if not hit then
+		return
+	end
+	local pos = Vector3.new(x, hit.Position.Y, z)
+	if (root.Position - pos).Magnitude > MAX_DIST then
+		return
+	end
+	if (fire:GetPivot().Position - pos).Magnitude > BUILD_ZONE_RADIUS then
+		return
+	end
+
+	local turns = math.floor(quarterTurns) % 4
+	local cf = CFrame.new(pos) * CFrame.Angles(0, math.rad(90 * turns), 0)
+	local _, size = template:GetBoundingBox()
+
+	local ignore: { Instance } = { workspace.Terrain, ground }
+	for _, p in Players:GetPlayers() do
+		if p.Character then
+			table.insert(ignore, p.Character)
+		end
+	end
+	local overlap = OverlapParams.new()
+	overlap.FilterType = Enum.RaycastFilterType.Exclude
+	overlap.FilterDescendantsInstances = ignore
+	-- templates have their pivot at the bottom centre, so the box centre is half a height up
+	local hits = workspace:GetPartBoundsInBox(cf * CFrame.new(0, size.Y / 2, 0), size * 0.95, overlap)
+	if #hits > 0 then
+		return
+	end
+
+	local count = partCount(template)
+	if (partsUsed[player] or 0) + count > MAX_PARTS_PER_PLAYER then
+		return
+	end
+	if not Inventory.take(player, itemId, 1) then
+		return
+	end
+
+	local piece = template:Clone()
+	piece:PivotTo(cf)
+	piece:SetAttribute("Owner", player.UserId)
+	piece:SetAttribute("HP", 200)
+	piece.Parent = buildsFolder
+	partsUsed[player] = (partsUsed[player] or 0) + count
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+	partsUsed[p] = nil
+end)
+```
+
+### Luau: night waves
+
+```lua
+--!strict
+-- ServerScriptService/Run/NightDirector (Script)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+local Workspace = game:GetService("Workspace")
+local Clock = require(ReplicatedStorage.Shared.Clock)
+
+local fire = workspace:WaitForChild("Camp"):WaitForChild("Campfire") :: Model
+local enemiesFolder = workspace:WaitForChild("Enemies")
+local MAX_ALIVE = 40
+local seed = Workspace:GetAttribute("Seed")
+local rng = Random.new(if typeof(seed) == "number" then seed else os.time())
+
+local function enemiesFor(night: number, players: number): number
+	local scale = 0.6 + 0.4 * math.clamp(players, 1, 6)
+	return math.min(MAX_ALIVE, math.ceil(3 * 1.18 ^ (night - 1) * scale))
+end
+
+local function pickType(night: number): string
+	if night >= 15 and rng:NextNumber() < 0.3 then
+		return "Brute"
+	elseif night >= 5 and rng:NextNumber() < 0.35 then
+		return "Runner"
+	end
+	return "Wolf"
+end
+
+local function spawnPoint(): Vector3
+	local center = fire:GetPivot().Position
+	local safe = fire:GetAttribute("SafeRadius")
+	local r = (if typeof(safe) == "number" then safe else 40) + 60 + rng:NextNumber() * 40
+	local a = rng:NextNumber() * math.pi * 2
+	local top = center + Vector3.new(math.cos(a) * r, 80, math.sin(a) * r)
+	local hit = workspace:Raycast(top, Vector3.new(0, -200, 0)) -- land on whatever ground is there
+	return if hit then hit.Position + Vector3.new(0, 3, 0) else top
+end
+
+local function runNight(night: number)
+	local total = enemiesFor(night, #Players:GetPlayers())
+	local window = Clock.nightLength(night) * 0.4 -- all spawns land in the first 40% of the night
+	for _ = 1, total do
+		if Workspace:GetAttribute("Phase") ~= "Night" then
+			return
+		end
+		while #enemiesFolder:GetChildren() >= MAX_ALIVE do
+			task.wait(1)
+		end
+		local template = ServerStorage.Enemies:FindFirstChild(pickType(night))
+		if template and template:IsA("Model") then
+			local enemy = template:Clone()
+			enemy:PivotTo(CFrame.new(spawnPoint()))
+			enemy:SetAttribute("Night", night)
+			enemy.Parent = enemiesFolder -- EnemyAI starts on ChildAdded
+		end
+		task.wait(window / total)
+	end
+end
+
+Workspace:GetAttributeChangedSignal("Phase"):Connect(function()
+	if Workspace:GetAttribute("Phase") == "Night" then
+		task.spawn(runNight, Workspace:GetAttribute("Night") :: number)
+	else
+		for _, enemy in enemiesFolder:GetChildren() do
+			enemy:SetAttribute("Fleeing", true) -- AI plays a flee animation, then the enemy is destroyed
+			task.delay(2, function()
+				enemy:Destroy()
+			end)
+		end
+	end
+end)
+```
+
+### Luau: enemy chase that respects the light
+
+```lua
+--!strict
+-- ServerScriptService/Run/EnemyAI (Script)
+local PathfindingService = game:GetService("PathfindingService")
+local Players = game:GetService("Players")
+
+local fire = workspace:WaitForChild("Camp"):WaitForChild("Campfire") :: Model
+local enemiesFolder = workspace:WaitForChild("Enemies")
+
+local function nearestTarget(from: Vector3): BasePart?
+	local best: BasePart? = nil
+	local bestDist = math.huge
+	for _, p in Players:GetPlayers() do
+		local char = p.Character
+		local root = if char then char:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
+		local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+		if root and hum and hum.Health > 0 then
+			local d = (root.Position - from).Magnitude
+			if d < bestDist then
+				best, bestDist = root, d
+			end
+		end
+	end
+	return best
+end
+
+local function think(enemy: Model)
+	local hum = enemy:FindFirstChildOfClass("Humanoid")
+	local root = enemy.PrimaryPart
+	if not hum or not root then
+		return
+	end
+	root:SetNetworkOwner(nil) -- the server simulates enemies, so clients can't fling them
+	local path = PathfindingService:CreatePath({ AgentRadius = 2, AgentHeight = 5, AgentCanJump = false })
+	while enemy.Parent and hum.Health > 0 and not enemy:GetAttribute("Fleeing") do
+		local target = nearestTarget(root.Position)
+		if not target then
+			task.wait(1)
+			continue
+		end
+		local firePos = fire:GetPivot().Position
+		local safe = fire:GetAttribute("SafeRadius")
+		local safeR = if typeof(safe) == "number" then safe else 0
+		local goal = target.Position
+		if (goal - firePos).Magnitude < safeR then
+			-- the target is in the light: prowl at the edge instead of entering
+			local away = root.Position - firePos
+			local dir = if away.Magnitude > 0.1 then away.Unit else Vector3.xAxis
+			goal = firePos + dir * (safeR + 4)
+		end
+		if (goal - root.Position).Magnitude < 40 then
+			hum:MoveTo(goal) -- close by: walk straight, which is cheaper than pathfinding
+			task.wait(0.3)
+		else
+			local ok = pcall(function()
+				path:ComputeAsync(root.Position, goal)
+			end)
+			if ok and path.Status == Enum.PathStatus.Success then
+				local waypoints = path:GetWaypoints()
+				for i = 2, math.min(#waypoints, 5) do -- follow a few waypoints, then re-plan
+					hum:MoveTo(waypoints[i].Position)
+					hum.MoveToFinished:Wait()
+				end
+			else
+				hum:MoveTo(goal)
+				task.wait(0.5)
+			end
+		end
+		-- Attack (in the full version): within 4 studs and outside the light, play a 0.6 s wind-up,
+		-- check the distance again, then call Combat.damage on the target's Humanoid.
+	end
+end
+
+enemiesFolder.ChildAdded:Connect(function(child)
+	if child:IsA("Model") then
+		task.spawn(think, child)
+	end
+end)
+```
+
+### Luau: damage, downed and revive
+
+All damage goes through one function, so lethal hits on players become a downed state instead of a death.
+
+```lua
+--!strict
+-- ServerScriptService/Run/Combat (ModuleScript)
+local Players = game:GetService("Players")
+
+local Combat = {}
+local BLEED_OUT = 30
+local REVIVE_HP = 40
+
+local function down(player: Player, char: Model, hum: Humanoid)
+	char:SetAttribute("Downed", true)
+	hum.Health = 1
+	hum.WalkSpeed = 4
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "Revive"
+	prompt.ObjectText = player.DisplayName
+	prompt.HoldDuration = 3
+	prompt.MaxActivationDistance = 8
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = char:FindFirstChild("HumanoidRootPart") -- a LocalScript hides it for the downed player
+	prompt.Triggered:Connect(function(helper: Player)
+		if helper == player or not char:GetAttribute("Downed") then
+			return
+		end
+		char:SetAttribute("Downed", nil)
+		hum.Health = REVIVE_HP
+		hum.WalkSpeed = 16
+		prompt:Destroy()
+	end)
+	task.delay(BLEED_OUT, function()
+		if char.Parent and char:GetAttribute("Downed") then
+			prompt:Destroy()
+			hum.Health = 0 -- real death: spectate, respawn at dawn
+		end
+	end)
+end
+
+function Combat.damage(hum: Humanoid, amount: number)
+	local char = hum.Parent
+	if not char or not char:IsA("Model") or hum.Health <= 0 or char:GetAttribute("Downed") then
+		return
+	end
+	local player = Players:GetPlayerFromCharacter(char)
+	if player and hum.Health - amount <= 0 then
+		down(player, char, hum)
+	else
+		hum:TakeDamage(amount)
+	end
+end
+
+return Combat
+```
+
+### Luau: disaster director (disaster-round variant)
+
+```lua
+--!strict
+-- ServerScriptService/Rounds/DisasterDirector (Script)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+local TweenService = game:GetService("TweenService")
+
+type Disaster = { name: string, weight: number, hint: string, run: (map: Model) -> () }
+
+local function forEachLiving(fn: (root: BasePart, hum: Humanoid) -> ())
+	for _, p in Players:GetPlayers() do
+		local char = p.Character
+		local root = if char then char:FindFirstChild("HumanoidRootPart") :: BasePart? else nil
+		local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+		if root and hum and hum.Health > 0 then
+			fn(root, hum)
+		end
+	end
+end
+
+local Disasters: { Disaster } = {
+	{
+		name = "Flood",
+		weight = 3,
+		hint = "Get high!",
+		run = function(map: Model)
+			local water = map:FindFirstChild("FloodWater") :: BasePart
+			TweenService:Create(water, TweenInfo.new(40, Enum.EasingStyle.Linear), {
+				CFrame = water.CFrame + Vector3.new(0, 30, 0),
+			}):Play()
+			for _ = 1, 60 do
+				local surface = water.Position.Y + water.Size.Y / 2
+				forEachLiving(function(root, hum)
+					if root.Position.Y < surface - 1 then
+						hum:TakeDamage(10)
+					end
+				end)
+				task.wait(1)
+			end
+		end,
+	},
+	-- Meteors, Tornado, Earthquake, Blizzard, Acid Rain: same shape, one counter-play each
+}
+
+local rng = Random.new()
+local lastName = ""
+
+local function pick(): Disaster
+	local total = 0
+	for _, d in Disasters do
+		if d.name ~= lastName or #Disasters == 1 then
+			total += d.weight
+		end
+	end
+	local roll = rng:NextNumber() * total
+	for _, d in Disasters do
+		if d.name ~= lastName or #Disasters == 1 then
+			roll -= d.weight
+			if roll <= 0 then
+				lastName = d.name
+				return d
+			end
+		end
+	end
+	return Disasters[1]
+end
+
+local maps = ServerStorage:WaitForChild("Maps"):GetChildren()
+while true do
+	task.wait(15) -- intermission
+	if #Players:GetPlayers() == 0 then
+		continue
+	end
+	local map = (maps[rng:NextInteger(1, #maps)] :: Model):Clone()
+	map.Parent = workspace
+	local spawnPart = map:FindFirstChild("Spawn") :: BasePart
+	forEachLiving(function(root)
+		local char = root.Parent :: Model -- the root's parent is the character Model
+		char:PivotTo(spawnPart.CFrame + Vector3.new(rng:NextNumber(-10, 10), 4, rng:NextNumber(-10, 10)))
+	end)
+	local disaster = pick()
+	ReplicatedStorage.Remotes.Warning:FireAllClients("Disaster", 10, disaster.name, disaster.hint)
+	task.wait(10)
+	disaster.run(map)
+	forEachLiving(function(root)
+		-- survivors: +1 point and coins through the Profiles module (not shown)
+	end)
+	map:Destroy()
+end
+```
+
+### Luau: party pads and the teleport into a reserved server
+
+`TeleportOptions` is the optional argument to `TeleportAsync`. Setting `ShouldReserveServer` sends the whole party to a fresh reserved server [66], which avoids the party being split across servers that have room [63][64][65].
+
+```lua
+--!strict
+-- ServerScriptService/Lobby/PartyPads (Script)
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+
+local RUN_PLACE_ID = 0 -- Builder sets this to the Run place's PlaceId (same universe)
+local MAX_PARTY = 6
+local COUNTDOWN = 15
+local STEP = 0.25
+
+local function playersOnPad(pad: BasePart): { Player }
+	local list: { Player } = {}
+	local seen: { [Player]: boolean } = {}
+	local box = workspace:GetPartBoundsInBox(pad.CFrame + Vector3.new(0, 4, 0), Vector3.new(pad.Size.X, 8, pad.Size.Z))
+	for _, part in box do
+		local char = part:FindFirstAncestorOfClass("Model")
+		local p = if char then Players:GetPlayerFromCharacter(char) else nil
+		if p and not seen[p] and #list < MAX_PARTY then
+			seen[p] = true
+			table.insert(list, p)
+		end
+	end
+	return list
+end
+
+local function launch(party: { Player }, difficulty: string)
+	local options = Instance.new("TeleportOptions")
+	options.ShouldReserveServer = true
+	options:SetTeleportData({ difficulty = difficulty }) -- untrusted on arrival: re-check unlocks there
+	for attempt = 1, 3 do
+		local ok, err = pcall(function()
+			TeleportService:TeleportAsync(RUN_PLACE_ID, party, options)
+		end)
+		if ok then
+			return
+		end
+		warn("Teleport failed", attempt, err)
+		task.wait(2 * attempt)
+	end
+end
+
+for _, pad in CollectionService:GetTagged("PartyPad") do
+	if not pad:IsA("BasePart") then
+		continue
+	end
+	task.spawn(function()
+		local timer = COUNTDOWN
+		while true do
+			local party = playersOnPad(pad)
+			if #party == 0 then
+				timer = COUNTDOWN
+			else
+				timer -= STEP
+				if timer <= 0 then
+					local difficulty = pad:GetAttribute("Difficulty")
+					launch(party, if typeof(difficulty) == "string" then difficulty else "Normal")
+					timer = COUNTDOWN
+					task.wait(5)
+				end
+			end
+			pad:SetAttribute("Countdown", math.ceil(timer)) -- the pad's BillboardGui shows these
+			pad:SetAttribute("Count", #party)
+			task.wait(STEP)
+		end
+	end)
+end
+```
+
+### Luau: meta payout and saving the run result
+
+```lua
+--!strict
+-- ServerScriptService/Data/RunRewards (ModuleScript)
+local DataStoreService = game:GetService("DataStoreService")
+local store = DataStoreService:GetDataStore("Profiles_v1")
+
+local RunRewards = {}
+local MILESTONES: { [number]: number } = { [5] = 2, [10] = 4, [20] = 8, [30] = 12 }
+local DIFF_MULT: { [string]: number } = { Normal = 1, Hard = 1.5, Nightmare = 2 }
+
+function RunRewards.metaFor(nights: number, questSteps: number, tracksDone: number, finished: boolean, difficulty: string): number
+	local m = 1 + math.floor(nights / 2) + questSteps + 3 * tracksDone
+	for night, bonus in MILESTONES do
+		if nights >= night then
+			m += bonus
+		end
+	end
+	if finished then
+		m += 30
+	end
+	return math.floor(m * (DIFF_MULT[difficulty] or 1))
+end
+
+-- Called once per player: at run end, or on PlayerRemoving (guard with a "paid" flag),
+-- and for everyone still in the server from game:BindToClose.
+function RunRewards.save(userId: number, difficulty: string, nights: number, meta: number): boolean
+	local ok, err = pcall(function()
+		store:UpdateAsync("u_" .. userId, function(old)
+			local p = old or { version = 1, meta = 0, runs = 0, bestNight = {}, stats = { nightsSurvived = 0 } }
+			p.meta += meta
+			p.runs += 1
+			p.bestNight[difficulty] = math.max(p.bestNight[difficulty] or 0, nights)
+			p.stats.nightsSurvived += nights
+			return p
+		end)
+	end)
+	if not ok then
+		warn("Run save failed", userId, err) -- queue a retry; never drop earned meta silently
+	end
+	return ok
+end
+
+return RunRewards
+```
+
+Two places write to the same profile, so both use `UpdateAsync` with deltas, and the lobby reloads the profile on every join (players arrive back from runs). If the game later caches profiles for a whole session, move to a session-locking profile library and have Reviewer audit it.
+
+### Luau: currency packs (Merchant)
+
+```lua
+--!strict
+-- ServerScriptService/Data/Receipts (Script)
+local DataStoreService = game:GetService("DataStoreService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local store = DataStoreService:GetDataStore("Profiles_v1")
+
+local META_PACKS: { [number]: number } = {
+	-- [productId] = meta. Merchant fills in the real ids after the owner creates the products.
+}
+
+MarketplaceService.ProcessReceipt = function(info)
+	local amount = META_PACKS[info.ProductId]
+	if not amount then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local ok = pcall(function()
+		store:UpdateAsync("u_" .. info.PlayerId, function(old)
+			local p = old or { version = 1, meta = 0, receipts = {} }
+			p.receipts = p.receipts or {}
+			if p.receipts[info.PurchaseId] then
+				return p -- already granted: idempotent
+			end
+			p.receipts[info.PurchaseId] = true
+			p.meta += amount
+			return p
+		end)
+	end)
+	return if ok then Enum.ProductPurchaseDecision.PurchaseGranted else Enum.ProductPurchaseDecision.NotProcessedYet
+end
+```
+
+In-run products (self-revive, fuel crate) are handled by the run place's own `ProcessReceipt`. Apply them only when the player is in the right state (downed with no teammate near; the fire burning) and only offer them in that state.
+
+### Analytics funnel (Liveops)
+
+Log the first-run funnel with `AnalyticsService:LogOnboardingFunnelStepEvent(player, step, name)`: 1 Arrived, 2 FirstChop, 3 FirstFeed, 4 FirstCraft, 5 Night1Start, 6 Night1Survived, 7 ResultsSeen, 8 SecondRunStarted. Log custom events for "NightReached" (value = night), "Downed", "Revived", "FireOut" and "EventNight" (name). These feed the targets in section 10.
+
+### Building a camp-survival vertical slice in 16 steps
+
+1. Architect writes the loop statements, the run finish line and the class list in `plan.md`.
+2. Balance builds the night-curve and meta simulation in `sim/` from section 5 and writes the results to `economy.md`.
+3. Scenic greyboxes the map: base at the centre, 5 rings, 8 landmark silhouettes, paths. No art yet.
+4. Builder makes `Shared/Config` with every tunable from section 5 (day and night lengths, fuel values, curve constants).
+5. Builder adds Clock, RunClock and LightingClient; Scenic adds the phase presets. Check: a 6-minute cycle plays smoothly on two clients.
+6. Builder adds Inventory, Gathering (trees and rocks tagged `Tree`/`Rock` with ProximityPrompts or tool hits) and Campfire. Check: chop, feed, light radius grows.
+7. Builder adds Recipes and Crafting; Frame builds the crafting modal. Check: craft a spear at the workbench, fail away from it.
+8. Builder adds NightDirector, EnemyAI and Combat with one enemy type (Wolf) from Librarian. Check: night 1 with 3 wolves; they prowl at the light's edge.
+9. Grey-box playtest: is night scary with grey boxes? If not, fix tells, audio and darkness before going on.
+10. Builder adds Placement; Frame builds build mode with the ghost and Highlight. Check: walls snap and the server rejects overlaps.
+11. Builder adds Downed/Revive and spectate. Check with 2 players.
+12. Builder adds the Quest board with one rescue track; Frame builds the board UI.
+13. Builder adds Results and RunRewards; Frame builds the results screen. Check: meta saves and reloads.
+14. Builder adds the Lobby place, PartyPads and the class wall; test teleports in a published test universe.
+15. Merchant adds passes and products (prices from the owner); Reviewer audits receipts and saves.
+16. Playtest runs 10 full runs (solo, 2, 4 players) and logs night reached, deaths and FPS. Kid Tester runs the first five minutes cold.
+
+## 12. Twists that work
+
+A fresh survival game keeps the proven structure (safe zone, clock, escalating nights, meta-currency) and changes one big thing. GameAnalytics' read on Dead Rails is exactly this: a familiar format with one new element, its Wild West setting [22].
+
+| Twist | What changes | Proven by | Fresh take for us | Watch out |
+|---|---|---|---|---|
+| Setting swap | The skin and the threat, not the loop | Dead Rails: Wild West plus zombies plus trains [22][23] | Deep-sea station (oxygen instead of fire), arctic outpost (warmth), haunted carnival, flooded city on rooftops | The setting has to make a thumbnail on its own |
+| The vehicle is the base | Safe zone moves; distance is progress | Dead Rails trains [28][29]; A Dusty Trip's car built from parts [40] | River boat, airship, giant walking mech, school bus at the end of the world | Vehicle physics on Roblox needs care; see [[Genre - Racing and Vehicles]] |
+| Rescue as the finish line | Survive plus a quest arc | 99 Nights' four missing children [9][10] | Rescue lost pets, gather a scattered crew, rebuild a radio part by part | Each rescue must be possible on its own, not all-or-nothing |
+| Disasters as the enemy | No monsters; the world attacks | Natural Disaster Survival [36] | Disasters plus building: build a shelter in 60 s, then the disaster tests it | Keep each disaster readable with one counter-play |
+| One player is the monster | Asymmetric: 1 hunter vs 5 campers | Survive the Killer's killer vs survivors, with survivor-only crawl routes [49] | A camp game where one random camper becomes the night stalker after night 3 | Balance is hard; the monster needs clear limits |
+| Build, then test | Two phases: design, then survive | Build A Boat For Treasure, named as an established Roblox survival format [22] | Build a raft, then survive a 5-minute storm crossing | Building tools must be fast on mobile |
+| Endless mode | No finish line; best-night leaderboard | Dead Rails listings tagged [ENDLESS] [24] | Weekly seeded endless run: everyone gets the same map and events | Needs a hard curve so runs end |
+| Side verb per season | A new activity inside the run | 99 Nights' Fishing update [20], Carnival Games before the Hedge Maze [18] | Cooking contest at camp, stargazing for night buffs, a farming patch | The side verb must feed the main loop (food, fuel, buffs) |
+| Traveling trader | Day-two decisions | 99 Nights' Pelt Trader on day two [15] | Trader stock rolls from the run seed; rare deals on event nights | Don't make the trader the only source of key items |
+| Classes as run modifiers | Each run is shaped by the team's mix | 99 Nights' class roster [12][13] | "Team synergy" bonuses (Medic plus Builder gives sturdier walls) | Avoid one "must-pick" class |
+| Tribes and shared bases | Social structure in sandbox survival | Booga Booga's tribes [46][47] | Small crews (2-6) with a shared flag and chest; weekly crew leaderboard | PvP griefing; keep raids opt-in |
+| The map is the fire | Map size tied to progress | Fire upgrades that expand the explorable map in 99 Nights [6] | Light towers that each open one sector when fuelled | Fuel chores; make towers self-sustaining once built |
+
+Rules for twists:
+- Change one of these: setting, base type, threat type or finish line. Changing two is a risk. Changing three is a new genre.
+- Write the twist into the title or thumbnail. If it doesn't show in a 150×150 thumbnail, it isn't the twist.
+- Test the twist in the grey box (step 9 of section 11). A twist that is only art isn't a twist.
+
+## 13. Failure modes
+
+1. **Night is too dark on phones.** Players can't see enemies and quit. Fix: the minimum ambient values in section 8, a personal light on each character and a brightness setting.
+2. **Night isn't scary.** Enemies walk straight in and die. Fix: tells, audio, fog, prowling at the light's edge and stalkers that retreat from the flashlight (law 9).
+3. **The first night comes too late.** Players leave in a quiet tutorial day. Fix: first night by 3:40 (section 4).
+4. **Failed runs pay nothing.** Players stop after one or two losses. Fix: the meta formula pays from night 1 (section 5).
+5. **Solo is impossible.** Friendless new players churn. Fix: enemy scaling by party size (law 8).
+6. **Co-op is optional.** Players don't invite friends. Fix: three-job nights and role classes (law 7).
+7. **Griefing.** Someone hoards fuel, steals from chests or traps the base. Fix: per-player inventories, chest take limits, no destroying others' builds, and kick votes in reserved servers.
+8. **Server lag by night 10.** Too many drops, enemies and parts. Fix: caps (law 19), anchored drops, MicroProfiler checks.
+9. **Runs too long with no checkpoint.** A crash or bedtime loses 40 minutes. Fix: milestone payouts during the run and runs designed to end around nights 6-15 for most teams.
+10. **Meta inflation.** Codes and badges hand out the whole store in a week. Fix: the faucet audit in section 5.
+11. **Pay-to-win classes.** The newest Robux class out-damages everything and teams demand it. Fix: classes for meta first, side-grades not upgrades.
+12. **Unreadable deaths.** "What killed me?" Fix: a cause of death on the results screen and a 1.5 s minimum tell.
+13. **Exploits.** Remote spam gives items; teleporting to loot. Fix: server validation on every remote and distance checks on prompts.
+14. **Teleport failures.** Parties split, or teleports fail silently. Fix: reserved servers, retry with backoff and a "Teleport failed, try again" toast.
+15. **Content fatigue.** The same map and enemies every run. Fix: landmark slots, night events and run seeds (laws 11 and 12).
+16. **Chores, not survival.** Hunger, thirst, warmth, sleep and sanity all at once. Fix: at most 3 meters, drain timings from section 5.
+17. **Too hard to learn without videos.** New games don't have creators explaining them. Fix: the 3-pointer start (law 23) and the quest board.
+18. **A broken genre label.** The game is filed under the wrong genre and never shows up in survival charts. Fix: set Survival and keep it accurate; you can only change it once every three months [54].
+
+## 14. Pitch checklist: is survival right for us right now?
+
+Pulse and Lead answer every line before pitching a survival game. Three or more "no" answers mean pick a different twist or a different genre.
+
+- [ ] Can we state the premise as "[setting] + [threat] + [goal]" in under 12 words, with one part unusual (law 21)?
+- [ ] Does the twist show in a thumbnail?
+- [ ] Is the safe-versus-dangerous contrast obvious in one screenshot (light vs dark, train vs horde)?
+- [ ] Are survival games currently in the charts, and is our twist different from the top three? (Pulse runs `node studio/cli.mjs market --refresh`.)
+- [ ] Is there a finish line we can name, plus a way for most runs to end in 15-45 minutes?
+- [ ] Can a solo player reach night 5 in their first run?
+- [ ] Is there a reason for 2-5 friends to play together (roles, multi-side nights)?
+- [ ] Is the meta store at least 6 classes or vehicles deep at launch, with a 4-week content plan after?
+- [ ] Can we build the vertical slice (section 11, steps 1-13) in the time we have?
+- [ ] Do we have, or can Librarian make, at least 3 enemy types with clear tells?
+- [ ] Will it run at 30+ fps on a low-end phone with 6 players at night 15?
+- [ ] Does the monetization avoid everything in the off-limits list (section 6)?
+- [ ] Is it suitable for the audience: tension, not gore? (See [[Genre - Horror]] for the line.)
+- [ ] Can we ship a seasonal update in parts within 6 weeks of launch?
+
+## 15. Checklist
+
+Producer verifies these in Studio or from evidence files before the build gate.
+
+- [ ] `plan.md` opens with both loop statements (run and meta) and names the finish line.
+- [ ] `economy.md` contains the night curve, fuel model, meta payout table and faucet audit, with simulation output.
+- [ ] Day 1 is 3:20 or shorter; the first night starts by 4:00; a 15 s warning fires before every night (screenshot plus Output log).
+- [ ] The base is visible (light or smoke) from every ring-2 point; checked in Studio with 3 screenshots.
+- [ ] A safe radius exists and enemies don't enter it while the fire burns (Playtest video or log).
+- [ ] First chop, feed and craft happen within 0:15, 0:45 and 2:00 in a Kid Tester cold run.
+- [ ] The first meta reward appears by 5:00 in a normal first run.
+- [ ] A failed run on night 2 still pays meta (profile value before and after).
+- [ ] Enemy count scales with party size; a solo run reaches night 5 (Playtest log).
+- [ ] Every enemy attack has a wind-up of at least 0.4 s and an audio cue.
+- [ ] At most 3 needs meters on screen.
+- [ ] Downed state with a 3 s revive works with 2 players; bleed-out is 30 s.
+- [ ] Every remote validates types, distance and cooldowns (Reviewer report).
+- [ ] Placement rejects overlap, out-of-zone and out-of-range placements (Reviewer test cases).
+- [ ] Unanchored part count stays under 400 at night 15 with 6 players (MicroProfiler or a count script output).
+- [ ] FPS ≥ 30 on the low-end phone profile at night 15 (Playtest).
+- [ ] The party teleports together into one reserved server (published test universe, 3 players).
+- [ ] The results screen shows nights, meta earned, the next class progress and "Play again."
+- [ ] Night readability: HUD and enemies visible at 50% phone brightness (Kid Tester screenshot).
+- [ ] A brightness setting exists and saves.
+- [ ] ProcessReceipt is idempotent (Reviewer: a double-grant test with the same PurchaseId).
+- [ ] No product skips a night, ends a run or sells paid random items without shown odds (Merchant plus Reviewer).
+- [ ] The genre is set to Survival in the experience settings.
+- [ ] Onboarding funnel events 1-8 fire in order (Liveops: Output log or dashboard screenshot).
+- [ ] The first three updates are planned in `liveops.md` with dates.
+
+## Common mistakes
+
+1. Making night just "day with a dark skybox": no new verb, no new threat.
+2. Starting the run with a long text tutorial instead of a tree, a fire and a workbench.
+3. Paying meta only for finishing, so 95% of runs pay nothing.
+4. Tuning difficulty only with 4-5 testers, so solo players hit a wall on night 2.
+5. Using `Touched` for party pads and resource pickups, which fires unreliably and lets players trigger them from odd angles. Poll with spatial queries or use ProximityPrompts.
+6. Letting the client report what it gathered (`AddItem:FireServer("Log", 5)`).
+7. Replicating the clock every frame from the server instead of computing it from shared time on each client [57].
+8. Setting fire fuel attributes every Heartbeat, which floods replication. Update 4 times per second.
+9. Unanchored loot drops that pile up and lag the server.
+10. Monsters that can be killed by standing on a rock where they can't path. Test pathfinding on every landmark.
+11. Invisible instant-kill threats with no tell or counter-tool.
+12. Five or more needs meters, so the game becomes chores.
+13. Night so dark that phone players can't see anything.
+14. Paid classes that beat every meta class, which turns co-op into a Robux check.
+15. Death-screen popups that hide the spectate and respawn buttons.
+16. Group teleports into public servers, splitting parties [63][64][65].
+17. Testing teleports only in Studio, where they don't work [63][64][65].
+18. Saving run inventory to DataStores, which bloats saves and allows dupes, even though runs reset anyway.
+19. Copying a hit's monster, class names or map. Steal patterns, not art.
+20. Shipping without night events, so every night of every run feels the same by run three.
+21. Free placement without a grid, giving gaps monsters walk through and walls that don't line up [60][62].
+22. One huge all-or-nothing finish line with no checkpoints or partial rewards.
+
+## References
+
+[1] List of Roblox games — https://en.wikipedia.org/wiki/List_of_Roblox_games — 99 Nights in the Forest peak of 14.2 million concurrent users and about 26 billion visits as of April 2026.
+[2] Roblox 99 Nights in the Forest movie — https://www.avclub.com/roblox-99-nights-in-the-forest-movie — film adaptation coverage; only two Roblox games had passed its concurrent peak.
+[3] Roblox Game "99 Nights" Becomes A Film — https://www.darkhorizons.com/roblox-game-99-nights-becomes-a-film/ — film adaptation announcement.
+[4] 99 Nights in the Forest (RoWatcher) — https://rowatcher.com/games/7326934954 — developer is the Roblox group Grandma's Favourite Games.
+[5] 99 Nights in the Forest—Tips for surviving The Deer, Owl, and Cultist invasions (PC Gamer) — https://pcgamer.com/games/roblox/99-nights-in-the-forest-tips/ — the game's named invasions.
+[6] 99 Nights in the Forest Roblox guide: how to survive every night (ExitLag) — https://www.exitlag.com/blog/99-nights-in-the-forest-roblox/ — campfire keeps the deer out; fuel upgrades the fire and expands the map; flashlight counter.
+[7] How to survive the monster in 99 Nights in the Forest (Sportskeeda) — https://www.sportskeeda.com/roblox-news/how-survive-monster-99-nights-forest?key4=flipboardroblox — flashlight makes the deer flee; sprinting outruns it at an energy cost; eat afterwards.
+[8] The Deer (99 Nights in the Forest) (Villains Wiki) — https://villains.fandom.com/wiki/The_Deer_(99_Nights_in_the_Forest) — the deer's behaviour around the camp and campfire.
+[9] How To Find All Missing Kids in 99 Nights in the Forest (Deltia's Gaming) — https://deltiasgaming.com/?p=293857 — Missing Kids Board, gated children, keys from cave mobs, Dino Kid first.
+[10] 99 Nights in the Forest endings (Pocket Gamer) — https://www.pocketgamer.com/roblox/99-nights-in-the-forest-endings — good ending needs 99 nights and all four children rescued.
+[11] 99 Nights in the Forest walkthrough (Destructoid) — https://www.destructoid.com/99-nights-in-the-forest-walkthrough/ — full-run walkthrough of the camp-survival structure.
+[12] 99 Nights in the Forest classes (Pocket Tactics) — https://www.pockettactics.com/99-nights-in-the-forest-classes — class count at time of writing; Camper costs 10 diamonds.
+[13] All Classes in 99 Nights in the Forest: Costs, perks, and upgrades (Sportskeeda) — https://www.sportskeeda.com/roblox-news/all-classes-99-nights-forest-costs-perks-upgrades — class costs, perks and upgrade levels.
+[14] 99 Nights in the Forest Big Game Hunter Class Guide (Deltia's Gaming) — https://deltiasgaming.com/?p=333390 — 600-diamond class; pelts and Mammoth Tusks give permanent bonuses.
+[15] Easiest Ways To Get Diamonds in 99 Nights in the Forest (Deltia's Gaming) — https://deltiasgaming.com/?p=296205 — Cultist Stronghold raids, about 50 diamonds from basic badges, Pelt Trader on day two and the Good Sack.
+[16] Diamonds in 99 Nights in the Forest (esports.gg) — https://esports.gg/news/roblox/diamonds-99-nights-in-the-forest/ — diamonds from day 50/99, badges, the Update Party and codes.
+[17] 99 Nights in the Forest update (Pocket Tactics) — https://www.pockettactics.com/99-nights-in-the-forest-update — Hedge Maze update dated November 1, 2025.
+[18] 99 Nights in the Forest Hedge Maze Update Guide (Deltia's Gaming) — https://deltiasgaming.com/?p=389685 — third part of the Halloween update, Carnival Games, 600-diamond Vampire class.
+[19] When is the next 99 Nights in the Forest update? (Sportskeeda) — https://www.sportskeeda.com/roblox-news/when-is-next-99-nights-in-the-forest-update — scheduled update time in UTC with a notify option on the event page.
+[20] Everything New in 99 Nights in the Forest Fishing Update (Deltia's Gaming) — https://deltiasgaming.com/?p=317391 — fishing added as a side activity.
+[21] 99 Nights in the Forest story explained (Pocket Tactics) — https://www.pockettactics.com/99-nights-in-the-forest-story — the game has a story layer behind the survival.
+[22] Dead Rails and the Hit Makers formula (GameAnalytics) — https://www.gameanalytics.com/blog/dead-rails-and-the-hit-makers-formula — familiar plus new; borrowing from Build A Boat For Treasure (4.3B+ plays per the article); Wild West twist; influencers and algorithm.
+[23] Dead Rails (RoWatcher) — https://rowatcher.com/games/7018190066/dead-rails — RCM Games; alternate 1899 zombie plague; trains to a cure in Mexico; co-op.
+[24] Dead Rails [ENDLESS] (RoWatcher) — https://rowatcher.com/games/7018190066/dead-rails-endless — title tags such as [ENDLESS], [HEATWAVE] and [EVENT] across updates.
+[25] Dead Rails Roblox: How Many Bonds Do You Get on Completion (Deltia's Gaming) — https://deltiasgaming.com/?p=230372 — 10 Bonds for a Normal run, 20 for Nightmare.
+[26] How to get and use Bonds in Dead Rails (Sportskeeda) — https://www.sportskeeda.com/roblox-news/how-get-use-bonds-dead-rails — Bond sources in towns and Robux Bond packs.
+[27] How to Get and Use Bonds in Dead Rails (Beebom) — https://beebom.com/how-to-get-and-use-bonds-in-dead-rails/amp/ — Bond sources and uses.
+[28] Dead Rails Guide: Ghost Train (Deltia's Gaming) — https://deltiasgaming.com/?p=268112 — Ghost Train as the newest and most expensive train at 325 Bonds.
+[29] All Train variants in Dead Rails: Price and usage (Sportskeeda) — https://www.sportskeeda.com/roblox-news/all-train-variants-dead-rails-price-usage — train prices and uses.
+[30] Dead Rails Roblox: All Train Types Ranked From Worst to Best (Deltia's Gaming) — https://deltiasgaming.com/?p=222098 — train ladder and trade-offs.
+[31] Dead Rails Roblox Guide: All Night Events Explained (Deltia's Gaming) — https://deltiasgaming.com/?p=180436 — night from 9 PM to 5 AM; enemies from 11 PM.
+[32] All Dead Rails night events and how to survive them (Sportskeeda) — https://www.sportskeeda.com/roblox-news/all-dead-rails-night-events-survive — Stormy, Cloudy, Full Moon and Blood Moon nights.
+[33] Dead Rails Roblox Guide: How To Raid Fort Constitution (Deltia's Gaming) — https://deltiasgaming.com/?p=207762 — random fort placement in distance bands, 6 AM raids, loadout.
+[34] Complete Guide to Classes in Dead Rails (Deltia's Gaming) — https://deltiasgaming.com/?p=177947 — Dead Rails class system.
+[35] Dead Rails beginner's guide (BlueStacks) — https://www.bluestacks.com/blog/game-guides/roblox/rl-dead-rails-beginners-guide-en.html — overview of the journey-survival run.
+[36] Natural Disaster Survival (Perfection Roblox Games wiki) — https://perfectionrobloxgames.miraheze.org/wiki/Natural_Disaster_Survival — Stickmasterluke; random map; disaster list.
+[37] Survive the Disasters (app) (Roblox Wiki) — https://roblox.fandom.com/wiki/Survive_the_Disasters_(app) — 2014 iOS app that simulated the game, later removed.
+[38] Most challenging disasters in Natural Disaster Survival (BlueStacks) — https://www.bluestacks.com/blog/game-guides/roblox/rl-most-challenging-disasters-en.html — which disasters are hardest and why.
+[39] A Dusty Trip: Guide (Sportskeeda) — https://sportskeeda.com/roblox-news/a-dusty-trip-guide — survival simulator; repair a vehicle; stamina and hunger; no tutorial.
+[40] How to build a van in A Dusty Trip (Pocket Gamer) — https://www.pocketgamer.com/roblox/how-to-build-a-van-in-a-dusty-trip — vehicles built from engine, radiator and wheel parts; drive as far as possible.
+[41] A Dusty Trip Guide: Free Dustbox Car (Scrap Quest) (Deltia's Gaming) — https://deltiasgaming.com/?p=264757 — 777 scrap points at the Scrap Shop about 1,500 m out.
+[42] A Dusty Trip Roblox Guide: How To Get Transit Ace (Deltia's Gaming) — https://deltiasgaming.com/?p=221134 — free 4-seat car at 2,000 m guarded by mutants, vault message to 8,000 m.
+[43] A Dusty Trip Roblox Guide: How To Get Blackout Car (Deltia's Gaming) — https://deltiasgaming.com/?p=199515 — timed suitcase delivery from 6,200 m to 8,150 m.
+[44] Gusmanak (Roblox profile) — https://www.roblox.com/users/281519/profile — Apocalypse Rising: open-world zombie survival where zombies aren't the only threat.
+[45] Apocalypse Rising Through the Ages (RoWatcher) — https://rowatcher.com/games/68692443/apocalypse-rising-through-the-ages — a place with miniature versions of all the Apocalypse Rising maps.
+[46] Booga Booga remake (Roblox game listing) — https://www.roblox.com/games/11604520803 — remake listing describing Booga Booga's origin and tribes.
+[47] Booga Booga remake (Roblox game listing) — https://www.roblox.com/games/14965491403 — remake of the 2018 version made from the uncopylocked original.
+[48] Survive the Killer: Killer guide (Sportskeeda) — https://sportskeeda.com/roblox-news/survive-killer-killer-guide — the killer role in asymmetric survival.
+[49] Roblox Survive the Killer: all mechanics, including how to crawl (Gamer Journalist) — https://gamerjournalist.com/roblox-survive-the-killer-all-mechanics-including-how-to-crawl-explained/ — survivor-only crawling routes; Dead by Daylight inspiration.
+[50] Road to the IGF: Klei Entertainment's Don't Starve (Game Developer) — https://gamedeveloper.com/design/road-to-the-igf-klei-entertainment-s-i-don-t-starve-i- — Kevin Forbes on Minecraft's influence.
+[51] Don't Starve development talk (GDC Vault) — https://www.gdcvault.com/play/1020547/contactUs — from a 16-hour game jam to release, with community data.
+[52] Seeing the Forest For The Trees: A Don't Starve Interview (Game-Wisdom) — https://game-wisdom.com/?p=3185 — designer interview on resource discovery and progression.
+[53] Why Don't Starve moved away from free-to-play (Shacknews, GDC 2014) — https://shacknews.com/topic/gdc-2014?page=2 — GDC panel on dropping the free-to-play plan.
+[54] Experience genres (Roblox Creator Docs) — https://create.roblox.com/docs/production/publishing/experience-genres — genres drive chart sorts; change once every three months; Roblox may reassign.
+[55] Lighting (Roblox Engine API Reference) — https://create.roblox.com/docs/en-us/reference/engine/classes/Lighting — ClockTime, TimeOfDay and SetMinutesAfterMidnight.
+[56] Custom daylight cycle (DevForum) — https://devforum.roblox.com/t/custom-daylight-cycle/677026 — separate day and night speeds.
+[57] How to make a day/night cycle (DevForum) — https://devforum.roblox.com/t/how-to-make-a-daynight-cycle/2437736 — server-only cycles look choppy; sync clients with GetServerTimeNow.
+[58] Day Night Cycle Help (DevForum) — https://devforum.roblox.com/t/day-night-cycle-help/3076509 — map elapsed time onto a 24-hour clock over a set duration.
+[59] How would I do this? (DevForum) — https://devforum.roblox.com/t/how-would-i-do-this/967244 — ClockTime is 24-hour decimal (18.25 = 6:15 PM).
+[60] How do I make grid based building system? (DevForum) — https://devforum.roblox.com/t/how-do-i-make-grid-based-building-system/2685654 — math.floor snapping; plot size as a grid multiple.
+[61] How do I make a building system with a grid? (DevForum) — https://devforum.roblox.com/t/how-do-i-make-a-building-system-with-a-grid-also-want-to-be-able-to-weild-destroy-blocks/370369 — grid placement with weld and destroy, shared place file.
+[62] How do you make a perfect snapping-system? (DevForum) — https://devforum.roblox.com/t/how-do-you-make-a-perfect-snapping-system/3930979 — rotation-related gaps; using surface normals.
+[63] Party system in game (DevForum) — https://devforum.roblox.com/t/party-system-in-game/1357798 — reserving servers for parties.
+[64] Group teleport system (DevForum) — https://devforum.roblox.com/t/group-teleport-system/329448 — group teleports versus reserved servers.
+[65] Creating unique servers for multiple players (DevForum) — https://devforum.roblox.com/t/2404208 — ReserveServer and TeleportAsync for a match; teleports don't work in Studio.
+[66] TeleportOptions (Roblox Engine API Reference) — https://create.roblox.com/docs/reference/engine/classes/TeleportOptions.md — optional TeleportAsync argument; reserved-server options and incompatible combinations.
+
+Related: [[00 Start Here]] · [[01 The First Five Minutes]] · [[02 The Core Loop]] · [[03 Rarity and RNG]] · [[04 Progression and Economy]] · [[05 UI and HUD]] · [[06 World and Look]] · [[07 Characters, VFX and Assets]] · [[08 Mobile]] · [[09 Shops and Monetization]] · [[10 Retention and Social]] · [[11 Thumbnails, Icons and the Store Page]] · [[12 Live Ops and Launch]] · [[13 Building It Right]] · [[14 Roblox Studio Workflow]] · [[15 Discovery and Growth]] · [[Genre - Horror]] · [[Genre - Tower Defense]] · [[Genre - Action and Combat]] · [[Genre - Racing and Vehicles]] · [[Genre - Farming and Fishing]]

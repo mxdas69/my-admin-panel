@@ -143,6 +143,7 @@ function render(forceMount = false) {
   const r = route();
   renderSidebar(r);
   renderTopbar(r);
+  renderRemoteLayer();
   const el = document.getElementById("page");
   const key = `${r.page}/${r.arg}`;
   const page = PAGES[r.page];
@@ -214,6 +215,7 @@ function renderTopbar(r) {
     <h1>${esc(page.title(r.arg))}</h1>
     ${s.games.length ? `<div class="seg game-switch">${[["all", "All games"], ...s.games.map((g) => [g.slug, g.name])].map(([slug, name]) => `<button class="${S.ui.game === slug ? "active" : ""}" data-act="pick-game" data-id="${esc(slug)}">${esc(name)}</button>`).join("")}</div>` : ""}
     <span class="spacer"></span>
+    ${s.remote?.sharing === true || s.remote?.sharing?.on ? `<span class="status-pill remote-pill"><span class="dot live" style="color:var(--green)"></span><span class="lbl">Remote Control ${s.remote.sharing?.status === "joined" ? `· ${esc(s.remote.partnerName || "friend")} is here` : "on"}</span>${isOwner() ? `<button class="btn ghost small" data-act="remote-off" title="Turn off Remote Control">${icon("x")}</button>` : ""}</span>` : ""}
     ${live}
     <button class="btn" data-act="refresh" title="Refresh">${icon("refresh")}<span class="lbl">Refresh</span></button>
     <button class="btn primary" data-act="new-task" title="New task">${icon("plus")}<span class="lbl">New task</span></button>`;
@@ -1033,6 +1035,12 @@ PAGES.settings = {
   update(el) {
     const box = el.querySelector("#connections");
     if (box) box.innerHTML = connectionsHtml();
+    const rc = el.querySelector("#remote-card");
+    const html = remoteCardHtml();
+    if (rc && rc.dataset.sig !== html && !rc.contains(document.activeElement)) {
+      rc.dataset.sig = html;
+      rc.innerHTML = html;
+    }
   },
   draw(el) {
     const v = S.settings;
@@ -1068,6 +1076,7 @@ PAGES.settings = {
         <div class="row" style="margin-top:14px"><button class="btn primary" data-act="save-settings">${icon("check")}Save settings</button></div>
       </div>
       <div><div class="card"><div class="row"><h3 class="section-title grow" style="margin:0">Connections</h3><button class="btn small" data-act="check-connections">${icon("refresh")}Check again</button></div><div id="connections">${connectionsHtml()}</div></div>
+        <div class="card" id="remote-card">${remoteCardHtml()}</div>
         <div class="card" id="people">${peopleHtml()}</div></div>
       </div>`;
   },
@@ -1104,6 +1113,66 @@ function modelGridHtml(v, pick) {
       }</label>`;
     })
     .join("");
+}
+
+function remoteCardHtml() {
+  const r = S.state.remote ?? {};
+  const partner = r.partnerName || "your friend";
+  const sh = r.sharing ?? {};
+  const time = (t) => (t ? new Date(t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "");
+  const status = {
+    off: "",
+    starting: `<span class="spinner"></span> Opening a secure connection…`,
+    sent: `${icon("send")} Request sent to <b>${esc(partner)}</b> at ${time(sh.sentAt)}. Waiting for them to join…`,
+    joined: `<span class="dot live" style="color:var(--green)"></span> <b>${esc(partner)}</b> joined at ${time(sh.joinedAt)} and sees everything live.`,
+    error: `<span style="color:var(--red)">${esc(sh.error ?? "Something went wrong.")}</span>`,
+  }[sh.status] ?? "";
+  const pairing = !r.paired
+    ? `<p class="muted" style="margin-top:0">Pair once with your friend's RoCrew. One of you makes a code, the other types it in.</p>
+       <div class="row"><button class="btn primary" data-act="remote-code">${icon("plus")}Make a pair code</button></div>
+       <div class="row" style="margin-top:10px"><input class="input grow mono" id="remote-code-in" placeholder="Or paste their code: RC-XXXX-XXXX-…"><button class="btn" data-act="remote-pair">Pair</button></div>`
+    : `<div class="row"><span class="pill ${r.partnerName ? "green" : "amber"}">${r.partnerName ? `Paired with ${esc(r.partnerName)}` : "Waiting for your friend to enter the code"}</span><span class="grow"></span><button class="btn ghost small" data-act="remote-unpair">Unpair</button></div>
+       ${r.partnerName ? "" : `<label class="field" style="margin-top:10px">Send your friend this code <small>They paste it under Settings → Remote Control in their RoCrew.</small><input class="input mono" readonly value="${esc(r.code)}" data-act="select-all"></label>`}`;
+  return `<h3 class="section-title">${icon("users")} Remote Control</h3>
+    ${pairing}
+    ${r.paired ? `<label class="switch-row"><input type="checkbox" data-change="remote-share" ${sh.on ? "checked" : ""}><span class="switch"></span><span><b>Share my studio live</b><br><small class="muted">${esc(partner)} gets a request. When they join, they land in your Lead chat and can watch and do everything, while it all runs on this PC. Turn it off and on to send the request again; turning it off disconnects them at once.</small></span></label>
+      ${status ? `<div class="remote-status">${status}</div>` : ""}
+      ${sh.errorCode === "NO_CLOUDFLARED" || (!r.tunnel?.installed && r.tunnel?.canInstall) ? `<div class="banner blue" style="margin:10px 0 0"><b>One-time setup</b>Remote Control uses Cloudflare's free tunnel helper so ${esc(partner)} can reach this PC from anywhere. <div class="row" style="margin-top:8px"><button class="btn primary small" data-act="remote-install" ${sh.installing ? "disabled" : ""}>${sh.installing ? '<span class="spinner"></span> Downloading…' : `${icon("upload")}Install it (about 40 MB)`}</button></div></div>` : ""}` : ""}
+    ${r.paired ? `<details class="how"><summary class="faint">Connection details</summary><p class="faint" style="font-size:12px">Requests travel encrypted with your pair code through a public relay, so only your two apps can read them. Relay: <span class="mono">${esc(r.relayUrl ?? "")}</span> (${esc(r.relayStatus ?? "")}).</p></details>` : ""}`;
+}
+
+// ---------- Remote Control: requests, banners ----------
+
+const BACK = (() => {
+  let v = new URLSearchParams(location.search).get("back");
+  try {
+    if (v) sessionStorage.setItem("rocrew-back", v);
+    else v = sessionStorage.getItem("rocrew-back");
+  } catch {}
+  return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(v ?? "") ? v : null;
+})();
+
+function renderRemoteLayer() {
+  const s = S.state;
+  const r = s?.remote ?? {};
+  const el = document.getElementById("remote-layer");
+  let html = "";
+  if (S.ui.remoteEnded) {
+    html = `<div class="modal-back"><div class="modal"><h3>Remote Control ended</h3><p class="muted">${esc(s?.owner || "Your friend")} turned off Remote Control, so this window is closed to you now.</p><div class="row end">${BACK ? `<a class="btn primary" href="${esc(BACK)}">Back to my studio</a>` : `<span class="faint">Close this tab and open RoCrew again to get back to your studio.</span>`}</div></div></div>`;
+  } else if (s?.me?.remote) {
+    html = `<div class="remote-bar"><span class="dot live" style="color:var(--green)"></span><span class="grow">You're in <b>${esc(s.owner || "your friend")}</b>'s studio with Remote Control. Everything runs on their PC, live.</span>${BACK ? `<a class="btn small" href="${esc(BACK)}">Leave</a>` : `<span class="faint lbl">To leave, close this tab and open RoCrew again.</span>`}</div>`;
+  } else if (r.invite && !S.ui.dismissed?.[r.invite.session]) {
+    html = `<div class="modal-back"><div class="modal invite"><div class="row"><span class="tile lg" style="--c:#22d3a6">${icon("users")}</span><div class="grow"><div class="eyebrow">Remote Control</div><h3 style="margin:2px 0 0">${esc(r.invite.name)} wants you in their studio</h3></div></div>
+      <p class="muted">Join to watch their crew live and work with them. You'll land in their Lead chat. It all runs on ${esc(r.invite.name)}'s PC.</p>
+      <div class="row end"><button class="btn" data-act="remote-decline" data-id="${esc(r.invite.session)}">Not now</button><button class="btn primary" data-act="remote-join" data-id="${esc(r.invite.session)}">${icon("arrow")}Join now</button></div></div></div>`;
+  }
+  if (el.dataset.sig !== html) {
+    el.dataset.sig = html;
+    el.innerHTML = html;
+    document.body.classList.toggle("with-remote-bar", Boolean(s?.me?.remote) && !S.ui.remoteEnded);
+  }
+  const waiting = r.invite && !S.ui.dismissed?.[r.invite.session];
+  document.title = waiting ? `(!) ${r.invite.name} wants you in · RoCrew` : "RoCrew Studio";
 }
 
 function peopleHtml() {
@@ -1331,6 +1400,40 @@ const ACTIONS = {
     await refresh();
   },
   "select-all": (el) => el.select(),
+  "remote-code": async () => {
+    const res = await attempt(() => api("POST", "/api/remote/pair", {}), "Pair code made. Send it to your friend.");
+    if (res) await refresh();
+  },
+  "remote-pair": async () => {
+    const code = document.getElementById("remote-code-in")?.value.trim();
+    if (!code) return toast("Paste your friend's pair code first.", true);
+    const res = await attempt(() => api("POST", "/api/remote/pair", { code }), "Paired. Your friend's app will show your name in a moment.");
+    if (res) await refresh();
+  },
+  "remote-unpair": async () => {
+    if (!confirm("Unpair? You'll need a new code to pair again.")) return;
+    if (await attempt(() => api("DELETE", "/api/remote/pair"))) await refresh();
+  },
+  "remote-install": async () => {
+    toast("Downloading the tunnel helper from Cloudflare…");
+    if (await attempt(() => api("POST", "/api/remote/install"), "Installed. Turning Remote Control on…")) {
+      await attempt(() => api("POST", "/api/remote/share", { on: true }));
+      await refresh();
+    }
+  },
+  "remote-off": async () => {
+    if (await attempt(() => api("POST", "/api/remote/share", { on: false }), "Remote Control is off.")) await refresh();
+  },
+  "remote-join": async (el) => {
+    const res = await attempt(() => api("POST", "/api/remote/answer", { session: el.dataset.id, join: true }));
+    if (res?.url) location.href = `${res.url}&back=${encodeURIComponent(location.origin)}#/lead`;
+    else await refresh();
+  },
+  "remote-decline": async (el) => {
+    (S.ui.dismissed ??= {})[el.dataset.id] = true;
+    renderRemoteLayer();
+    await attempt(() => api("POST", "/api/remote/answer", { session: el.dataset.id, join: false }));
+  },
   invite: async () => {
     const box = document.getElementById("invite-name");
     const name = box.value.trim();
@@ -1479,6 +1582,11 @@ const ACTIONS = {
 };
 
 const CHANGES = {
+  "remote-share": async (el) => {
+    const res = await attempt(() => api("POST", "/api/remote/share", { on: el.checked }), el.checked ? "" : "Remote Control is off.");
+    if (!res) el.checked = !el.checked;
+    await refresh();
+  },
   autostart: async (el) => {
     const res = await attempt(() => api("POST", "/api/autostart", { enabled: el.checked }), el.checked ? "RoCrew will start with your PC." : "RoCrew won't start with your PC.");
     if (!res) el.checked = !el.checked;
@@ -1563,6 +1671,11 @@ async function refresh() {
   try {
     S.state = await api("GET", "/api/state");
   } catch (err) {
+    if (S.state?.me?.remote) {
+      S.ui.remoteEnded = true;
+      renderRemoteLayer();
+      return;
+    }
     document.getElementById("page").innerHTML = `<div class="banner red"><b>Can't reach the RoCrew app.</b>${esc(err.message)}. Is <span class="mono">node studio/server.mjs</span> still running?</div>`;
     return;
   }

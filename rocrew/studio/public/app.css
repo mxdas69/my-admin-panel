@@ -410,3 +410,18 @@ details.how summary { cursor: pointer; }
   .model-grid { grid-template-columns: 1fr 1fr; }
   .howto { max-width: 100%; }
 }
+
+/* Remote Control */
+.remote-bar { position: fixed; left: 0; right: 0; top: 0; z-index: 60; display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: linear-gradient(90deg, rgba(34, 211, 166, 0.22), rgba(96, 165, 250, 0.22)); border-bottom: 1px solid rgba(34, 211, 166, 0.45); font-size: 13px; backdrop-filter: blur(8px); }
+body.with-remote-bar .app { padding-top: 42px; }
+.modal.invite { max-width: 440px; border-color: rgba(34, 211, 166, 0.5); animation: pop 0.25s ease-out; }
+@keyframes pop { from { transform: scale(0.94); opacity: 0; } to { transform: none; opacity: 1; } }
+.remote-pill { gap: 6px; padding-right: 4px; border-color: rgba(34, 211, 166, 0.5); }
+.remote-status { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; display: flex; gap: 8px; align-items: center; }
+.switch-row { display: flex; gap: 12px; align-items: flex-start; margin-top: 12px; cursor: pointer; }
+.switch-row input { position: absolute; opacity: 0; pointer-events: none; }
+.switch { flex: none; width: 42px; height: 24px; border-radius: 999px; background: rgba(255, 255, 255, 0.14); position: relative; transition: background 0.2s; margin-top: 2px; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+.switch-row input:checked + .switch { background: var(--green); }
+.switch-row input:checked + .switch::after { transform: translateX(18px); }
+.switch-row input:focus-visible + .switch { outline: 2px solid var(--purple, #a855f7); outline-offset: 2px; }

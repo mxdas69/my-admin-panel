@@ -6,7 +6,7 @@ also: [lead, architect, liveops, kid-tester, producer, pulse]
 
 # 09 Shops and Monetization
 
-This chapter is the studio's playbook for earning Robux without losing players. It covers which Roblox product type to use for each offer, how to price it, how to present it (worth anchors, struck-through prices, quantity ladders, bundles, gifting), where offers may appear and how often, time-boxed and server-wide boosts, starter packs, VIP, limited items, subscriptions, rewarded video ads and immersive ads, Creator Rewards (which replaced Premium Payouts in July 2025), private servers, avatar items, and the rules for paid random items and odds. It also holds the server code that takes real money: receipts, ownership checks, gifts and boosts.
+This chapter is the studio's playbook for earning Robux without losing players. It covers which of Roblox's monetization options [8] to use for each offer, how to price it, how to present it (worth anchors, struck-through prices, quantity ladders, bundles, gifting), where offers may appear and how often, time-boxed and server-wide boosts, starter packs, VIP, limited items, subscriptions, rewarded video ads and immersive ads, Creator Rewards (which replaced Premium Payouts in July 2025), private servers, avatar items, and the rules for paid random items and odds. It also holds the server code that takes real money: receipts, ownership checks, gifts and boosts.
 
 Monetization decides whether a game can keep being updated, but it can also kill the game. A shop that sells convenience, speed, status and fun extras to players who already love the loop earns for years. A shop that sells power, pushes popups in the first minute or lies about prices drives players away, earns downvotes and invites moderation. Roblox's own monetization guidance warns that players may downvote an experience whose strategies they dislike [7], and a 2026 University of Sydney study found misleading or deceptive monetization in 14 of the 15 top-earning games it examined [37][38]. Our games compete on trust: the honest shop is the long-term winner, especially with a young audience.
 
@@ -103,7 +103,7 @@ Read this chapter when you plan a game's economy (Balance and Architect), before
     A child who buys 30 minutes and gets disconnected after 5 should not lose 25 minutes of a paid item. Store `RemainingSeconds` in the save, decrement on the server once per second while the player is present, add time on each purchase, and enforce any cap at the buy button, never at the grant (the grant always gives what was paid for). Show a boost tile with icon, multiplier and `mm:ss` left. Done right: buy 30 min twice, see 60:00, leave at 41:12, rejoin and see 41:12. Done wrong: an `os.time()` end stamp that keeps counting while the player sleeps.
 
 27. **Server boosts: one buyer, everyone in the server benefits, the buyer is credited, and unused time isn't silently lost.**
-    A server boost is a generous social purchase: one player pays and the whole server gets "2x Luck for 15 minutes". It works because it's visible and celebrates the buyer. In Studio: the product grants the buyer a token; the server spends the token to start or queue a 15-minute window; a banner reads "Ava boosted this server: 2x Luck 14:59"; queued windows keep their token until they start; on shutdown, a window more than half unused returns its token to the buyer. Late joiners get the boost. Done right: the banner shows the buyer and the stacked time. Done wrong: the boost lives in a server variable and vanishes on shutdown with 14 minutes left.
+    A server boost is a generous social purchase: one player pays and the whole server gets "2x Luck for 15 minutes". It works because it's visible and celebrates the buyer. In Studio: the product grants the buyer a token; the server spends the token to start or queue a 15-minute window; a banner reads "Ava boosted this server: 2x Luck 14:59"; on shutdown, windows that haven't started, or are more than half unused, return their tokens to their buyers. Late joiners get the boost. Done right: the banner shows the buyer and the stacked time. Done wrong: the boost lives in a server variable and vanishes on shutdown with 14 minutes left.
 
 28. **Gifting uses a separate "gift" product per giftable item, the server locks the recipient before the prompt, and the purchase grants a gift token that the server then delivers.**
     `ProcessReceipt` only knows who paid, so the recipient must be chosen and validated on the server first. Granting a token (not the item) keeps the receipt path standard and idempotent; a second, Robux-free step moves the token to the recipient. If the recipient left, the token waits in the buyer's "Gifts to send" list. Blox Fruits lets players gift items such as permanent fruits and gamepasses [41], and Grow a Garden's gift shop charges Robux and needs both players in the same server [46]; DevForum discussions recommend a central gift service that registers each feature's products [50], and community tools show each stage of a transfer to the players (sending, processing, sent, completed) [51]. Done right: pick a player, buy "Gift VIP", both players get a toast. Done wrong: a "gift" that grants the buyer instead, or a client remote naming the recipient after payment.
@@ -352,8 +352,8 @@ Base rate: the smallest pack sets it (here 4 Coins per R$). Each pack's bonus is
 - **Product:** "Server 2x Luck, 15 min", priced 99-199 R$ (roughly 3-5x a personal boost, because it helps up to the whole server).
 - **Effect:** everyone in the server, including late joiners, gets the boost; it adds to personal boosts.
 - **Credit:** a top banner "Ava boosted the server! 2x Luck 14:59", a chat system message, and a confetti burst for 2 s. Display names only.
-- **Stacking:** extra purchases queue more windows (time adds). Each queued window keeps the buyer's token until it starts.
-- **Shutdown:** on `game:BindToClose`, if the running window has more than half its time left and its buyer is still in the server, the token goes back to the buyer's save (they can use it in another server). Queued windows return their tokens too.
+- **Stacking:** extra purchases queue more windows (time adds), each credited to its buyer.
+- **Shutdown:** on `game:BindToClose`, every window that hasn't started, and a running window with more than half its time left, returns one token to its buyer's save if the buyer is still in the server, so they can use it in another server. A buyer who already left forfeits nothing they could have used: their window ran for the server they paid for.
 - **Abuse:** cap queued server time at 2 hours; refuse further purchases at the button with "Server boost queue is full".
 
 ## Limited items
@@ -413,3 +413,907 @@ Frame builds these. Sizes are for a 1920x1080 design canvas using Scale with a `
 - **Gift picker:** a scrolling list of players in the server with avatar headshot, display name and a state ("Already has VIP" greyed); search box at 10+ players.
 - **Purchase toast:** top-center, 2.5 s, "+2,750 Coins added" with the item icon; plays a short sound; queued, never stacked.
 
+## Examples from top games
+
+### A real discount from a real price
+**Game:** Adopt Me! ([45])
+**Shows:** Sportskeeda's pass guide lists the VIP pass at 600 Robux against a 750 Robux original cost.
+**Why it works:** a price reduction anchored to a price players have actually seen makes the pass feel like a deal without inventing a number.
+**Steal:** strike-through prices only for real, time-boxed reductions from a price that really existed (Rule 18), computed from live prices.
+**Avoid:** a "was" price that was never charged, or a "sale" that never ends; the Sydney study calls this timed false reference pricing [37].
+
+### VIP that sells status and fun, not power
+**Game:** Adopt Me! ([45])
+**Shows:** the reported VIP perks include access to a VIP Room and an exclusive limo.
+**Why it works:** both perks are visible to other players and fun to show off; neither makes a free player's pets worse.
+**Steal:** a VIP lounge and one showy VIP-only item other players can see (Rule 24).
+**Avoid:** putting progression, rare spawns or exclusive resources inside the VIP area.
+
+### A subscription that bundles VIP and a daily-use perk
+**Game:** Adopt Me! ([44])
+**Shows:** Pets Plus is a monthly subscription reported at $2.99 per month (varying by region) that includes VIP membership and lets players equip two pets at the same time.
+**Why it works:** "two pets at once" is felt every minute of every session, so the monthly price keeps feeling worth it.
+**Steal:** a subscription benefit used constantly, named clearly, with price and duration stated [14].
+**Avoid:** a subscription whose only benefit is a one-time item; players cancel after the first month.
+
+### A shop that lives in the menu, with currency and boosts side by side
+**Game:** Blox Fruits ([40])
+**Shows:** the wiki's Shop page lists Robux purchases such as money packs, fragment bundles and 2x EXP boosts in an in-game store reached through the GUI menu.
+**Why it works:** one predictable place to buy, reachable from the main menu, holding the repeatable products engaged players want.
+**Steal:** one shop entry point in the HUD, with currency packs and timed boosts as the repeatable core (Rules 14, 49).
+**Avoid:** scattering buy prompts across the world with no central shop to compare value.
+
+### A pass that sells information
+**Game:** Blox Fruits ([42])
+**Shows:** the Fruit Notifier pass tells holders the distance to newly spawned fruits, alongside passes like 2x Money.
+**Why it works:** it sells time saved and a head start on a hunt the whole server joins; the fruit still has to be reached and claimed in play.
+**Steal:** convenience passes that point the player toward play (finders, compasses, notifiers) rather than skipping it.
+**Avoid:** an information perk so strong that free players never find anything; cap or delay it if spawns are contested.
+
+### Gifting passes and permanent items
+**Game:** Blox Fruits ([41])
+**Shows:** the wiki describes gifting as a mechanic that lets players gift other players items like permanent fruits and gamepasses.
+**Why it works:** gifting turns a purchase into a social act; friends who receive gifts feel invested in the game.
+**Steal:** "Gift" versions of passes and cosmetics, delivered by the server to a validated recipient (Rule 28).
+**Avoid:** gifting random or tradeable currency items, which invites scams and policy problems.
+
+### A long ladder of passes
+**Game:** Blox Fruits ([43])
+**Shows:** a 2026 third-party guide counts 14 gamepasses in the Robux shop ranging from 200 to 3,000 Robux (counts and prices change; check the game).
+**Why it works:** a mature game can carry many passes because players arrive at different stages and budgets; each pass has one clear job.
+**Steal:** grow the pass ladder over updates, one well-understood perk per pass.
+**Avoid:** launching with a dozen passes; start with 3-6 (Rule 15).
+
+### A gift shop with Robux pricing and a same-server rule
+**Game:** Grow a Garden ([46])
+**Shows:** guides describe a Gift Shop where seeds can be gifted for Robux (not the in-game currency) by pressing a Gift icon and picking a friend's name, with both players in the same server.
+**Why it works:** gifting in the same server is visible and immediate; the giver sees the thanks.
+**Steal:** same-server gifting at launch, with a picker of present players and a celebration on delivery.
+**Avoid:** gifts that disappear into an offline inbox with no confirmation.
+
+### A rotating stock with a paid shortcut
+**Game:** Grow a Garden ([47])
+**Shows:** guides report the seed shop restocks on a five-minute cycle, and that Robux can buy any seed at any time.
+**Why it works:** the free restock gives a reason to check back often; the paid path sells certainty to players who don't want to wait.
+**Steal:** a short, frequent free rotation with an honest "Next restock 2:41" and a buy-now option beside it (Rule 31).
+**Avoid:** long restock timers designed to sell skips; Roblox's docs warn players dislike appointment mechanics [7].
+
+### A meta currency earned every run and sold too
+**Game:** DOORS ([48])
+**Shows:** the wiki says Knobs can be bought with Robux or obtained by ending a run in any way.
+**Why it works:** every run pays something, even a failed one, so losing still moves the player forward; buying Knobs speeds up the same path.
+**Steal:** a currency earned from every session outcome, also sold in packs (quantity ladder).
+**Avoid:** a currency that only payers can get in useful amounts.
+
+### A paid second chance
+**Game:** DOORS ([49])
+**Shows:** Revives are paid and bought with Robux (codes have also handed some out for free).
+**Why it works:** a revive is sold at the moment of highest intent: deep in a run with friends.
+**Steal:** a cheap, capped revive with a free respawn option beside it, and occasional free revives via codes or daily rewards (Rules 31-32).
+**Avoid:** an unskippable revive card with a countdown over the death screen.
+
+### What the top earners got wrong
+**Game:** 15 top-earning Roblox games studied by the University of Sydney, October 2025 to February 2026 ([37][38][39])
+**Shows:** the researchers found misleading, deceptive or unfair monetization in 14 of 15 games, including "daily discounts" that are always available, separate currencies that obscure real prices, near-miss visuals, countdown timers creating false urgency and opaque random rewards.
+**Why it works (for them, short-term):** urgency and confusion push impulse spending.
+**Steal:** nothing except the warning list; Kid Tester uses it as a checklist (Rule 45).
+**Avoid:** every practice on that list. They cost trust, ratings and, increasingly, regulatory attention [27][38].
+
+## By genre
+
+### Price ladders by genre (rule of thumb; the owner sets prices)
+| Genre | Impulse | Starter | Core passes | VIP | Top pack | Signature offers | Off-limits |
+|---|---|---|---|---|---|---|---|
+| Simulator | 25-49 boost or pack | 49-79 | 2x Coins 149-199, Auto-hatch 199-299, +pet slots 99-149 | 249-399 | 999-2,499 | timed boosts, server luck, egg packs with odds | Robux-only pets stronger than any earnable pet |
+| Tycoon | 25-49 cash | 49-99 | 2x Cash 149-199, Auto-collect 99-149, extra floor 99 | 199-299 | 999 | "30 min of cash" packs scaled to income | buying the finished tycoon outright |
+| Idle/incremental | 25-49 | 49-79 | 2x income 149-199, offline cap +4h 99, auto-buy 149 | 199-299 | 999 | time warps (hours of income) | offline caps tuned to sell extensions |
+| Obby | 9-25 stage skip | 49 | speed/gravity coil 49-99, trails 49-149 | 99-199 | 249-499 | capped skips, trails, radio | skip-to-end pass; paid-only final stage |
+| Roleplay/life sim | 25-49 | 79-99 | houses 149-399, vehicles 99-399, radio 99 | 299-499 | 499-999 | avatar items (40%) [31], premium homes | gating basic jobs or roles behind passes |
+| Action/combat (PvE) | 25-49 | 79-99 | 2x XP 149-199, extra loadout 99 | 199-399 | 999 | revives, weapon skins | stat weapons usable in PvP |
+| Battlegrounds | 25-49 emote | 79 | emote packs 49-149, skins 149-399 | 199-299 | 499-999 | kill effects, emotes, private servers | paid characters stronger than free ones |
+| Survival | 15-49 revive | 79 | storage 99-149, 2x XP 149-199 | 199-299 | 499-999 | revives, base skins | paid weapons in PvP |
+| Horror | 15-49 revive | 49-79 | lobby cosmetics 49-149, meta packs | 149-249 | 399-799 | capped revives [49], meta currency [48] | paying to skip the scary part, paid lore |
+| Tower defense | 25-49 | 79-99 | 2x speed 99-149, +unit slot 199, auto-skip 99 | 249-399 | 999-1,999 | summons with odds, banners | Robux-only meta units |
+| RNG/collection | 9-25 reroll or luck | 49-99 | quick roll 149, storage 99, auto-roll 199 | 249-499 | 999-2,499 | luck potions (adjusted odds shown) [26], server luck | hidden odds, near-miss reveals |
+| Shooter | 25-49 | 79-99 | skins 99-399, season pass 299-499 | 199-299 | 999 | cosmetic skins, season track | guns with better stats |
+| Racing | 25-49 | 79 | car packs 149-499 (sidegrades), garage slots 99, 2x cash 199 | 199-299 | 999 | paint, rims, neon | faster cars in ranked |
+| Sports | 25-49 | 79 | kits 99-199, celebrations 49-99 | 199-299 | 499-999 | emotes, ball skins | stat boosts in matches |
+| Party/social | 15-49 | 49 | emote packs 49-99, radio 99, lounge 199-299 | 199-399 | 499 | emotes, cosmetics, free private servers | locking minigames behind passes |
+| Story/puzzle | 15-49 hint/skip | 49-79 | cosmetics 49-149, chapter cosmetics | 99-199 | 249-499 | hints (free hint after a few minutes stuck) | a paywall mid-chapter |
+| Farming/fishing | 25-49 | 49-99 | extra plots 99-199, auto-sell 149, 2x sell 149-199 | 199-399 | 999-1,999 | buy-now restock [47], gifting [46], bait boosts | grow timers built to sell skips [7] |
+
+### Genre notes
+- **Simulator:** the shop is part of the loop. Sell multipliers and slots, and server luck boosts that make the whole server cheer. Every egg stand has an "Odds" button. Balance runs the fully-paid simulation (Rule 25). See [[Genre - Simulator]].
+- **Tycoon:** pass pads in the world are the classic placement; each pad shows a card first, never a direct prompt (Rule 30). Cash packs scale with income, or they're worthless by hour two. See [[Genre - Tycoon]].
+- **Idle and incremental:** sell offline-cap extensions and income multipliers as passes; sell "time warps" (2 h of income) as products. Never shrink the free offline cap to sell the paid one. See [[Genre - Idle and Incremental]].
+- **Obby:** skips are the impulse product; cap them (rule of thumb: 3 per session) and price them per stage. The real money is cosmetics (trails, coils) that show off while jumping. See [[Genre - Obby]].
+- **Roleplay and life sim:** status and self-expression sell: houses, cars, outfits, pets. Avatar item sales earn the experience 40% [31]. Free private servers keep friend groups ([[10 Retention and Social]]). See [[Genre - Roleplay and Life Sim]].
+- **Action and combat:** PvE can sell XP and revives; PvP sells only cosmetics and loadout comfort (Rule 44). See [[Genre - Action and Combat]].
+- **Battlegrounds:** cosmetics, emotes and kill effects; characters must be balanced whether bought or earned. See [[Genre - Battlegrounds]].
+- **Survival:** storage, revives and cosmetics; keep raids and PvP fair. See [[Genre - Survival]].
+- **Horror:** revives and lobby cosmetics; sell nothing that removes the tension the game is about. See [[Genre - Horror]].
+- **Tower defense:** summons are paid random items: odds panel, policy gate, pity ([[03 Rarity and RNG]]). Speed passes are popular convenience. See [[Genre - Tower Defense]].
+- **RNG and collection:** the riskiest genre for policy. Every roll bought with anything Robux-related shows odds; luck potions show adjusted odds [26]; restricted players get a direct-purchase path [28]. See [[Genre - RNG and Collection]].
+- **Shooter:** skins and a season pass; never stats. See [[Genre - Shooter]].
+- **Racing and vehicles:** cars as sidegrades in casual modes; ranked uses matched stats. See [[Genre - Racing and Vehicles]].
+- **Sports:** celebrations, kits and ball skins; private servers for friend matches. See [[Genre - Sports]].
+- **Party and social hangout:** emotes and cosmetics; never lock a minigame. See [[Genre - Party and Social Hangout]].
+- **Story and puzzle:** hints and cosmetics; always a free hint after the player has been stuck a while (rule of thumb: 3 minutes). See [[Genre - Story and Puzzle]].
+- **Farming and fishing:** restock shortcuts, plots and gifting; keep grow times short and the free restock frequent (Rule 12). See [[Genre - Farming and Fishing]].
+
+## Luau
+
+### Config with placeholder IDs
+Agents can't create products or set Robux prices. The owner creates each pass and product in **Creator Hub > Creations > (experience) > Monetization > Passes / Developer Products** and pastes the IDs in. Merchant asks for this with `node studio/cli.mjs ask`, listing every item with its suggested price and config key. Until then the IDs stay `0` and code refuses to prompt.
+```lua
+-- In ReplicatedStorage/Shared/Config (the shared Config ModuleScript), the Monetization section. Data only.
+-- TODO(owner): create each item on Creator Hub, set the price there, replace 0 with the real ID.
+Config.Monetization = {
+	GamePasses = { VIP = 0, DoubleCoins = 0, StarterPack = 0 },               -- suggested 299 / 149 / 79 R$
+	Products = { CoinsSmall = 0, CoinsMedium = 0, CoinsLarge = 0, Revive = 0 }, -- suggested 25 / 99 / 399 / 15 R$
+}
+```
+A fuller launch config adds boosts, server boosts, gifts, a subscription and offer rules. Still data only:
+```lua
+Config.Monetization = {
+	GamePasses = { VIP = 0, DoubleCoins = 0, StarterPack = 0 },
+	Products = {
+		CoinsSmall = 0, CoinsMedium = 0, CoinsLarge = 0, Revive = 0,
+		Boost2x30 = 0, ServerLuck15 = 0, GiftVIP = 0,
+	},
+	Subscriptions = { Plus = "" }, -- subscription IDs are strings; "" is the placeholder
+	Boosts = { Coins2x = { Seconds = 1800, MaxQueuedSeconds = 4 * 3600 } },
+	ServerBoosts = { Luck2x = { Seconds = 900, MaxQueuedSeconds = 2 * 3600 } },
+	Gifts = { GiftVIP = { Grants = "VIP" } }, -- gift product key -> the pass key it gives
+	Offers = { UnsolicitedCooldown = 12 * 60, FirstSessionQuiet = 3 * 60 },
+	Sales = {}, -- [key] = { WasPrice = 149, StartsAt = <UTC>, EndsAt = <UTC> }
+}
+```
+The `PlayerData` default template ([[13 Building It Right]]) must include `Receipts = {}`, `Purchases = {}`, `Boosts = {}`, `ServerBoostTokens = {}`, `GiftTokens = {}`, `Gifted = {}`, `StarterPackGranted = false`.
+
+### Client prompt, called only from a buy button's `Activated`
+```lua
+local function buyPass(key: string)
+	local id = Config.Monetization.GamePasses[key]
+	if not id or id == 0 then
+		warn(`[Shop] GamePasses.{key} is a placeholder; create it on Creator Hub and update Config.Monetization`)
+		return
+	end
+	MarketplaceService:PromptGamePassPurchase(Players.LocalPlayer, id) -- products: PromptProductPurchase(player, id)
+end
+```
+
+### Live prices (client)
+```lua
+--!strict
+-- StarterPlayerScripts/Client/PriceService (ModuleScript). Never shows a guessed number.
+local MarketplaceService = game:GetService("MarketplaceService")
+local cache: {[string]: number} = {}
+local PriceService = {}
+
+function PriceService.Get(id: number, infoType: Enum.InfoType): number?
+	if id == 0 then return nil end
+	local key = `{infoType.Name}:{id}`
+	if cache[key] then return cache[key] end
+	local ok, info = pcall(MarketplaceService.GetProductInfo, MarketplaceService, id, infoType)
+	if ok and info and typeof(info.PriceInRobux) == "number" then
+		cache[key] = info.PriceInRobux
+		return info.PriceInRobux
+	end
+	return nil
+end
+
+function PriceService.Fill(label: TextLabel, id: number, infoType: Enum.InfoType)
+	label.Text = "..."
+	task.spawn(function()
+		for _ = 1, 3 do
+			local price = PriceService.Get(id, infoType)
+			if price then label.Text = `R$ {price}`; return end
+			task.wait(5)
+		end
+		label.Text = "Unavailable"
+	end)
+end
+
+-- "Worth" of a bundle at this player's live prices; nil means hide the line.
+-- parts: { { Id = number, InfoType = Enum.InfoType, Count = number } }
+function PriceService.Worth(parts: {{Id: number, InfoType: Enum.InfoType, Count: number}}): number?
+	local total = 0
+	for _, part in parts do
+		local price = PriceService.Get(part.Id, part.InfoType)
+		if not price then return nil end
+		total += price * part.Count
+	end
+	return total
+end
+
+return PriceService
+```
+
+### Game pass ownership (server)
+```lua
+local MarketplaceService, Players = game:GetService("MarketplaceService"), game:GetService("Players")
+local owned: {[Player]: {[number]: boolean}} = {}
+local function ownsPass(player: Player, passId: number): boolean
+	if passId == 0 then return false end
+	local cache = owned[player] or {}
+	owned[player] = cache
+	if cache[passId] ~= nil then return cache[passId] end
+	local ok, result = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, passId)
+	if not ok then warn(`[Passes] check failed: {result}`); return false end -- don't cache failures
+	cache[passId] = result
+	return result
+end
+MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, wasPurchased)
+	if not wasPurchased then return end
+	owned[player] = owned[player] or {}
+	owned[player][passId] = true
+	applyPassPerks(player, passId) -- grant right away, no rejoin needed
+end)
+Players.PlayerRemoving:Connect(function(player) owned[player] = nil end)
+```
+On join, once the save has loaded, call `applyPassPerks` for every pass that `ownsPass` confirms or that the save lists in `Gifted`. Perks set a `Pass_<Key>` attribute so gameplay code can read ownership without yielding:
+```lua
+local passKeyById: {[number]: string} = {}
+for key, id in Config.Monetization.GamePasses do
+	if id ~= 0 then passKeyById[id] = key end
+end
+
+local function applyPerksForKey(player: Player, key: string)
+	player:SetAttribute(`Pass_{key}`, true) -- gameplay reads this; it never yields
+	if key == "StarterPack" then
+		local data = PlayerData.Get(player)
+		if data and not data.StarterPackGranted then -- consumable parts exactly once
+			data.StarterPackGranted = true
+			data.Coins += 400
+			data.Boosts.Coins2x = (data.Boosts.Coins2x or 0) + 3600
+			data.Cosmetics.LavaTrail = true
+			task.defer(PlayerData.SaveNow, player)
+		end
+	end
+end
+
+local function applyPassPerks(player: Player, passId: number)
+	local key = passKeyById[passId]
+	if key then applyPerksForKey(player, key) end
+end
+
+local function applyAllPasses(player: Player) -- call after the save has loaded
+	local data = PlayerData.Get(player)
+	for key, id in Config.Monetization.GamePasses do
+		if (data and data.Gifted[key]) or ownsPass(player, id) then applyPerksForKey(player, key) end
+	end
+end
+```
+Order inside `ServerScriptService/Services/PassService`: `passKeyById`, `applyPerksForKey` and `applyPassPerks` first, then the ownership code above (so the connection can call `applyPassPerks`), then `applyAllPasses`. Export `PassService.applyPerksForKey = applyPerksForKey` and `PassService.applyAllPasses = applyAllPasses`; GiftService uses the first, the join flow the second. If `ownsPass` failed on join (it returned false without caching), schedule one retry: `task.delay(20, applyAllPasses, player)`.
+
+### ProcessReceipt (server, the only correct shape)
+Rules: set it **once**, in **one** server module. It must be **idempotent**: the same `PurchaseId` never grants twice. Record the `PurchaseId` **in the same save document** as the grant, and return `PurchaseGranted` **only after that save succeeded**. Return `NotProcessedYet` in every other case, and Roblox will call it again later (for example on the player's next join) [1]. `PlayerData` is described in [[13 Building It Right]].
+```lua
+--!strict
+-- ServerScriptService/Services/ReceiptService (ModuleScript, required once by the server entry Script)
+local MarketplaceService, Players = game:GetService("MarketplaceService"), game:GetService("Players")
+local ReplicatedStorage, ServerScriptService = game:GetService("ReplicatedStorage"), game:GetService("ServerScriptService")
+local PlayerData = require(ServerScriptService.Services.PlayerData) -- Get(player) -> data?, SaveNow(player) -> boolean
+local Config = require(ReplicatedStorage.Shared.Config)
+local MAX_RECEIPTS = 100
+
+-- Grants ONLY mutate the save table: no UI, no effects, no yielding.
+local grantsByKey: {[string]: (data: any) -> ()} = {
+	CoinsSmall = function(data) data.Coins += 100 end,
+	CoinsMedium = function(data) data.Coins += 450 end,
+	CoinsLarge = function(data) data.Coins += 2000 end,
+	Revive = function(data) data.PendingRevive = true end,
+}
+local grants: {[number]: (data: any) -> ()} = {}
+for key, id in Config.Monetization.Products do -- skip placeholder 0s so they can't collide
+	if grantsByKey[key] == nil then warn(`[Receipts] no grant for product {key}`)
+	elseif id ~= 0 then grants[id] = grantsByKey[key] end
+end
+
+local function prune(receipts: {[string]: number}) -- keep only the newest MAX_RECEIPTS ids
+	local ids = {}
+	for id in receipts do table.insert(ids, id) end
+	table.sort(ids, function(a, b) return receipts[a] > receipts[b] end)
+	for i = MAX_RECEIPTS + 1, #ids do receipts[ids[i]] = nil end
+end
+
+MarketplaceService.ProcessReceipt = function(receipt)
+	local player = Players:GetPlayerByUserId(receipt.PlayerId)
+	local data = player and PlayerData.Get(player) -- nil if the player left or the save hasn't loaded
+	local grant = grants[receipt.ProductId]
+	if not player or not data then return Enum.ProductPurchaseDecision.NotProcessedYet end
+	if not grant then
+		warn(`[Receipts] unknown ProductId {receipt.ProductId}`)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if data.Receipts[receipt.PurchaseId] == nil then -- not yet granted in this save
+		local ok, err = pcall(grant, data)
+		if not ok then
+			warn(`[Receipts] grant failed {receipt.PurchaseId}: {err}`)
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		data.Receipts[receipt.PurchaseId] = os.time()
+		prune(data.Receipts)
+	end
+	-- Acknowledge only once grant + record are durably saved. If the save fails, the cached
+	-- record stops a double grant on retry, and the retry saves again.
+	if PlayerData.SaveNow(player) then
+		return Enum.ProductPurchaseDecision.PurchaseGranted -- now fire effects or UI remotes
+	end
+	return Enum.ProductPurchaseDecision.NotProcessedYet
+end
+```
+- Never grant in `PromptProductPurchaseFinished`. It is a UI signal, not proof of payment.
+- Purchases made in Studio playtests are test purchases with no Robux charged, but they do run `ProcessReceipt`. Test the whole path, including leaving mid-purchase.
+
+**Extending the grant table.** New products add one entry each; still save mutations only:
+```lua
+	Boost2x30 = function(data) data.Boosts.Coins2x = (data.Boosts.Coins2x or 0) + 1800 end,
+	ServerLuck15 = function(data) data.ServerBoostTokens.Luck2x = (data.ServerBoostTokens.Luck2x or 0) + 1 end,
+	GiftVIP = function(data) data.GiftTokens.GiftVIP = (data.GiftTokens.GiftVIP or 0) + 1 end,
+```
+**After-grant effects.** Where the comment says "now fire effects or UI remotes", Merchant may add a deferred hook. Hooks only *spend* tokens or show UI, so a hook that runs twice (if Roblox redelivers an already-saved receipt) finds no token and does nothing:
+```lua
+local keyById: {[number]: string} = {}
+for key, id in Config.Monetization.Products do if id ~= 0 then keyById[id] = key end end
+
+local afterGrant: {[string]: (player: Player) -> ()} = {
+	ServerLuck15 = function(player) ServerBoostService.UseToken(player, "Luck2x") end,
+	GiftVIP = function(player) GiftService.SendPending(player, "GiftVIP") end,
+}
+local function onGranted(player: Player, productId: number)
+	local key = keyById[productId]
+	local hook = key and afterGrant[key]
+	if hook then hook(player) end
+	ReplicatedStorage.Remotes.PurchaseToast:FireClient(player, key)
+end
+
+-- in ProcessReceipt, replacing the final success branch:
+	if PlayerData.SaveNow(player) then
+		task.defer(onGranted, player, receipt.ProductId)
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+```
+
+### Personal timed boosts (server)
+```lua
+--!strict
+-- ServerScriptService/Services/BoostService (ModuleScript). Boosts tick only while the player is here.
+local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
+local PlayerData = require(ServerScriptService.Services.PlayerData)
+local BoostService = {}
+
+function BoostService.Start() -- called once by the server entry script
+	task.spawn(function()
+		while true do
+			local dt = task.wait(1)
+			for _, player in Players:GetPlayers() do
+				local data = PlayerData.Get(player)
+				if data then
+					for key, remaining in data.Boosts do
+						local left = remaining - dt
+						data.Boosts[key] = if left > 0 then left else nil
+						player:SetAttribute(`Boost_{key}`, if left > 0 then math.ceil(left) else nil) -- HUD reads it
+					end
+				end
+			end
+		end
+	end)
+end
+
+function BoostService.IsActive(player: Player, key: string): boolean
+	local data = PlayerData.Get(player)
+	return data ~= nil and (data.Boosts[key] or 0) > 0
+end
+
+-- Used by the server before the client may show an enabled buy button (cap at the button, never in the grant).
+function BoostService.CanQueue(player: Player, key: string, seconds: number, maxQueued: number): boolean
+	local data = PlayerData.Get(player)
+	return data ~= nil and (data.Boosts[key] or 0) + seconds <= maxQueued
+end
+
+-- Additive stacking with a cap (Rule 25). Reads attributes, never yields.
+function BoostService.CoinMultiplier(player: Player): number
+	local m = 1
+	if player:GetAttribute("Pass_DoubleCoins") then m += 1 end
+	if BoostService.IsActive(player, "Coins2x") then m += 1 end
+	if workspace:GetAttribute("ServerBoost_Coins2x") then m += 1 end
+	if workspace:GetAttribute("Event_DoubleCoins") then m += 1 end
+	return math.min(m, 5)
+end
+
+return BoostService
+```
+
+### Server boosts (server)
+```lua
+--!strict
+-- ServerScriptService/Services/ServerBoostService (ModuleScript)
+local Players = game:GetService("Players")
+local ReplicatedStorage, ServerScriptService = game:GetService("ReplicatedStorage"), game:GetService("ServerScriptService")
+local PlayerData = require(ServerScriptService.Services.PlayerData)
+local Config = require(ReplicatedStorage.Shared.Config)
+
+type Window = { buyerId: number, buyerName: string, seconds: number }
+local queues: {[string]: {Window}} = {} -- key -> windows; [1] is the running one
+local runningLeft: {[string]: number} = {}
+local ServerBoostService = {}
+
+local function publish(key: string)
+	local q = queues[key]
+	local total = 0
+	if q and q[1] then
+		total = runningLeft[key] or q[1].seconds
+		for i = 2, #q do total += q[i].seconds end
+	end
+	workspace:SetAttribute(`ServerBoost_{key}`, if total > 0 then math.ceil(total) else nil)
+	workspace:SetAttribute(`ServerBoost_{key}_By`, if q and q[1] then q[1].buyerName else nil)
+end
+
+function ServerBoostService.QueuedSeconds(key: string): number
+	return workspace:GetAttribute(`ServerBoost_{key}`) or 0
+end
+
+-- Spends one token and queues a window. No token means no-op, so a repeated call is safe.
+function ServerBoostService.UseToken(player: Player, key: string): boolean
+	local data = PlayerData.Get(player)
+	local def = Config.Monetization.ServerBoosts[key]
+	if not data or not def or (data.ServerBoostTokens[key] or 0) < 1 then return false end
+	data.ServerBoostTokens[key] -= 1
+	local q = queues[key] or {}
+	queues[key] = q
+	table.insert(q, { buyerId = player.UserId, buyerName = player.DisplayName, seconds = def.Seconds })
+	if #q == 1 then runningLeft[key] = def.Seconds end
+	publish(key)
+	ReplicatedStorage.Remotes.ServerBoostStarted:FireAllClients(key, player.DisplayName)
+	return true
+end
+
+function ServerBoostService.Start()
+	task.spawn(function()
+		while true do
+			local dt = task.wait(1)
+			for key, q in queues do
+				if q[1] then
+					runningLeft[key] = (runningLeft[key] or q[1].seconds) - dt
+					if runningLeft[key] <= 0 then
+						table.remove(q, 1)
+						runningLeft[key] = if q[1] then q[1].seconds else nil
+					end
+					publish(key)
+				end
+			end
+		end
+	end)
+	game:BindToClose(function() -- return tokens for unused time to buyers still here
+		for key, q in queues do
+			for i, w in q do
+				local unused = if i == 1 then (runningLeft[key] or 0) else w.seconds
+				local buyer = Players:GetPlayerByUserId(w.buyerId)
+				local data = buyer and PlayerData.Get(buyer)
+				if buyer and data and unused > w.seconds / 2 then
+					data.ServerBoostTokens[key] = (data.ServerBoostTokens[key] or 0) + 1
+					PlayerData.SaveNow(buyer) -- don't rely on another BindToClose running later
+				end
+			end
+		end
+	end)
+end
+
+return ServerBoostService
+```
+The buy button checks `QueuedSeconds(key) + def.Seconds <= def.MaxQueuedSeconds` (through a server RemoteFunction) before enabling. Tokens left in a save (from shutdown) appear in the Boosts tab as "Use server boost (1)".
+
+### Gifts (server)
+```lua
+--!strict
+-- ServerScriptService/Services/GiftService (ModuleScript). Same-server gifting.
+local Players = game:GetService("Players")
+local ReplicatedStorage, ServerScriptService = game:GetService("ReplicatedStorage"), game:GetService("ServerScriptService")
+local PlayerData = require(ServerScriptService.Services.PlayerData)
+local PolicyCache = require(ServerScriptService.Services.PolicyCache)
+local PassService = require(ServerScriptService.Services.PassService) -- exposes applyPerksForKey
+local Config = require(ReplicatedStorage.Shared.Config)
+local Remotes = ReplicatedStorage.Remotes
+
+local TARGET_TTL = 300 -- seconds a chosen recipient stays locked
+local pending: {[Player]: {giftKey: string, toUserId: number, at: number}} = {}
+local GiftService = {}
+
+local function canReceive(recipient: Player, passKey: string): boolean
+	return recipient:GetAttribute(`Pass_{passKey}`) ~= true
+end
+
+-- RemoteFunction, invoked by the gift picker before the product prompt. Returns ok, reason.
+Remotes.SetGiftTarget.OnServerInvoke = function(player: Player, giftKey: unknown, toUserId: unknown)
+	if typeof(giftKey) ~= "string" or typeof(toUserId) ~= "number" then return false, "bad" end
+	local def = Config.Monetization.Gifts[giftKey]
+	local recipient = Players:GetPlayerByUserId(toUserId)
+	if not def or not recipient or recipient == player then return false, "unavailable" end
+	if not (PolicyCache.TradingAllowed(player) and PolicyCache.TradingAllowed(recipient)) then return false, "policy" end
+	if not canReceive(recipient, def.Grants) then return false, "owned" end
+	pending[player] = { giftKey = giftKey, toUserId = toUserId, at = os.clock() }
+	return true, "ok"
+end
+
+-- Moves one token from buyer to recipient. No Robux involved, so it may yield.
+function GiftService.Send(buyer: Player, giftKey: string, toUserId: number): boolean
+	local def = Config.Monetization.Gifts[giftKey]
+	local recipient = Players:GetPlayerByUserId(toUserId)
+	local buyerData = PlayerData.Get(buyer)
+	local recData = recipient and PlayerData.Get(recipient)
+	if not def or not recipient or not buyerData or not recData then return false end
+	if (buyerData.GiftTokens[giftKey] or 0) < 1 or not canReceive(recipient, def.Grants) then return false end
+	buyerData.GiftTokens[giftKey] -= 1
+	recData.Gifted[def.Grants] = { From = buyer.UserId, At = os.time() }
+	if not PlayerData.SaveNow(recipient) then -- roll back so nothing is lost
+		recData.Gifted[def.Grants] = nil
+		buyerData.GiftTokens[giftKey] += 1
+		return false
+	end
+	PlayerData.SaveNow(buyer)
+	PassService.applyPerksForKey(recipient, def.Grants)
+	Remotes.Toast:FireClient(buyer, `Gift delivered to {recipient.DisplayName}!`)
+	Remotes.Toast:FireClient(recipient, `{buyer.DisplayName} gifted you {def.Grants}!`)
+	return true
+end
+
+-- After-grant hook for gift products.
+function GiftService.SendPending(buyer: Player, giftKey: string)
+	local p = pending[buyer]
+	pending[buyer] = nil
+	if p and p.giftKey == giftKey and os.clock() - p.at <= TARGET_TTL and GiftService.Send(buyer, giftKey, p.toUserId) then
+		return
+	end
+	Remotes.Toast:FireClient(buyer, "Your gift is saved in Gifts to send.")
+end
+
+Players.PlayerRemoving:Connect(function(player) pending[player] = nil end)
+return GiftService
+```
+If the recipient's save succeeds and the buyer's doesn't, the buyer may get the token back after a crash: the error favors the player and costs no Robux. Log `GiftSent` from `Send`.
+
+### Subscriptions (server)
+```lua
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local SUB_ID: string = Config.Monetization.Subscriptions.Plus
+
+local function refreshPlus(player: Player)
+	if SUB_ID == "" then return end -- placeholder until the owner creates it
+	local ok, status = pcall(MarketplaceService.GetUserSubscriptionStatusAsync, MarketplaceService, player, SUB_ID)
+	if not ok then warn(`[Subs] status check failed: {status}`); return end -- keep the last known state
+	player:SetAttribute("Sub_Plus", status.IsSubscribed == true)
+end
+Players.PlayerAdded:Connect(refreshPlus)
+Players.UserSubscriptionStatusChanged:Connect(function(player: Player, subscriptionId: string)
+	if subscriptionId == SUB_ID then refreshPlus(player) end
+end)
+
+local function grantPlusDaily(player: Player, data) -- call when the save loads and on a 60 s tick
+	if player:GetAttribute("Sub_Plus") ~= true then return end
+	local today = math.floor(os.time() / 86400) -- UTC day index
+	if data.Plus.LastDailyDay == today then return end
+	data.Plus.LastDailyDay = today
+	data.Coins += 500 -- Balance sets the amount
+end
+```
+The buy button prompts with `MarketplaceService:PromptSubscriptionPurchase` as shown in the subscriptions guide [14]; the card text states the price and "per month".
+
+### Policy cache (server)
+```lua
+--!strict
+-- ServerScriptService/Services/PolicyCache (ModuleScript). One call per player, cached [28][29].
+local Players = game:GetService("Players")
+local PolicyService = game:GetService("PolicyService")
+type Policy = { RandomRestricted: boolean, TradingAllowed: boolean }
+local SAFE: Policy = { RandomRestricted = true, TradingAllowed = false } -- used when the check fails
+local cache: {[Player]: Policy} = {}
+local PolicyCache = {}
+
+local function load(player: Player)
+	for attempt = 1, 2 do
+		local ok, info = pcall(PolicyService.GetPolicyInfoForPlayerAsync, PolicyService, player)
+		if player.Parent == nil then return end -- left while we waited
+		if ok and info then
+			cache[player] = {
+				RandomRestricted = info.ArePaidRandomItemsRestricted == true,
+				TradingAllowed = info.IsPaidItemTradingAllowed == true,
+			}
+			break
+		end
+		if attempt == 1 then task.wait(10) end
+	end
+	-- The UI reads this attribute to hide buttons; the server still re-checks on every purchase path.
+	player:SetAttribute("PaidRandomAllowed", not (cache[player] or SAFE).RandomRestricted)
+end
+
+Players.PlayerAdded:Connect(load)
+Players.PlayerRemoving:Connect(function(player) cache[player] = nil end)
+function PolicyCache.RandomAllowed(player: Player): boolean return not (cache[player] or SAFE).RandomRestricted end
+function PolicyCache.TradingAllowed(player: Player): boolean return (cache[player] or SAFE).TradingAllowed end
+return PolicyCache
+```
+
+### Odds that add up to exactly 100% (shared)
+```lua
+--!strict
+-- ReplicatedStorage/Shared/OddsDisplay (ModuleScript). Pure: build the panel from the server's weight table.
+local UNITS = 1_000_000 -- 100.0000% in steps of 0.0001%
+local OddsDisplay = {}
+
+function OddsDisplay.Percentages(weights: {[string]: number}): {[string]: number}
+	local total = 0
+	for _, w in weights do total += w end
+	assert(total > 0, "empty odds table")
+	local floors: {[string]: number} = {}
+	local rest: {{id: string, r: number}} = {}
+	local used = 0
+	for id, w in weights do
+		local exact = w / total * UNITS
+		local f = math.floor(exact)
+		floors[id] = f
+		used += f
+		table.insert(rest, { id = id, r = exact - f })
+	end
+	-- Largest remainder: hand the leftover units to the biggest fractions so the sum is exact.
+	table.sort(rest, function(a, b) return if a.r == b.r then a.id < b.id else a.r > b.r end)
+	for i = 1, UNITS - used do floors[rest[i].id] += 1 end
+	local out: {[string]: number} = {}
+	for id, f in floors do
+		if f == 0 then warn(`[Odds] {id} rounds to 0%; also show it as "1 in N"`) end
+		out[id] = f / 10_000 -- a percentage with 4 decimals
+	end
+	return out
+end
+
+function OddsDisplay.Format(pct: number): string
+	local s = string.format("%.4f", pct):gsub("0+$", ""):gsub("%.$", "")
+	return `{s}%`
+end
+
+return OddsDisplay
+```
+With a luck boost active, build a second table from the boosted weights the server would use and show it under "With my boosts" [26].
+
+### Offer cooldowns (client)
+```lua
+--!strict
+-- StarterPlayerScripts/Client/OfferManager (ModuleScript). Decides if an unsolicited card may show.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local OfferManager = {}
+local sessionStart = os.clock()
+local lastUnsolicited = -math.huge
+local declined: {[string]: boolean} = {}
+local firstSession = true -- set from the save's SessionCount when it arrives
+
+function OfferManager.SetFirstSession(v: boolean) firstSession = v end
+
+function OfferManager.CanShow(offerKey: string, inCombat: boolean, inTutorial: boolean): boolean
+	local cfg = Config.Monetization.Offers
+	if declined[offerKey] or inCombat or inTutorial then return false end
+	if firstSession and os.clock() - sessionStart < cfg.FirstSessionQuiet then return false end
+	return os.clock() - lastUnsolicited >= cfg.UnsolicitedCooldown
+end
+
+function OfferManager.MarkShown() lastUnsolicited = os.clock() end
+function OfferManager.MarkDeclined(offerKey: string) declined[offerKey] = true end -- silent for this session
+return OfferManager
+```
+
+### VIP chat tag (client) and overhead tag (server)
+```lua
+-- StarterPlayerScripts/Client/ChatTags (LocalScript)
+local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
+TextChatService.OnIncomingMessage = function(message: TextChatMessage)
+	local props = Instance.new("TextChatMessageProperties")
+	local source = message.TextSource
+	local player = source and Players:GetPlayerByUserId(source.UserId)
+	if player and player:GetAttribute("Pass_VIP") then
+		props.PrefixText = `<font color="#FFD54A">[VIP]</font> {message.PrefixText}`
+	end
+	return props
+end
+```
+```lua
+-- Server: call from CharacterAdded when Pass_VIP is true.
+local function addVipTag(character: Model)
+	local head = character:WaitForChild("Head", 5)
+	if not head then return end
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "VipTag"
+	gui.Size = UDim2.fromOffset(120, 32)
+	gui.StudsOffset = Vector3.new(0, 2.6, 0)
+	gui.MaxDistance = 60
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Text = "VIP"
+	label.Font = Enum.Font.GothamBlack
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(255, 213, 74)
+	label.TextStrokeTransparency = 0.2
+	label.Parent = gui
+	gui.Parent = head -- parent last
+end
+```
+
+### Quantity-limited item bought with earned currency (server)
+```lua
+local DataStoreService = game:GetService("DataStoreService")
+local stockStore = DataStoreService:GetDataStore("LimitedStock_v1")
+local busy: {[Player]: boolean} = {}
+
+local function claimSerial(itemKey: string, cap: number): number?
+	local serial: number? = nil
+	local ok, err = pcall(function()
+		stockStore:UpdateAsync(itemKey, function(sold: number?)
+			local n = sold or 0
+			if n >= cap then serial = nil; return nil end -- returning nil cancels the write
+			serial = n + 1
+			return n + 1
+		end)
+	end)
+	if not ok then warn(`[Limited] claim failed: {err}`); return nil end
+	return serial
+end
+
+local function buyLimited(player: Player, itemKey: string)
+	local data = PlayerData.Get(player)
+	local def = Config.Limiteds[itemKey]
+	if busy[player] or not data or not def or os.time() > def.EndsAt or data.Owned[itemKey] then return end
+	if data.Gems < def.Price then return end
+	busy[player] = true
+	data.Gems -= def.Price -- reserve first so a double tap can't spend twice during the yield
+	local serial = claimSerial(itemKey, def.Stock)
+	if serial then
+		data.Owned[itemKey] = { Serial = serial, At = os.time() }
+	else
+		data.Gems += def.Price -- sold out or failed: refund
+	end
+	busy[player] = nil
+end
+```
+Robux-priced limited items are time-limited only (Rule 34); quantity limits on Robux items belong to UGC Limiteds, where Roblox manages stock [31].
+
+### Shop funnel and IAP logging (server)
+```lua
+local AnalyticsService = game:GetService("AnalyticsService")
+local HttpService = game:GetService("HttpService")
+local STEPS = { Opened = 1, ViewedItem = 2, TappedBuy = 3, Granted = 4 }
+local funnelId: {[Player]: string} = {}
+local lastStep: {[Player]: number} = {}
+
+ReplicatedStorage.Remotes.ShopStep.OnServerEvent:Connect(function(player: Player, stepName: unknown)
+	if typeof(stepName) ~= "string" or STEPS[stepName] == nil or stepName == "Granted" then return end
+	if os.clock() - (lastStep[player] or 0) < 1 then return end -- rate limit
+	lastStep[player] = os.clock()
+	if stepName == "Opened" then funnelId[player] = HttpService:GenerateGUID(false) end
+	local id = funnelId[player]
+	if id then AnalyticsService:LogFunnelStepEvent(player, "ShopFunnel", id, STEPS[stepName], stepName) end
+end)
+
+-- In onGranted (after the save succeeded):
+local function logGrant(player: Player, key: string, currency: string, amount: number, balance: number)
+	local id = funnelId[player]
+	if id then AnalyticsService:LogFunnelStepEvent(player, "ShopFunnel", id, STEPS.Granted, "Granted") end
+	AnalyticsService:LogEconomyEvent(player, Enum.AnalyticsEconomyFlowType.Source, currency, amount, balance,
+		Enum.AnalyticsEconomyTransactionType.IAP.Name, key)
+end
+```
+
+## Checklist
+- [ ] Every pass and product ID lives in `Config.Monetization`; placeholder `0`s (and `""` for subscriptions) refuse to prompt and warn in Output.
+- [ ] A search of the place finds exactly one `ProcessReceipt` assignment, in `ReceiptService`.
+- [ ] `ProcessReceipt` records `PurchaseId` in the player save and returns `PurchaseGranted` only after `SaveNow` succeeds.
+- [ ] Every product key has a grant handler; grants only mutate the save; an unknown `ProductId` returns `NotProcessedYet` and warns.
+- [ ] A Studio test purchase of each product grants exactly once and survives a rejoin; a forced save failure retries without a double grant.
+- [ ] Pass perks apply on join (pcall'd `UserOwnsGamePassAsync`, failures not cached, one retry) and mid-session.
+- [ ] Displayed prices come from `GetProductInfo`; no digits after "R$" are hardcoded in StarterGui.
+- [ ] Each tab of the shop fits on a phone without horizontal scrolling; the close button is 44 px or larger, inside the safe area.
+- [ ] No purchase prompt opens without a tap on a buy button; no offer appears before minute 3 of a first session.
+- [ ] Unsolicited offer cards share a 10-15 minute cooldown, and "No thanks" silences that offer for the session.
+- [ ] Every paid option with a free alternative shows both at equal size.
+- [ ] The starter pack is a pass, grants its consumables once (`StarterPackGranted`), has no timer, and its "Worth" line is computed from live prices.
+- [ ] Quantity ladder bonuses are true arithmetic from the smallest pack's rate.
+- [ ] No struck-through price appears outside an active `Config.Sales` window with a live price below `WasPrice`.
+- [ ] Timed boosts tick only while the player is present and resume after a rejoin with the same time left.
+- [ ] Server boosts credit the buyer, reach late joiners, and return tokens on shutdown for unused windows.
+- [ ] Gifts validate the recipient on the server before the prompt, deliver via token, and land in "Gifts to send" when the recipient left.
+- [ ] Every paid random item has an "Odds" button generated from the server table; percentages sum to 100; boosted odds are shown when boosts are active.
+- [ ] Players with `ArePaidRandomItemsRestricted` (or a failed policy check) see no paid random purchase and get an alternative.
+- [ ] Paid-item gifting or trading is blocked when `IsPaidItemTradingAllowed` is false for either player.
+- [ ] Rewarded ad buttons appear only after a successful availability check, give a fixed reward, and respect the daily cap.
+- [ ] Multipliers stack additively and are capped; Balance's fully-paid simulation is in `sim/` and passes.
+- [ ] Kid Tester's dark-pattern pass found no fake timers, fake scarcity, near-miss reveals, guilt text or stacked prompts.
+- [ ] The shop funnel and IAP economy events fire in a Studio test with no errors.
+- [ ] `decisions.md` lists every price suggestion and the open owner `ask`.
+
+## Common mistakes
+- Granting a developer product and returning `PurchaseGranted` before saving: the player loses the purchase if the server dies.
+- Not recording `PurchaseId`, so a retried receipt grants twice.
+- Setting `ProcessReceipt` in two scripts. Only one callback exists, and the last assignment wins [4].
+- Mixing `BindReceiptHandler` and `ProcessReceipt` for the same products without a plan [2].
+- Granting in `PromptProductPurchaseFinished`, or trusting the client to say "I bought it".
+- Caching a failed `UserOwnsGamePassAsync` as "not owned" for the whole session.
+- Hardcoded prices in UI that drift from Creator Hub, regional prices and price tests [9][11].
+- A wall of popups on join, which is the fastest way to lose a new player ([[01 The First Five Minutes]]).
+- A "sale" that never ends, or a "was" price that was never charged [37].
+- "+500% value" ribbons that aren't arithmetic.
+- Timed boosts that count down while the player is offline.
+- Clamping a paid boost at a cap inside the grant, so the player loses paid time.
+- Server boosts stored only in memory, lost on shutdown with time left.
+- Gifts that grant the buyer, or recipients named by the client after payment.
+- Odds typed by hand that don't match the server's weights, or that don't add up to 100% [26].
+- Luck potions sold without showing the boosted odds [26].
+- Calling `GetPolicyInfoForPlayerAsync` on every shop open and hitting its limit [28].
+- Rewarded ad buttons shown to players who can't watch ads, or ad rewards that are random [22].
+- Stat weapons for Robux in PvP.
+- Long timers designed to sell skips [7].
+- Multiplicative stacking that lets payers finish the game in an hour.
+- A starter pack that can be bought twice because it's a developer product without a one-time check.
+- Building physical commerce or Robux transfers without the owner's decision [30][33].
+
+## References
+[1] Developer products — https://create.roblox.com/docs/production/monetization/developer-products — ProcessReceipt is set once by one server script; return PurchaseGranted after granting and NotProcessedYet to retry; test before enabling sales.
+[2] MarketplaceService (engine reference) — https://create.roblox.com/docs/reference/engine/classes/MarketplaceService.md — BindReceiptHandler as a newer alternative; bound handlers take precedence and unmatched receipts fall through to ProcessReceipt.
+[3] ReceiptDecision enum — https://robloxapi.github.io/ref/enum/ReceiptDecision.html — BindReceiptHandler callbacks return NotProcessedYet (redelivered) or Processed.
+[4] Devproducts not working (DevForum) — https://devforum.roblox.com/t/devproducts-not-working/3185811 — when several scripts set ProcessReceipt, only the most recent assignment works.
+[5] Passes — https://create.roblox.com/docs/production/monetization/passes — passes are a one-time fee; check UserOwnsGamePassAsync in a pcall; developers must assign privileges themselves.
+[6] GamePassService (engine reference) — https://create.roblox.com/docs/reference/engine/classes/GamePassService.md — legacy PlayerHasPass uses asset IDs; new passes only have pass IDs; results may be cached.
+[7] Monetization (Creator Docs) — https://create.roblox.com/docs/en-us/production/monetization — appointment mechanics are unpopular; tourists vs locals; transparency on chance; downvotes; developer products monetize better; store purchase data yourself.
+[8] Monetize your experiences — https://create.roblox.com/docs/monetize-experiences — overview of Roblox monetization options and tools.
+[9] Price optimization — https://create.roblox.com/docs/production/monetization/price-optimization.md — tests show prices on rejoin, results after about 3 weeks; Dynamic Price Check finds hardcoded prices.
+[10] Price Optimization Now Includes Item-Level Price Recommendations (DevForum) — https://devforum.roblox.com/t/price-optimization-now-includes-item-level-price-recommendations/3894427 — item-level recommendations added to price optimization.
+[11] Regional pricing — https://create.roblox.com/docs/en-us/production/monetization/regional-pricing — on by default for managed-price passes; location signals; products need scripted prices; GetUsersPriceLevelsAsync for transfers.
+[12] Introducing Regional Pricing for Developer Products (DevForum) — https://devforum.roblox.com/t/introducing-regional-pricing-for-developer-products/3971235 — opt-in with a default price; 1,000 US / 700 Brazil / 500 India example.
+[13] Roblox launches regional pricing for in-experience items (Newsroom, April 2025) — https://about.roblox.com/es/newsroom/2025/04/roblox-launches-regional-pricing-for-in-experience-items — launch announcement.
+[14] Subscriptions — https://create.roblox.com/docs/production/monetization/subscriptions — monthly auto-renewing; local currency or Robux; paid out in Robux; all owned at once; clear names, price and duration; regional availability.
+[15] Subscriptions within experiences: now available for users to purchase (DevForum) — https://devforum.roblox.com/t/2702306 — subscriptions opened to buyers.
+[16] Engagement-based payouts — https://create.roblox.com/docs/production/monetization/engagement-based-payouts — deprecated effective July 24, 2025 and replaced by Creator Rewards.
+[17] Creator Rewards — https://create.roblox.com/docs/creator-rewards — daily engagement (Active Spenders, first three experiences, 10 minutes) and audience expansion (35% of first $100 via links, 100+ DAU); prohibited behavior.
+[18] Creator Rewards (Roblox Wiki) — https://roblox.fandom.com/wiki/Creator_Rewards — started July 24, 2025, replacing Engagement-Based Payouts and Creator Affiliate; audience expansion needs ID verification and DevEx.
+[19] Roblox's new Creator Rewards encourage engagement and retention (Tubefilter) — https://www.tubefilter.com/?p=186987 — Active Spenders defined as $9.99+ spent in the past 60 days.
+[20] Roblox To Reward Creators For Attracting Players (MediaPost) — https://www.mediapost.com/publications/article/406941/roblox-to-reward-creators-for-attracting-players.html — payouts uncapped; amounts may change.
+[21] Rewarded video ads — https://create.roblox.com/docs/production/promotion/rewarded-video-ads — creator 13+, ID-verified, public experience, 2,000+ unique monthly visitors.
+[22] Ad integrations — https://create.roblox.com/docs/production/promotion/ad-integrations — rewarded video ads only for users 13+; rewards can't be randomized items.
+[23] More Creators Can Now Use Rewarded Video Ads (DevForum, August 2025) — https://devforum.roblox.com/t/more-creators-can-now-use-rewarded-video-ads/3838678 — earlier self-service bar: 100K+ average DAU, minimal or mild maturity, good standing.
+[24] Rewarded video ads return ExperienceIneligible (DevForum) — https://devforum.roblox.com/t/rewarded-video-ads-cannot-be-shown-in-my-live-experience-the-api-returns-experienceineligible-but-the-creator-hub-says-it-is-eligible/4763102 — the API can report ineligible while Creator Hub says eligible.
+[25] Immersive ads — https://create.roblox.com/docs/en-us/production/monetization/immersive-ads — public experience, 13+ owner, ID verification with 2FA, Maturity and Compliance Questionnaire; eligibility is ongoing.
+[26] Paid random items — https://create.roblox.com/docs/production/monetization/paid-random-items — odds before purchase, indirect purchases included, luck items show adjusted odds, percentages sum to 100, labeled Info/Details pop-up.
+[27] Korea's loot box rules push Roblox to disclose item odds worldwide (Tech Times, June 2026) — https://www.techtimes.com/articles/319148/20260626/koreas-loot-box-rules-push-roblox-disclose-item-odds-worldwide.htm — disclosure applied globally; tools to block or replace random purchases.
+[28] PolicyService (engine reference) — https://create.roblox.com/docs/reference/engine/classes/PolicyService.md — GetPolicyInfoForPlayerAsync fields such as ArePaidRandomItemsRestricted; yields; rate cap.
+[29] Policy Info For Player (DevForum) — https://devforum.roblox.com/t/policy-info-for-player/1926774 — pcall the call and cache it on join.
+[30] Robux transfers — https://create.roblox.com/docs/en-us/production/monetization/robux-transfers — PromptRobuxTransferAsync and BindReceiptHandler; the game earns 10% of Robux sent.
+[31] Avatar items — https://create.roblox.com/docs/production/monetization/avatar-items — in-experience split 30% creator / 40% experience owner / 30% platform, also for Limited original sales; linking steps.
+[32] Monetize avatar — https://create.roblox.com/docs/monetize-avatar — selling avatar items in experiences via the Avatar Inspect Menu or UGC homestore templates.
+[33] Commerce products — https://create.roblox.com/docs/production/monetization/commerce-products — selling physical products in experiences.
+[34] Roblox now lets creators sell physical products within their experiences (TechCrunch, May 2025) — https://techcrunch.com/2025/05/15/roblox-now-lets-creators-sell-physical-products-within-their-experiences — launch coverage.
+[35] Private servers — https://create.roblox.com/docs/production/monetization/private-servers — free or monthly Robux fee; experience must be public; not with paid access.
+[36] Private/VIP Servers FAQ (Roblox Help) — https://en.help.roblox.com/hc/articles/205345050 — prices set by the creator; initial charge then monthly.
+[37] Inside the pay-to-play world of Roblox targeting children (University of Sydney, May 2026) — https://www.sydney.edu.au/news-opinion/news/2026/05/17/inside-the-pay-to-play-world-of-roblox-targeting-children-.html — deceptive monetization in 14 of 15 games; timed false reference pricing.
+[38] Misleading and Deceptive Monetisation in Roblox (report, University of Sydney) — https://ses.library.usyd.edu.au/handle/2123/35033 — the March 2026 report on 15 top-earning games and fourteen practices.
+[39] Roblox sucking up money from young players: study (ACS Information Age, 2026) — https://ia.acs.org.au/article/2026/roblox-sucking-up-money-from-young-players--study.html — obscured pricing through currencies, near-miss visuals, false-urgency countdowns.
+[40] Shop (Blox Fruits Wiki) — https://blox-fruits.fandom.com/wiki/Shop — Robux money packs, fragments and 2x EXP in a shop reached from the GUI menu.
+[41] Gifting (Blox Fruits Wiki) — https://blox-fruits.fandom.com/wiki/Gifting — players can gift permanent fruits and gamepasses.
+[42] Everything you should know about gamepasses in Blox Fruits (Sportskeeda) — https://www.sportskeeda.com/roblox-news/everything-know-gamepasses-roblox-blox-fruits — 2x Money, Dark Blade and Fruit Notifier passes.
+[43] Blox Fruits game pass tier list 2026 (rblxguide) — https://rblxguide.com/games/blox-fruits/updates/blox-fruits-game-pass-tier-list-2026 — third-party count of 14 passes from 200 to 3,000 Robux.
+[44] Adopt Me Pets Plus subscription (Sportskeeda) — https://www.sportskeeda.com/roblox-news/adopt-me-pets-plus-subscription-benefits-content-price — $2.99/month varying by region; includes VIP; two pets equipped.
+[45] Exploring gamepasses in Adopt Me (Sportskeeda) — https://sportskeeda.com/roblox-news/exploring-gamepasses-roblox-adopt-me — VIP at 600 Robux vs 750 original; VIP Room and exclusive limo.
+[46] Can You Gift Seeds in Grow a Garden? (Deltia's Gaming) — https://deltiasgaming.com/?p=239851 — Gift Shop costs Robux; pick a friend; same server.
+[47] Grow a Garden Seed Shop and Gear Shop Stock Explained (Deltia's Gaming) — https://deltiasgaming.com/?p=207402 — five-minute restock; Robux can buy any seed any time.
+[48] Knobs (DOORS Wiki) — https://doors-game.fandom.com/wiki/Knobs — Knobs bought with Robux or earned by ending a run.
+[49] Roblox Doors codes (Sportskeeda) — https://sportskeeda.com/roblox-news/doors-codes — Revives are paid and bought with Robux; codes give free items.
+[50] Best approach for a scalable gifting system with Developer Products (DevForum) — https://devforum.roblox.com/t/best-approach-for-a-scalable-gifting-system-with-developer-products/4740647 — a central gift service that registers each feature's products.
+[51] GiftTools+ (DevForum) — https://devforum.roblox.com/t/gifttools-a-powerful-customizable-tool-gifting-system/4754403 — staged transfer notifications (sending, processing, sent, completed).
+[52] Monetization analytics (Creator Docs) — https://create.roblox.com/docs/en-us/production/analytics/monetization.md — Creator Hub's monetization dashboard.
+[53] Roblox UI design best practices (creation.dev) — https://www.creation.dev/blog/roblox-ui-design-best-practices — one menu at a time; close buttons in the same place; safe areas on phones.
+[54] Advertise on Roblox (Creator Docs) — https://create.roblox.com/docs/pt-br/production/promotion/advertise-on-roblox — ads must follow Roblox's Advertising Standards, Community Standards and Terms of Use.
+[55] Check if Player has Gamepass (DevForum) — https://devforum.roblox.com/t/check-if-player-has-gamepass/287289 — community confirmation that UserOwnsGamePassAsync is the call for pass IDs.
+[56] Roblox Plus private server limit (PCGamesN) — https://www.pcgamesn.com/roblox/plus-private-server-limit — Plus subscribers limited to one free private server per game; creators can still offer free servers.
+
+Related: [[00 Start Here]] · [[01 The First Five Minutes]] · [[02 The Core Loop]] · [[03 Rarity and RNG]] · [[04 Progression and Economy]] · [[05 UI and HUD]] · [[08 Mobile]] · [[10 Retention and Social]] · [[11 Thumbnails, Icons and the Store Page]] · [[12 Live Ops and Launch]] · [[13 Building It Right]] · [[15 Discovery and Growth]]

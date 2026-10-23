@@ -22,7 +22,35 @@ const GAME = `zz-test-${process.pid}`;
 let server;
 let token;
 
-const env = { ...process.env, ROCREW_DATA: DATA, PORT: String(PORT), FAKE_DELAY: "300" };
+// A stand-in for the ntfy relay that Remote Control uses between two apps.
+const RELAY_PORT = PORT + 300;
+const relayTopics = new Map();
+const relay = http
+  .createServer((req, res) => {
+    const [, topic, json] = new URL(req.url, "http://x").pathname.split("/");
+    const t = relayTopics.get(topic) ?? { msgs: [], subs: new Set() };
+    relayTopics.set(topic, t);
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        const m = { id: Math.random().toString(36).slice(2), time: Date.now() / 1000, event: "message", topic, message: body };
+        t.msgs.push(m);
+        for (const sub of t.subs) sub.write(JSON.stringify(m) + "\n");
+        res.end("{}");
+      });
+    } else if (json === "json") {
+      res.writeHead(200, { "content-type": "application/x-ndjson" });
+      res.write(JSON.stringify({ event: "open", topic }) + "\n");
+      for (const m of t.msgs) res.write(JSON.stringify(m) + "\n");
+      t.subs.add(res);
+      req.on("close", () => t.subs.delete(res));
+    } else res.end();
+  })
+  .listen(RELAY_PORT);
+relay.unref();
+
+const env = { ...process.env, ROCREW_DATA: DATA, PORT: String(PORT), FAKE_DELAY: "300", ROCREW_RELAY_URL: `http://127.0.0.1:${RELAY_PORT}`, ROCREW_FAKE_TUNNEL: "1" };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function api(method, route, body, headers = {}) {
@@ -291,4 +319,86 @@ test("the vault is read in small pieces: cards, sections and search", () => {
   assert.match(readSections(page, "shop")[0].text, /price on a big button/);
   assert.equal(search(pages, "price button")[0].heading, "Shop screens");
   assert.equal(search(pages, "example.com").length, 0, "sources aren't searched");
+});
+
+test("Remote Control: pair, send a request, join live, and get cut off when it's turned off", async () => {
+  // A second studio: the friend's PC.
+  const dataB = fs.mkdtempSync(path.join(os.tmpdir(), "rocrew-b-"));
+  const portB = PORT + 200;
+  fs.writeFileSync(path.join(dataB, "config.json"), JSON.stringify({ claudeCommand: "node test/fake-claude.mjs", ownerName: "Othman" }));
+  const b = spawn("node", ["studio/server.mjs"], { cwd: ROOT, env: { ...env, ROCREW_DATA: dataB, PORT: String(portB) }, stdio: "ignore" });
+  try {
+    for (let i = 0; i < 50 && !fs.existsSync(path.join(dataB, "runtime.json")); i++) await sleep(100);
+    const tokenB = JSON.parse(fs.readFileSync(path.join(dataB, "runtime.json"), "utf8")).token;
+    const apiB = async (method, route, body, key = tokenB) => {
+      const res = await fetch(`http://127.0.0.1:${portB}${route}`, { method, headers: { "content-type": "application/json", "x-rocrew-token": key }, body: body ? JSON.stringify(body) : undefined });
+      return { status: res.status, json: await res.json().catch(() => null) };
+    };
+    const wait = async (fn, what) => {
+      for (let i = 0; i < 60; i++) {
+        const v = await fn();
+        if (v) return v;
+        await sleep(150);
+      }
+      throw new Error(`timed out waiting for ${what}`);
+    };
+    await api("POST", "/api/settings", { ownerName: "mxdas" });
+
+    // Pair: mxdas makes a code, Othman types it in; each app learns the other's name.
+    const code = (await api("POST", "/api/remote/pair", {})).json.code;
+    assert.match(code, /^RC-/);
+    assert.equal((await apiB("POST", "/api/remote/pair", { code: "nope" })).status, 400);
+    await apiB("POST", "/api/remote/pair", { code });
+    await wait(async () => (await state()).remote.partnerName === "Othman", "mxdas to learn Othman's name");
+    await wait(async () => (await apiB("GET", "/api/state")).json.remote.partnerName === "mxdas", "Othman to learn mxdas's name");
+
+    // Othman turns on Remote Control; mxdas gets a request.
+    await apiB("POST", "/api/remote/share", { on: true });
+    const invite = await wait(async () => (await state()).remote.invite, "the request");
+    assert.equal(invite.name, "Othman");
+    assert.equal(invite.key, undefined, "the key never reaches the page before joining");
+
+    // mxdas joins: lands in Othman's studio as a guest, live, credited by name.
+    const { url } = (await api("POST", "/api/remote/answer", { session: invite.session, join: true })).json;
+    const key = new URL(url).searchParams.get("key");
+    const page = await fetch(url);
+    assert.equal(page.status, 200);
+    const asGuest = (await apiB("GET", "/api/state", null, key)).json;
+    assert.equal(asGuest.me.remote, true);
+    assert.equal(asGuest.owner, "Othman");
+    assert.equal((await apiB("GET", "/api/settings", null, key)).status, 403, "guests can't change settings");
+    await apiB("POST", "/api/lead/message", { text: "Add a lava zone" }, key);
+    const bState = await wait(async () => {
+      const s = (await apiB("GET", "/api/state")).json;
+      return s.remote.sharing.status === "joined" && s;
+    }, "Othman to see mxdas joined");
+    assert.ok(bState.tasks.some((t) => t.agent === "lead" && t.by === "mxdas"));
+    assert.equal((await state()).remote.invite, null);
+
+    // Othman turns it off: the key stops working at once.
+    await apiB("POST", "/api/remote/share", { on: false });
+    assert.equal((await apiB("GET", "/api/state", null, key)).status, 401);
+  } finally {
+    const exited = new Promise((r) => b.once("exit", r));
+    b.kill();
+    await exited;
+    await api("DELETE", "/api/remote/pair");
+    fs.rmSync(dataB, { recursive: true, force: true });
+  }
+});
+
+test("relay messages are encrypted, signed and can't be replayed", async () => {
+  const { Relay, keysFor, seal } = await import("../studio/lib/relay.mjs");
+  const got = [];
+  const r = new Relay({ relayUrl: "http://x", code: "RC-AAAA-BBBB-CCCC-DDDD", me: "me", onMessage: (m) => got.push(m) });
+  const line = (msg, key = keysFor("RC-AAAA-BBBB-CCCC-DDDD").key) => JSON.stringify({ event: "message", id: "1", message: seal(key, msg) });
+  const msg = { type: "invite", sender: "them", at: Date.now(), nonce: "n1" };
+  r.handleLine(line(msg));
+  r.handleLine(line(msg)); // replay
+  r.handleLine(line({ ...msg, nonce: "n2" }, keysFor("RC-ZZZZ-ZZZZ-ZZZZ-ZZZZ").key)); // wrong pair code
+  r.handleLine(line({ ...msg, nonce: "n3", at: Date.now() - 3600000 })); // too old
+  r.handleLine(line({ ...msg, nonce: "n4", sender: "me" })); // my own
+  r.handleLine(JSON.stringify({ event: "message", message: "not encrypted" }));
+  assert.equal(got.length, 1);
+  assert.notEqual(keysFor("RC-AAAA-BBBB-CCCC-DDDD").topic, keysFor("RC-AAAA-BBBB-CCCC-DDDE").topic);
 });

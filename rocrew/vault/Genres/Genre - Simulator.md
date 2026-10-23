@@ -355,7 +355,7 @@ See [[10 Retention and Social]] for general rules. Simulator specifics:
 See [[12 Live Ops and Launch]]. The genre leaders update fast: Bubble Gum Simulator Infinity shipped updates or events on May 24, June 7 and July 12, 2025, each adding a new luck or reward system (Rift Summons, Super Chest, Infinity Potions) and turning a 500M visits milestone into an event [12][14][15].
 
 **Cadence (studio targets).**
-- **Week 1 after launch:** fixes only, plus a code for a boost. Codes are part of every top simulator's coverage [17][22].
+- **Week 1 after launch:** fixes only, plus a code for a boost. Codes are a regular part of top simulators' coverage [17][22].
 - **Every 2 weeks:** one new zone with an egg and 6 to 10 breakables, or one new system (enchants, fusing, a quest giver).
 - **Every 4 to 6 weeks:** a timed event with an event currency, an event egg and a shop that closes. Event pets become collectibles.
 - **Milestones:** each visits or favorites milestone (1M, 10M, 100M) is a 48-hour boost and a code.
@@ -780,7 +780,7 @@ If fewer than 8 boxes are ticked, pitch a different genre or a different twist.
 ### References
 [1] Roblox Simulator Game Guide (creation.dev) — https://www.creation.dev/blog/roblox-simulator-game-guide — Rebirth gives simulators their longevity; show the benefit before the reset; typical rebirth rewards (permanent multiplier, new area, exclusive pets, new upgrade tier).
 [2] Simulator, glossary entry (creation.dev) — https://www.creation.dev/pt/glossary/simulator — Glossary definition of the Roblox simulator genre.
-[3] Gamepasses (Pet Simulator 99), Pet Simulator Wiki — https://pet-simulator.fandom.com/wiki/Gamepasses_(Pet_Simulator_99) — Magic Eggs pass: 10% gold and 10% rainbow chance from any egg.
+[3] Gamepasses (Pet Simulator 99), Pet Simulator Wiki — <https://pet-simulator.fandom.com/wiki/Gamepasses_(Pet_Simulator_99)> — Magic Eggs pass: 10% gold and 10% rainbow chance from any egg.
 [4] Pet Simulator 99 Rebirths (Bloxodes) — https://bloxodes.com/wiki/pet-simulator-99/rebirths — Rebirths as a friendly prestige that unlocks features (auto-hatch, teleport) without wiping progress.
 [5] How To Get Charged Eggs In Pet Simulator 99 (GINX) — https://www.ginx.tv/en/pet-sim-99-charged-eggs — Charged Eggs need Rebirth 6, boost Huge-pet luck, and raise hatch costs.
 [6] Pet Simulator 99, Roblox Wiki (Fandom) — https://roblox.fandom.com/wiki/BIG_Games_Pets/Pet_Simulator_99 — Developer BIG Games Pets; fourth game in the series; centred on hatching eggs.

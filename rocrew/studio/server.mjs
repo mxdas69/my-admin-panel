@@ -17,6 +17,7 @@ import { probeClaude } from "./lib/claude.mjs";
 import { presetTable } from "./lib/models.mjs";
 import { fetchCharts, fetchDetails, velocity, breakouts, liveNumbers, uploadDecal } from "./lib/roblox.mjs";
 import { generateImage, askGemini } from "./lib/gemini.mjs";
+import { RemoteControl } from "./lib/remote.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(process.env.ROCREW_ROOT ?? path.join(HERE, ".."));
@@ -34,6 +35,36 @@ const TOKEN_FILE = path.join(DATA, "token");
 const TOKEN = fs.existsSync(TOKEN_FILE) ? fs.readFileSync(TOKEN_FILE, "utf8").trim() : randomBytes(24).toString("hex");
 fs.writeFileSync(TOKEN_FILE, TOKEN, { mode: 0o600 });
 let connections = { checkedAt: null, claude: null };
+
+// Remote Control guests only exist while it's on; a restart turns it off.
+store.data.people = (store.data.people ?? []).filter((p) => !p.remote);
+const remote = new RemoteControl({
+  file: path.join(DATA, "remote.json"),
+  binDir: path.join(DATA, "bin"),
+  port: () => port,
+  ownerName: () => config.get().ownerName,
+  relayUrl: process.env.ROCREW_RELAY_URL ?? null,
+  guests: {
+    add(name) {
+      const p = { id: store.id("u"), name, token: randomBytes(24).toString("hex"), createdAt: Date.now(), remote: true };
+      store.data.people.push(p);
+      store.save();
+      return p;
+    },
+    remove(id) {
+      store.data.people = (store.data.people ?? []).filter((p) => p.id !== id);
+      store.save();
+      closeClientsFor(id);
+    },
+  },
+  ...(process.env.ROCREW_FAKE_TUNNEL ? { tunnel: fakeTunnel() } : {}),
+});
+remote.on("change", () => crew.changed("remote"));
+
+/** For tests: a "tunnel" that is just this computer's own address. */
+function fakeTunnel() {
+  return { onExit: null, find: () => "fake", canInstall: () => false, install: async () => {}, start: async (p) => `http://127.0.0.1:${p}`, stop() {} };
+}
 
 // ---------- helpers ----------
 
@@ -83,7 +114,7 @@ function personFor(token) {
   if (!token) return null;
   if (same(token, TOKEN)) return { id: "owner", name: config.get().ownerName || "You", owner: true };
   const p = (store.data.people ?? []).find((x) => same(token, x.token));
-  return p ? { id: p.id, name: p.name, owner: false } : null;
+  return p ? { id: p.id, name: p.name, owner: false, remote: Boolean(p.remote) } : null;
 }
 
 function requestToken(req, url) {
@@ -95,6 +126,7 @@ function tokenOk(req, url) {
   if (person && !person.owner) {
     const p = store.data.people.find((x) => x.id === person.id);
     if (p && Date.now() - (p.lastSeenAt ?? 0) > 60000) p.lastSeenAt = Date.now();
+    if (p?.remote) remote.guestSeen(p.id);
   }
   return Boolean(person);
 }
@@ -308,8 +340,9 @@ function stateView(req) {
   const me = personFor(requestToken(req, new URL(req.url, "http://x")));
   return {
     owner: config.get().ownerName,
-    me: me ? { name: me.name, owner: me.owner } : null,
-    people: (db.people ?? []).map((p) => ({ name: p.name, lastSeenAt: p.lastSeenAt ?? null })),
+    me: me ? { name: me.name, owner: me.owner, remote: Boolean(me.remote) } : null,
+    people: (db.people ?? []).filter((p) => !p.remote).map((p) => ({ name: p.name, lastSeenAt: p.lastSeenAt ?? null })),
+    remote: remote.view(Boolean(me?.owner)),
     paused: db.paused,
     agents: AGENTS,
     statuses: crew.agentStatuses(),
@@ -333,6 +366,16 @@ function stateView(req) {
 // ---------- live updates ----------
 
 const clients = new Set();
+
+/** Cut off a person's live updates the moment their access ends. */
+function closeClientsFor(personId) {
+  for (const res of clients) {
+    if (res.personId === personId) {
+      clients.delete(res);
+      res.end();
+    }
+  }
+}
 let lastChangeAt = Date.now();
 crew.on("change", (e) => {
   lastChangeAt = Date.now();
@@ -614,7 +657,7 @@ function ownerOnly(req) {
 }
 
 function peopleView() {
-  return (store.data.people ?? []).map((p) => ({ id: p.id, name: p.name, createdAt: p.createdAt, lastSeenAt: p.lastSeenAt ?? null, links: linkFor(p.token), key: p.token }));
+  return (store.data.people ?? []).filter((p) => !p.remote).map((p) => ({ id: p.id, name: p.name, createdAt: p.createdAt, lastSeenAt: p.lastSeenAt ?? null, links: linkFor(p.token), key: p.token }));
 }
 
 route("GET", /^\/api\/people$/, (req) => {
@@ -635,6 +678,63 @@ route("DELETE", /^\/api\/people\/([\w]+)$/, (req, url, [id]) => {
   store.data.people = (store.data.people ?? []).filter((p) => p.id !== id);
   crew.changed();
   return { people: peopleView() };
+});
+
+// ---------- Remote Control ----------
+
+route("GET", /^\/api\/remote$/, (req) => {
+  ownerOnly(req);
+  return remote.view(true);
+});
+route("POST", /^\/api\/remote\/pair$/, async (req) => {
+  ownerOnly(req);
+  const { code } = await readJson(req);
+  try {
+    if (code) await remote.pair(code);
+    else remote.createCode();
+  } catch (err) {
+    throw new HttpError(400, err.message);
+  }
+  return remote.view(true);
+});
+route("DELETE", /^\/api\/remote\/pair$/, (req) => {
+  ownerOnly(req);
+  remote.unpair();
+  return remote.view(true);
+});
+route("POST", /^\/api\/remote\/share$/, async (req) => {
+  ownerOnly(req);
+  const { on } = await readJson(req);
+  need(remote.view(true).paired || !on, "Pair with your friend first.");
+  remote.share(Boolean(on)).catch(() => {});
+  return remote.view(true);
+});
+route("POST", /^\/api\/remote\/install$/, async (req) => {
+  ownerOnly(req);
+  try {
+    await remote.installTunnel();
+  } catch (err) {
+    throw new HttpError(502, err.message);
+  }
+  return remote.view(true);
+});
+route("POST", /^\/api\/remote\/relay$/, async (req) => {
+  ownerOnly(req);
+  try {
+    remote.setRelayUrl((await readJson(req)).url);
+  } catch (err) {
+    throw new HttpError(400, err.message);
+  }
+  return remote.view(true);
+});
+route("POST", /^\/api\/remote\/answer$/, async (req) => {
+  ownerOnly(req);
+  const { session, join } = await readJson(req);
+  try {
+    return remote.answer(String(session ?? ""), Boolean(join));
+  } catch (err) {
+    throw new HttpError(410, err.message);
+  }
 });
 
 // ---------- start with Windows ----------
@@ -694,6 +794,7 @@ const server = http.createServer(async (req, res) => {
       if (!tokenOk(req, url)) throw new HttpError(401, "Missing or wrong token.");
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive" });
       res.write(": hello\n\n");
+      res.personId = personFor(requestToken(req, url))?.id;
       clients.add(res);
       req.on("close", () => clients.delete(res));
       return;
@@ -781,6 +882,7 @@ const ticker = setInterval(() => crew.tick(), 5000);
 ticker.unref();
 
 function shutdown() {
+  remote.stop();
   for (const run of crew.running.values()) run.kill("app closed");
   store.flush();
   try {

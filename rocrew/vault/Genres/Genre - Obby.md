@@ -253,7 +253,7 @@ Must-have screens:
 4. **Respawn at checkpoint** button (or keep Roblox's Reset enabled): stuck players need a way out.
 5. **Completion screen**: time, deaths, badge, "Play Hard Mode", "Restart for a Win".
 
-Mobile rules: keep a 260×260 px area at bottom-right (the default jump button) and a 300×300 px area at bottom-left (thumbstick) completely clear. Nothing important sits in the top 60 px (Roblox top bar). Enable Shift Lock as an option (`StarterPlayer.EnableMouseLockOption = true`) for keyboard players; never force a camera mode that fights the thumbstick.
+Mobile rules: keep a 260×260 px area at bottom-right (the default jump button) and a 300×300 px area at bottom-left (thumbstick) completely clear. Nothing important sits in the top 60 px (Roblox top bar). Enable Shift Lock as an option (`StarterPlayer.EnableMouseLockOption = true`) for keyboard players; never force a camera mode that fights the thumbstick. Gamepad: every menu button is selectable (`Selectable = true`, sensible `NextSelection*` links, `GuiService.SelectedObject` set when a menu opens) and ProximityPrompts keep their default gamepad key (`GamepadKeyCode`, ButtonX); map Skip and Respawn to gamepad buttons with ContextActionService, not to keys only.
 
 ## 8. World and look
 
@@ -298,6 +298,22 @@ Rules:
 
 ## 11. Building it in Studio
 
+### Build order (a classic obby in 14 steps)
+1. **Architect** writes the loop statement, the shape (classic, tower, chart, speedrun, troll), the stage count, the zone list with one new mechanic per zone, and the physics values into `plan.md`.
+2. **Balance** fills the difficulty table (gap, pad, mover speed, expected deaths per stage) in `economy.md` from the formulas in section 5.
+3. **Builder** writes `Config`, `PlayerData`, `StageService` and `HazardService` (tags `Checkpoint`, `Kill`), and tests them on greybox stages 0-10.
+4. **Scenic** builds a jump test strip in a `TestArea` folder (flat gaps 3-10 studs, rises 2-7 studs, pads 1-8 studs); **Playtest** confirms which bands are easy, hard and impossible on keyboard and on a phone.
+5. **Scenic** greyboxes Zone 1 (stages 0-10) at the table's values, with the zone's set piece in stages 1-5.
+6. **Kid Tester** plays the first five minutes on a phone and reports any stage that took more than 3 tries.
+7. **Builder** adds `MoverService`, launch pads and the no-collision group; **Playtest** rides every mover for a full cycle.
+8. **Frame** builds the stage pill, toasts, Skip button, Stage Select and Settings.
+9. **Merchant** wires `ProcessReceipt` for Skip Stage and the passes, tested with Studio test purchases.
+10. **Scenic** builds the remaining zones and dresses Zone 1 in its final theme (color language from section 8).
+11. **Builder** adds rewards, badges, and the timer and boards if the shape needs them.
+12. **Liveops** adds the stage funnel and economy events.
+13. **Reviewer** forges every remote, checks saves on leave and shutdown, and checks for double-granting receipts.
+14. **Producer** runs the section 15 checklist with evidence (screenshots, Output lines) before the game moves on.
+
 ### Systems list
 1. **PlayerData** (load/save, session lock, autosave every 60 s, save on leave and on close).
 2. **StageService** (checkpoints, current/max stage, respawn at stage, stage select, anti-skip).
@@ -331,7 +347,7 @@ Workspace/Map/
 Every checkpoint is a Part tagged `Checkpoint` with an attribute `Stage` (integer). Every kill part is tagged `Kill`. Movers are tagged `Mover` with attributes (`Axis`, `Travel`, `Speed`, `Pause`). Checkpoints in Studio point their front face (LookVector) toward the next stage so respawns face the right way.
 
 ### Checkpoints: teams or attributes?
-Roblox documents spawn-based checkpoints: SpawnLocations with `AllowTeamChangeOnTouch` switch the touching player to that spawn's team, only the first team should be auto-assignable, and a non-neutral spawn creates its matching team [4]. That's fine for a 20-stage obby but scales badly (one team per stage) [5]. RoCrew uses **attribute checkpoints with server-side stage numbers and a PivotTo respawn**: one Stage 0 SpawnLocation, and on every `CharacterAdded` the server moves the character to its saved checkpoint. Community systems confirm the essentials: keep progress on the server (client-held progress is exploitable) [9], only accept the next stage in sequence so skipping from 1 to 3 does nothing [6], hook `CharacterAdded` rather than caching `player.Character` [10], and handle stage 0 and skip-ahead bugs explicitly [11]. Save across sessions and offer a stage selector [6][7].
+Roblox documents spawn-based checkpoints: SpawnLocations with `AllowTeamChangeOnTouch` switch the touching player to that spawn's team, only the first team should be auto-assignable, and a non-neutral spawn creates its matching team [4]. That's fine for a 20-stage obby but scales badly (one team per stage) [5]. The basic community recipe is a folder of numbered checkpoint parts, a stored stage value and a Touched handler that updates it [8]. RoCrew uses **attribute checkpoints with server-side stage numbers and a PivotTo respawn**: one Stage 0 SpawnLocation, and on every `CharacterAdded` the server moves the character to its saved checkpoint. Community systems confirm the essentials: keep progress on the server (client-held progress is exploitable) [9], only accept the next stage in sequence so skipping from 1 to 3 does nothing [6], hook `CharacterAdded` rather than caching `player.Character` [10], and handle stage 0 and skip-ahead bugs explicitly [11]. Save across sessions and offer a stage selector [6][7].
 
 ### Remotes contract
 
@@ -786,7 +802,7 @@ Tag each section with its difficulty (attribute `Difficulty` 1-5) and draw Norma
 1. **Invisible or ambiguous kill parts.** Players die without knowing why and quit. Fix: Neon red only, and never red decoration [12].
 2. **Impossible or barely possible jumps.** Designed in Studio, never playtested; DevForum's top obby tip is to playtest every stage until you know it can be beaten [12].
 3. **A boring, generic opening.** The first stages look like the template; players leave in minutes [13].
-4. **Repetition.** The same jump-and-laser stage 40 times [13]. Each zone needs a new mechanic.
+4. **Repetition.** The same jump-and-laser stage 40 times [13]. Each zone needs a new mechanic; when ideas run dry, sketch stages on paper or a tablet before building, as DevForum creators advise [14].
 5. **Client-side progress.** Exploiters set their stage to 999 [9].
 6. **Lost progress.** Data not saved on leave or on shutdown, or a schema change wipes stage numbers.
 7. **Respawning at the wrong place.** Caching `player.Character`, stage 0 edge cases, or streaming not loaded at the respawn point [10][11].
