@@ -782,7 +782,9 @@ PAGES.games = {
     if (tab === "overview") {
       body.innerHTML = `<div class="cols"><div class="card"><h3 class="section-title">${icon("sparkle")} What's new in ${esc(game.version)}</h3>
         ${game.whatsNew.length ? `<ul>${game.whatsNew.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : `<p class="muted">The Lead posts release notes here (<span class="mono">node studio/cli.mjs game update --whatsnew "…"</span>).</p>`}</div>
-        <div class="card"><h3 class="section-title">${icon("tasks")} Open work (${open.length})</h3>${open.map((t) => `<div class="mini-task">${tile(t.agent, "sm")}<span class="grow">${esc(t.title)}</span>${statusPill(t.status)}</div>`).join("") || `<p class="muted">Nothing open.</p>`}</div></div>`;
+        <div class="card"><h3 class="section-title">${icon("tasks")} Open work (${open.length})</h3>${open.map((t) => `<div class="mini-task">${tile(t.agent, "sm")}<span class="grow">${esc(t.title)}</span>${statusPill(t.status)}</div>`).join("") || `<p class="muted">Nothing open.</p>`}</div></div>
+        <div class="card" id="game-reports"><h3 class="section-title">${icon("file")} Reports</h3><p class="muted">Loading…</p></div>`;
+      loadReports(game.slug);
     } else if (tab === "pipeline") {
       body.innerHTML = `<div class="pipeline">${LANES.map(([name, ids]) => {
         const lane = tasks.filter((t) => ids.includes(t.agent)).slice(-8).reverse();
@@ -802,6 +804,22 @@ PAGES.games = {
     }
   },
 };
+
+/** The newest round summary in full, then every report as a link, newest first. */
+async function loadReports(slug) {
+  const files = await api("GET", `/api/games/${slug}/files`).catch(() => null);
+  const box = document.getElementById("game-reports");
+  if (!box || !files) return;
+  const reports = files.filter((f) => /^reports\/.*\.md$/.test(f.path)).sort((a, b) => b.modifiedAt - a.modifiedAt);
+  const summary = reports.find((f) => /summary/i.test(f.path));
+  let latest = "";
+  if (summary) {
+    const res = await api("GET", `/api/games/${slug}/file?path=${encodeURIComponent(summary.path)}`).catch(() => null);
+    if (res) latest = `<div class="eyebrow">Latest summary · ${ago(summary.modifiedAt)}</div><div class="md report-summary">${renderMarkdown(splitFrontmatter(res.text).body, { wikiHref: vaultHref })}</div>`;
+  }
+  box.innerHTML = `<h3 class="section-title">${icon("file")} Reports</h3>${latest}
+    ${reports.length ? `<div class="report-list">${reports.map((f) => `<button class="file-link" data-act="open-report" data-slug="${esc(slug)}" data-id="${esc(f.path)}">${esc(f.path.replace(/^reports\//, "").replace(/\.md$/, ""))}<small class="faint" style="float:right">${ago(f.modifiedAt)}</small></button>`).join("")}</div>` : `<p class="muted">When the crew finishes a round, the Lead writes a plain-English summary here: what got done, what they found, what needs you, and what's next.</p>`}`;
+}
 
 async function loadFiles(slug) {
   const files = await attempt(() => api("GET", `/api/games/${slug}/files`));
@@ -1501,6 +1519,11 @@ const ACTIONS = {
     await refresh();
   },
   "select-all": (el) => el.select(),
+  "open-report": (el) => {
+    S.ui.gameTab = "files";
+    S.fileView = { slug: el.dataset.slug, path: el.dataset.id };
+    render(true);
+  },
   "approve-tasks": async () => {
     const boxes = [...document.querySelectorAll("[data-propose]")];
     const yes = boxes.filter((b) => b.checked).map((b) => b.dataset.propose);

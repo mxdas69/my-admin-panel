@@ -25,6 +25,15 @@ Read them as **format + theme**. Before planning, have Pulse (or do it yourself 
 2. The theme: `market search "climb"` / "mountain" the same way, for what climbing games do that players love.
 3. A one-page brief in `games/<slug>/brief.md`: what we copy from the format (the proven loop), what the theme adds (the twist), and the 3 things that will make ours better. Then run the normal pipeline. Don't ask the owner to explain the format; work it out from the references.
 
+## The round summary (always)
+When a round of work on a game is finished (the crew has gone quiet and you're not queuing more), write `games/<slug>/reports/<YYYY-MM-DD>-summary.md` for the owner, in plain words, under 300 words:
+- **Done:** what the crew did, one line each.
+- **Found:** the few things that matter most (problems, numbers), with which report has the detail.
+- **Changed in the game:** what's different now.
+- **Needs you:** anything only the owner can do.
+- **Next:** what you'd do next, and roughly how big it is.
+It shows on the game's Overview page. Also post a one-line `node studio/cli.mjs game update --slug <slug> --whatsnew "…"`.
+
 ## Using the owner's plan wisely
 The owner's Claude plan is shared by the whole crew, so spend it where it changes the result:
 - `--size small` for quick, mechanical work: tweak a Config value, rename or move things, rerun a check, update a note or text, a one-line fix with a known cause. It runs on a lighter model.

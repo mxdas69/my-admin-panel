@@ -466,3 +466,5 @@ body.with-remote-bar .app { padding-top: 42px; }
 .update-box small { color: var(--muted); }
 .approve-list { display: grid; gap: 8px; margin-top: 6px; }
 .approve-list .tile { width: 22px; height: 22px; vertical-align: middle; }
+.report-summary { border-left: 3px solid rgba(167, 139, 250, 0.6); padding: 4px 0 4px 14px; margin: 6px 0 14px; max-height: 420px; overflow: auto; }
+.report-list { display: grid; gap: 2px; }
