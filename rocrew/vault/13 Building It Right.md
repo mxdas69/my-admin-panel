@@ -682,3 +682,1041 @@ return RateLimit
 ```
 Drop over-limit calls silently. Log repeated abuse at most once per player per minute, and don't kick on the first spike, because lag bursts happen.
 
+## DataStore patterns
+- **Load with retries** (pcall plus exponential backoff). If loading still fails, **never** hand out a fresh save that could overwrite the real one: kick with "Couldn't load your data, please rejoin" (Rule 22).
+- **Session lock:** load through `UpdateAsync` and stamp `{JobId = game.JobId, Time = os.time()}`. If another live server holds a recent lock (the player just hopped servers), wait and retry. Every save refreshes the lock, so treat a lock older than a few autosave intervals (for example 5-10 minutes) as stale, left behind by a crashed server (Rule 23).
+- **Session cache:** gameplay reads and writes a table in memory (`PlayerData.Get(player)`). DataStores are touched only on load, autosave, purchase, leave and shutdown (Rule 24).
+- **Save with `UpdateAsync`**, not `SetAsync`, and abort the write if the lock belongs to another server. Return `true` only when the write actually happened, because `ProcessReceipt` depends on it ([[09 Shops and Monetization]]).
+- **Autosave** every 1-3 minutes (rule of thumb), staggered across players. Save on `PlayerRemoving` (release the lock) and in `game:BindToClose`, in parallel with a deadline ([[12 Live Ops and Launch]]). Make saving idempotent so both paths can run.
+- **Versioned schema:** `Version` field, ordered migrations, defaults reconciled on load, never save over a newer version.
+- **Budget awareness:** check `DataStoreService:GetRequestBudgetForRequestType(Enum.DataStoreRequestType.UpdateAsync)` before optional writes. Roblox throttles frequent writes to the same key (roughly one every several seconds), and keys have a size limit, so keep saves small. "Request was added to queue" warnings mean you're writing too often.
+- Only save plain data: numbers, strings, booleans and tables with string keys or dense array indices. No Instances, Vector3s or CFrames (store them as numbers).
+- Use a different store name in Studio (`if RunService:IsStudio() then "PlayerData_Studio_v1" else "PlayerData_v1"`) so tests never touch live saves. DataStores in Studio need the owner to enable API access for a published place.
+```lua
+local function save(player: Player, release: boolean): boolean
+	local data = sessions[player]
+	if not data then return false end -- never loaded: never save
+	local wrote = false
+	local ok = pcall(store.UpdateAsync, store, `Player_{player.UserId}`, function(old)
+		wrote = false
+		if old and old.Lock and old.Lock.JobId ~= game.JobId then return nil end -- not our lock: abort
+		data.Lock = if release then nil else { JobId = game.JobId, Time = os.time() }
+		wrote = true
+		return data
+	end)
+	return ok and wrote
+end
+```
+The full module below builds on this function.
+
+### Platform limits to design around (verify the current numbers on Creator Hub before relying on them)
+| Service | Limit (as documented at the time of writing) | Design rule |
+|---|---|---|
+| DataStore value size | About 4 MB per key, encoded | Keep player saves under 100 KB (studio target) |
+| DataStore same-key writes | About one write per key every 6 seconds | Autosave every 120 s; never save on every change |
+| DataStore request budget | Per server per minute, grows with players (about 60 + 10 × players for gets and for sets) | Check `GetRequestBudgetForRequestType` before optional writes |
+| DataStore names | Store names and keys up to 50 characters | `PlayerData_v1`, `Player_<UserId>` |
+| DataStore versions | Old versions kept for a limited time (about 30 days) | Restore tools ready (Rule 37) |
+| OrderedDataStore sorted reads | Much smaller budget than normal reads | Read top lists every few minutes and cache |
+| MemoryStore | Items up to about 32 KB, expiry up to about 45 days, memory and request quotas that scale with users | Always set an expiry; batch writes |
+| MessagingService | Messages up to about 1 KB, best-effort delivery, send and subscribe quotas per server | Send hints ("refresh"), never must-arrive values |
+| BindToClose | About 30 seconds before shutdown | Parallel saves with a 25 s deadline |
+
+### Save schema (Types and defaults)
+```lua
+--!strict
+-- ReplicatedStorage/Shared/Types
+export type PetRecord = { Id: string, Level: number, Shiny: boolean }
+
+export type PlayerSave = {
+	Version: number,
+	Currencies: {[string]: number},          -- "Coins" -> 1250
+	Inventory: {[string]: number},           -- itemId -> count (stackables)
+	Pets: {[string]: PetRecord},             -- uid -> record (uniques)
+	Equipped: {[string]: boolean},           -- uid -> true
+	Receipts: {[string]: number},            -- PurchaseId -> os.time()
+	PassesOwned: {[string]: boolean},        -- tostring(passId) -> true (fallback cache)
+	RedeemedCodes: {[string]: number},       -- code -> os.time()
+	Onboarding: { Logged: {[string]: boolean} },
+	Stats: { Sessions: number, FirstJoin: number, PlaySeconds: number, TotalCoins: number },
+	Referral: { Day: number, Count: number },
+	ReferredBy: number?,
+	EventsConverted: {[string]: boolean},
+	Experiments: {[string]: number},
+	Settings: { Music: boolean, Sfx: boolean },
+	Lock: { JobId: string, Time: number }?,
+}
+
+return {}
+```
+```lua
+--!strict
+-- ServerScriptService/Services/SaveDefaults: the template every save is reconciled against.
+return {
+	Version = 3,
+	Currencies = { Coins = 0, Gems = 0 },
+	Inventory = {},
+	Pets = {},
+	Equipped = {},
+	Receipts = {},
+	PassesOwned = {},
+	RedeemedCodes = {},
+	Onboarding = { Logged = {} },
+	Stats = { Sessions = 0, FirstJoin = 0, PlaySeconds = 0, TotalCoins = 0 },
+	Referral = { Day = 0, Count = 0 },
+	EventsConverted = {},
+	Experiments = {},
+	Settings = { Music = true, Sfx = true },
+}
+```
+A ModuleScript must return exactly one value, which is why `Types` ends with `return {}`; other modules use it with `local Types = require(ReplicatedStorage.Shared.Types)` and `Types.PlayerSave`. Empty tables in the defaults are collections: reconcile creates them when missing but never fills their contents.
+
+### Migrations
+```lua
+--!strict
+-- ServerScriptService/Services/Migrations
+local Defaults = require(script.Parent.SaveDefaults)
+local CURRENT_VERSION: number = Defaults.Version
+
+local steps: {[number]: (any) -> ()} = {
+	[1] = function(d) -- v1 -> v2: coins moved into Currencies
+		d.Currencies = d.Currencies or {}
+		d.Currencies.Coins = (d.Currencies.Coins or 0) + (d.Coins or 0)
+		d.Coins = nil
+	end,
+	[2] = function(d) -- v2 -> v3: Diamonds renamed to Gems
+		d.Currencies.Gems = (d.Currencies.Gems or 0) + (d.Currencies.Diamonds or 0)
+		d.Currencies.Diamonds = nil
+	end,
+}
+
+local Migrations = {}
+
+-- Returns false when the save is newer than this server understands: do not use or save it.
+function Migrations.run(d: any): boolean
+	d.Version = d.Version or 1
+	if d.Version > CURRENT_VERSION then return false end
+	while d.Version < CURRENT_VERSION do
+		local step = steps[d.Version]
+		assert(step, `[Migrations] no step from v{d.Version}`)
+		step(d)
+		d.Version += 1
+	end
+	return true
+end
+
+return Migrations
+```
+
+### The full PlayerData module
+```lua
+--!strict
+-- ServerScriptService/Services/PlayerData
+-- Retries + session lock on load, in-memory session cache, staggered autosave,
+-- release on leave, parallel saves in BindToClose. The only module that talks to the player store.
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Types = require(ReplicatedStorage.Shared.Types)
+local Defaults = require(script.Parent.SaveDefaults)
+local Migrations = require(script.Parent.Migrations)
+local StoreAdapter = require(script.Parent.StoreAdapter)
+
+type PlayerSave = Types.PlayerSave
+
+local STORE_NAME = if RunService:IsStudio() then "PlayerData_Studio_v1" else "PlayerData_v1"
+local MAX_LOAD_ATTEMPTS = 6
+local LOCK_STALE_SECONDS = 600   -- 5 missed autosaves: the old server is gone
+local AUTOSAVE_SECONDS = 120
+local MAX_RECEIPTS = 100
+local SHUTDOWN_DEADLINE = 25
+
+local store: any
+local sessions: {[Player]: PlayerSave} = {}
+local saving: {[Player]: boolean} = {}
+local nextSave: {[Player]: number} = {}
+local loadedEvent = Instance.new("BindableEvent")
+
+local PlayerData = {}
+PlayerData.Loaded = loadedEvent.Event -- (player, data) after a successful load
+
+local function key(userId: number): string
+	return `Player_{userId}`
+end
+
+local function deepCopy(value: any): any
+	if type(value) ~= "table" then return value end
+	local out = {}
+	for k, v in value do out[k] = deepCopy(v) end
+	return out
+end
+
+local function reconcile(target: {[any]: any}, template: {[any]: any})
+	for k, v in template do
+		if target[k] == nil then
+			target[k] = deepCopy(v)
+		elseif type(v) == "table" and type(target[k]) == "table" and next(v) ~= nil then
+			reconcile(target[k], v)
+		end
+	end
+end
+
+type LoadResult = "ok" | "locked" | "newer" | "error"
+
+local function tryLoad(player: Player): (LoadResult, PlayerSave?)
+	local result: LoadResult = "error"
+	local loaded: PlayerSave? = nil
+	local ok, err = pcall(function()
+		store:UpdateAsync(key(player.UserId), function(old: any)
+			-- This function can run more than once; set every upvalue on every path.
+			local data = if type(old) == "table" then old else deepCopy(Defaults)
+			local lock = data.Lock
+			if lock and lock.JobId ~= game.JobId and os.time() - lock.Time < LOCK_STALE_SECONDS then
+				result, loaded = "locked", nil
+				return nil -- another live server owns this save: cancel the write
+			end
+			if not Migrations.run(data) then
+				result, loaded = "newer", nil
+				return nil -- made by a newer version: never write it
+			end
+			reconcile(data, Defaults)
+			data.Lock = { JobId = game.JobId, Time = os.time() }
+			result, loaded = "ok", data
+			return data, { player.UserId } -- user IDs for data-deletion requests (Rule 32)
+		end)
+	end)
+	if not ok then
+		warn(`[PlayerData] load error for {player.UserId}: {err}`)
+		return "error", nil
+	end
+	return result, loaded
+end
+
+local function write(player: Player, release: boolean): boolean
+	local data = sessions[player]
+	if not data then return false end -- never loaded: never save
+	local wrote = false
+	local ok, err = pcall(function()
+		store:UpdateAsync(key(player.UserId), function(old: any)
+			wrote = false
+			if type(old) == "table" and old.Lock and old.Lock.JobId ~= game.JobId then
+				return nil -- not our lock any more: abort
+			end
+			data.Lock = if release then nil else { JobId = game.JobId, Time = os.time() }
+			wrote = true
+			return data, { player.UserId }
+		end)
+	end)
+	if not ok then warn(`[PlayerData] save error for {player.UserId}: {err}`) end
+	return ok and wrote
+end
+
+function PlayerData.Get(player: Player): PlayerSave?
+	return sessions[player]
+end
+
+function PlayerData.all(): {[Player]: PlayerSave}
+	return sessions -- read-only by convention
+end
+
+-- Saves now. Waits for a save already running for this player. Returns true only if written.
+function PlayerData.Save(player: Player, release: boolean?): boolean
+	while saving[player] do task.wait(0.1) end
+	if not sessions[player] then return true end -- already released by another path
+	saving[player] = true
+	local ok = false
+	for attempt = 1, 3 do
+		ok = write(player, release == true)
+		if ok then break end
+		task.wait(attempt * 2)
+	end
+	saving[player] = nil
+	return ok
+end
+
+function PlayerData.SaveAndRelease(player: Player): boolean
+	if not sessions[player] then return true end
+	nextSave[player] = nil
+	local ok = PlayerData.Save(player, true)
+	if not ok then warn(`[PlayerData] FINAL SAVE FAILED for {player.UserId}`) end
+	sessions[player] = nil
+	return ok
+end
+
+function PlayerData.recordReceipt(data: PlayerSave, purchaseId: string)
+	data.Receipts[purchaseId] = os.time()
+	local count, oldestId, oldestTime = 0, nil :: string?, math.huge
+	for id, t in data.Receipts do
+		count += 1
+		if t < oldestTime then oldestId, oldestTime = id, t end
+	end
+	if count > MAX_RECEIPTS and oldestId then
+		data.Receipts[oldestId] = nil -- only acknowledged receipts are this old
+	end
+end
+
+local function load(player: Player)
+	for attempt = 1, MAX_LOAD_ATTEMPTS do
+		if player.Parent == nil then return end -- left while we were loading
+		local result, data = tryLoad(player)
+		if result == "ok" and data then
+			sessions[player] = data
+			if player.Parent == nil then
+				PlayerData.SaveAndRelease(player) -- left during the load: release our lock
+				return
+			end
+			data.Stats.Sessions += 1
+			if data.Stats.FirstJoin == 0 then data.Stats.FirstJoin = os.time() end
+			nextSave[player] = os.clock() + AUTOSAVE_SECONDS + math.random() * 30 -- stagger
+			loadedEvent:Fire(player, data)
+			return
+		elseif result == "newer" then
+			player:Kick("A new update is out! Please rejoin to play it.")
+			return
+		end
+		task.wait(math.min(2 ^ attempt, 15) + math.random()) -- "locked" or "error": back off
+	end
+	player:Kick("We couldn't load your data. Your progress is safe. Please rejoin in a minute.")
+end
+
+PlayerData.reload = load -- used after a failed teleport released the session
+
+function PlayerData.Init()
+	store = StoreAdapter.get(STORE_NAME)
+end
+
+function PlayerData.Start()
+	Players.PlayerAdded:Connect(load)
+	for _, player in Players:GetPlayers() do task.spawn(load, player) end
+
+	Players.PlayerRemoving:Connect(function(player)
+		PlayerData.SaveAndRelease(player)
+	end)
+
+	task.spawn(function() -- one autosave loop for everyone
+		while true do
+			task.wait(5)
+			local now = os.clock()
+			for player, due in nextSave do
+				if now >= due then
+					nextSave[player] = now + AUTOSAVE_SECONDS
+					task.spawn(PlayerData.Save, player, false)
+				end
+			end
+		end
+	end)
+
+	game:BindToClose(function()
+		local pending = 0
+		for _, player in Players:GetPlayers() do
+			pending += 1
+			task.spawn(function()
+				PlayerData.SaveAndRelease(player) -- no-op if PlayerRemoving already did it
+				pending -= 1
+			end)
+		end
+		local deadline = os.clock() + SHUTDOWN_DEADLINE
+		while pending > 0 and os.clock() < deadline do
+			task.wait(0.1)
+		end
+	end)
+end
+
+return PlayerData
+```
+Notes on this module:
+- `UpdateAsync` may call the transform more than once, so the transform sets every upvalue on every path and has no other side effects.
+- A player who leaves during loading still gets the lock released, because `load` checks `player.Parent` after the load returns.
+- A failed final save leaves the lock in place. It becomes stale after `LOCK_STALE_SECONDS`, and in the meantime the player's next server retries and, if needed, kicks politely. Never lower the stale time below a few autosave intervals.
+- The module never writes `Defaults` unless the key is truly empty (`old` is nil), so an outage can't overwrite a real save.
+
+### Economy: the only place balances change
+```lua
+--!strict
+-- ServerScriptService/Services/Economy
+local PlayerData = require(script.Parent.PlayerData)
+local Analytics = require(script.Parent.Analytics)
+local StateSync = require(script.Parent.StateSync)
+
+local Economy = {}
+local TX = Enum.AnalyticsEconomyTransactionType
+
+function Economy.add(player: Player, currency: string, amount: number, sku: string,
+	txType: Enum.AnalyticsEconomyTransactionType?): boolean
+	local data = PlayerData.Get(player)
+	if not data or amount <= 0 or amount ~= amount or amount % 1 ~= 0 then return false end
+	local balance = (data.Currencies[currency] or 0) + amount
+	data.Currencies[currency] = balance
+	if currency == "Coins" then data.Stats.TotalCoins += amount end
+	Analytics.source(player, currency, amount, balance, txType or TX.Gameplay, sku)
+	StateSync.mark(player, "Currencies")
+	return true
+end
+
+function Economy.spend(player: Player, currency: string, amount: number, sku: string,
+	txType: Enum.AnalyticsEconomyTransactionType?): boolean
+	local data = PlayerData.Get(player)
+	if not data or amount <= 0 or amount ~= amount or amount % 1 ~= 0 then return false end
+	local balance = data.Currencies[currency] or 0
+	if balance < amount then return false end
+	balance -= amount
+	data.Currencies[currency] = balance
+	Analytics.sink(player, currency, amount, balance, txType or TX.Shop, sku)
+	StateSync.mark(player, "Currencies")
+	return true
+end
+
+-- Grants a reward table such as { Coins = 500, Gems = 5 }.
+function Economy.grant(player: Player, reward: {[string]: number}, sku: string,
+	txType: Enum.AnalyticsEconomyTransactionType?)
+	for currency, amount in reward do
+		Economy.add(player, currency, amount, sku, txType)
+	end
+end
+
+return Economy
+```
+
+### StateSync: batched server→client state
+```lua
+--!strict
+-- ServerScriptService/Services/StateSync: collects changed sections, sends one delta per player at 10 Hz.
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local PlayerData = require(script.Parent.PlayerData)
+local Remotes = require(script.Parent.Remotes)
+
+local StateSync = {}
+local dirty: {[Player]: {[string]: boolean}} = {}
+local SEND_INTERVAL = 0.1
+
+function StateSync.mark(player: Player, section: string)
+	local d = dirty[player]
+	if not d then d = {}; dirty[player] = d end
+	d[section] = true
+end
+
+function StateSync.Start()
+	local remote = Remotes.get("StateChanged")
+	PlayerData.Loaded:Connect(function(player: Player, data: any)
+		remote:FireClient(player, { Full = true, Currencies = data.Currencies, Inventory = data.Inventory, Pets = data.Pets })
+	end)
+	Players.PlayerRemoving:Connect(function(player) dirty[player] = nil end)
+
+	local acc = 0
+	RunService.Heartbeat:Connect(function(dt)
+		acc += dt
+		if acc < SEND_INTERVAL then return end
+		acc = 0
+		for player, sections in dirty do
+			local data = PlayerData.Get(player)
+			if data then
+				local delta: {[string]: any} = {}
+				for section in sections do delta[section] = (data :: any)[section] end
+				remote:FireClient(player, delta)
+			end
+			dirty[player] = nil -- clearing a key during traversal is allowed
+		end
+	end)
+end
+
+return StateSync
+```
+For large sections (an inventory of 300 pets), send per-item changes instead of the whole section, so each update stays a few hundred bytes.
+
+### Restoring a save (the owner runs this; agents prepare it)
+```lua
+-- Studio command bar, server context, in the published place with API access.
+-- Names the LIVE store on purpose. The player must be offline (the lock is empty or stale).
+local DataStoreService = game:GetService("DataStoreService")
+local store = DataStoreService:GetDataStore("PlayerData_v1")
+local key = "Player_12345678"
+
+local pages = store:ListVersionsAsync(key, Enum.SortDirection.Descending)
+for _, info in pages:GetCurrentPage() do
+	print(info.Version, DateTime.fromUnixTimestampMillis(info.CreatedTime):ToIsoDate(), info.IsDeleted)
+end
+
+-- After choosing the version from just before the bug:
+-- local old = store:GetVersionAsync(key, "<version from the list>")
+-- print(game:GetService("HttpService"):JSONEncode(old))  -- inspect it first
+-- store:UpdateAsync(key, function() old.Lock = nil; return old end)
+```
+Write every restore in `liveops.md`: the UserId, the version used, the time and who approved it ([[12 Live Ops and Launch]]).
+
+## Purchases
+### ProcessReceipt idempotency
+Use exactly one callback. Record `PurchaseId` in the player's save alongside the grant, return `PurchaseGranted` only after `save()` returns true, and return `NotProcessedYet` otherwise. Product design and pricing are in [[09 Shops and Monetization]].
+```lua
+--!strict
+-- ServerScriptService/Services/ReceiptService (Merchant)
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local PlayerData = require(script.Parent.PlayerData)
+local Products = require(script.Parent.Products) -- [productId] = function(player): boolean
+
+local ReceiptService = {}
+local Decision = Enum.ProductPurchaseDecision
+
+local function processReceipt(receiptInfo: {[string]: any}): Enum.ProductPurchaseDecision
+	local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
+	if not player then
+		return Decision.NotProcessedYet -- Roblox retries later, for example when they rejoin
+	end
+	local data = PlayerData.Get(player)
+	if not data then
+		return Decision.NotProcessedYet -- save not loaded yet
+	end
+	local purchaseId = tostring(receiptInfo.PurchaseId)
+	if data.Receipts[purchaseId] then
+		-- Granted before. Acknowledge only once that grant is safely saved.
+		return if PlayerData.Save(player) then Decision.PurchaseGranted else Decision.NotProcessedYet
+	end
+	local grant = Products[receiptInfo.ProductId]
+	if not grant then
+		warn(`[Receipts] unknown product {receiptInfo.ProductId}`)
+		return Decision.NotProcessedYet
+	end
+	local ok, granted = pcall(grant, player)
+	if not ok or not granted then
+		warn(`[Receipts] grant failed for {receiptInfo.ProductId}: {granted}`)
+		return Decision.NotProcessedYet
+	end
+	PlayerData.recordReceipt(data, purchaseId)
+	if PlayerData.Save(player) then
+		return Decision.PurchaseGranted
+	end
+	-- The grant and its receipt are in memory together; the next successful save stores both,
+	-- and Roblox's retry then sees the receipt and acknowledges without granting twice.
+	return Decision.NotProcessedYet
+end
+
+function ReceiptService.Init()
+	MarketplaceService.ProcessReceipt = processReceipt -- the only assignment in the whole game
+end
+
+return ReceiptService
+```
+```lua
+--!strict
+-- ServerScriptService/Services/Products: one grant function per developer product.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local Economy = require(script.Parent.Economy)
+local Boosts = require(script.Parent.Boosts)
+
+local IAP = Enum.AnalyticsEconomyTransactionType.IAP
+
+local Products: {[number]: (Player) -> boolean} = {
+	[Config.Products.Coins1000] = function(player)
+		return Economy.add(player, "Coins", 1000, "Coins1000", IAP)
+	end,
+	[Config.Products.Luck2x10m] = function(player)
+		return Boosts.add(player, "Luck2x", 600)
+	end,
+}
+
+return Products
+```
+
+### Game passes
+```lua
+--!strict
+-- ServerScriptService/Services/PassService (Merchant)
+local MarketplaceService = game:GetService("MarketplaceService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Shared.Config)
+local PlayerData = require(script.Parent.PlayerData)
+
+local PassService = {}
+local owned: {[Player]: {[number]: boolean}} = {}
+
+local function setOwned(player: Player, passId: number)
+	owned[player] = owned[player] or {}
+	owned[player][passId] = true
+	local data = PlayerData.Get(player)
+	if data then data.PassesOwned[tostring(passId)] = true end -- fallback cache
+	player:SetAttribute(`Pass_{passId}`, true) -- the client shows perks; the server enforces them
+end
+
+function PassService.has(player: Player, passId: number): boolean
+	return owned[player] ~= nil and owned[player][passId] == true
+end
+
+function PassService.Start()
+	PlayerData.Loaded:Connect(function(player: Player, data: any)
+		for _, passId in Config.GamePasses do
+			local ok, has = pcall(function()
+				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, passId)
+			end)
+			if (ok and has) or (not ok and data.PassesOwned[tostring(passId)]) then
+				setOwned(player, passId)
+			end
+		end
+	end)
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, wasPurchased)
+		if wasPurchased then setOwned(player, passId) end
+	end)
+	game:GetService("Players").PlayerRemoving:Connect(function(player) owned[player] = nil end)
+end
+
+return PassService
+```
+
+## Leaderboards, MemoryStore, MessagingService and teleports
+
+### Global leaderboard with an OrderedDataStore
+```lua
+--!strict
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local PlayerData = require(script.Parent.PlayerData)
+
+local Leaderboard = {}
+local board = DataStoreService:GetOrderedDataStore(if RunService:IsStudio() then "TopCoins_Studio" else "TopCoins_v1")
+local names: {[number]: string} = {}
+local top: {{userId: number, name: string, value: number}} = {}
+
+function Leaderboard.top()
+	return top -- the board UI reads this snapshot through a remote or attributes
+end
+
+local function pushScores()
+	for player, data in PlayerData.all() do
+		if DataStoreService:GetRequestBudgetForRequestType(Enum.DataStoreRequestType.SetIncrementSortedAsync) > 5 then
+			pcall(function()
+				board:SetAsync(`Player_{player.UserId}`, math.floor(data.Stats.TotalCoins))
+			end)
+		end
+		task.wait(1) -- spread writes
+	end
+end
+
+local function readTop()
+	local ok, pages = pcall(function() return board:GetSortedAsync(false, 50) end)
+	if not ok then return end
+	local list = {}
+	for _, entry in pages:GetCurrentPage() do
+		local userId = tonumber(string.match(entry.key, "%d+")) or 0
+		if not names[userId] then
+			local okName, name = pcall(function() return Players:GetNameFromUserIdAsync(userId) end)
+			names[userId] = if okName then name else "Player"
+		end
+		table.insert(list, { userId = userId, name = names[userId], value = entry.value })
+	end
+	top = list
+end
+
+function Leaderboard.Start()
+	task.spawn(function()
+		while true do
+			readTop()
+			task.wait(180)
+			pushScores()
+		end
+	end)
+end
+
+return Leaderboard
+```
+
+### A cross-server counter in a MemoryStore sorted map
+```lua
+--!strict
+-- Community goal: every server adds its local total every 30 s.
+local MemoryStoreService = game:GetService("MemoryStoreService")
+local goal = MemoryStoreService:GetSortedMap("CommunityGoal_v1")
+local EXPIRY = 7 * 24 * 3600 -- always set an expiry
+local pendingLocal = 0
+
+local CommunityGoal = {}
+
+function CommunityGoal.add(amount: number)
+	pendingLocal += amount -- no network call per action
+end
+
+function CommunityGoal.Start()
+	task.spawn(function()
+		while true do
+			task.wait(30)
+			if pendingLocal > 0 then
+				local toSend = pendingLocal
+				local ok = pcall(function()
+					goal:UpdateAsync("total", function(old: any)
+						return (if typeof(old) == "number" then old else 0) + toSend
+					end, EXPIRY)
+				end)
+				if ok then pendingLocal -= toSend end -- keep it for the next try if it failed
+			end
+		end
+	end)
+end
+
+return CommunityGoal
+```
+
+### A matchmaking queue (MemoryStore queue)
+```lua
+--!strict
+local MemoryStoreService = game:GetService("MemoryStoreService")
+local queue = MemoryStoreService:GetQueue("Arena1v1_v1")
+
+-- Lobby server: add a player for up to 120 s.
+local function enqueue(player: Player)
+	pcall(function() queue:AddAsync({ userId = player.UserId }, 120) end)
+end
+
+-- One matchmaking loop (on lobby servers): read two, then remove them once a server is reserved.
+local function matchOnce()
+	local ok, items, readId = pcall(function()
+		return queue:ReadAsync(2, true, 5) -- all or nothing, wait up to 5 s
+	end)
+	if not ok or not items or #items < 2 then return end
+	-- reserve a server, teleport both (see below), then:
+	pcall(function() queue:RemoveAsync(readId) end)
+end
+```
+Items read but not removed return to the queue after the read's invisibility timeout, so a crashed matchmaker doesn't lose players.
+
+### Teleports
+```lua
+--!strict
+local TeleportService = game:GetService("TeleportService")
+local PlayerData = require(script.Parent.PlayerData)
+
+local Travel = {}
+
+function Travel.sendToPlace(players: {Player}, placeId: number)
+	for _, player in players do
+		PlayerData.SaveAndRelease(player) -- release the lock first (Rule 39)
+	end
+	local options = Instance.new("TeleportOptions")
+	options.ShouldReserveServer = true
+	options:SetTeleportData({ mode = "Boss" }) -- passes through the client: never rewards or secrets
+	local ok, err = pcall(function()
+		return TeleportService:TeleportAsync(placeId, players, options)
+	end)
+	if not ok then warn(`[Teleport] failed: {err}`) end
+end
+
+function Travel.Start()
+	TeleportService.TeleportInitFailed:Connect(function(player, result, message)
+		warn(`[Teleport] {player.UserId} {result.Name}: {message}`)
+		PlayerData.reload(player) -- the player is still here, but their session was released
+	end)
+end
+
+return Travel
+```
+Every place in the same experience uses the same DataStores, so the destination loads the save normally. If a teleport fails after the save was released, the player must not keep playing on a released session: expose the module's `load` function as `PlayerData.reload` and call it, then show a retry button.
+
+## Security
+
+### Threat model
+| Attack | What the exploiter does | Defense (rule) |
+|---|---|---|
+| Remote spam | Fires a remote thousands of times | Token bucket per player per remote (18) |
+| Bad arguments | NaN, infinity, negatives, huge strings, wrong types | Validation order (17); `Validate` helpers |
+| Client-trusted values | Sends a price, reward, damage or "won" flag | Server computes everything (41) |
+| Speed, fly, teleport | Moves their own character anywhere | Server position sampling with tolerance (42) |
+| Remote hit claims | "I hit that player from 300 studs" | Server raycast or range check (43) |
+| Touch farming | Moves parts or their character onto rewards | Ownership, claimed flag, debounce (44) |
+| Physics hijack | Moves client-owned unanchored parts | `SetNetworkOwner(nil)` (45) |
+| Inappropriate text | Names a pet with banned words | `TextService` filtering (46) |
+| Fake admin | Unhides the admin panel | Server-side admin check (47) |
+| Stolen secrets | Reads replicated scripts | Secrets only on the server (48) |
+| Backdoors | A free model with hidden `require(id)` | Script audit, LoadStringEnabled off (49) |
+| Forged join data | Crafted teleport or launch data | Allowlists, caps (50) |
+| Dupes on leave | Trades or purchases racing with leave | Atomic swaps, receipts, locks (33, 38) |
+| Alt farming | Referral and daily rewards from alts | Caps per day, first-session rules ([[15 Discovery and Growth]]) |
+
+### Exploit test script (run from the client command bar)
+In Play mode or a local server, switch the Test tab's view to the client so the command bar runs on the client, then paste:
+```lua
+local R = game:GetService("ReplicatedStorage"):WaitForChild("Remotes")
+local bad = { -1, 0, 0/0, math.huge, -math.huge, 1.5, 1e308, "1", string.rep("A", 100000), {}, { 1, 2, 3 }, true }
+for _, value in bad do
+	pcall(function() R.BuyItem:FireServer("Sword", value) end)
+	pcall(function() R.BuyItem:FireServer(value, 1) end)
+	pcall(function() R.RedeemCode:FireServer(value) end)
+	pcall(function() R.EquipPet:FireServer(value) end)
+end
+for _ = 1, 200 do R.ClaimDaily:FireServer() end -- rate limit test
+print("[ExploitTest] sent; now check server Output and the player's balances")
+```
+Pass criteria: no red errors on the server, no change to balances or inventory beyond what one legitimate call allows, and the rate limiter dropping the spam. Add a line for every new remote.
+
+### Free-model and plugin audit, in 7 steps (Librarian and Reviewer)
+1. Insert the asset into an empty test place, never straight into the game.
+2. In the Explorer, search the asset for `Script`, `LocalScript` and `ModuleScript` (filter by class).
+3. Read every script. Reject on `require(` with a number, `getfenv`, `setfenv`, `loadstring`, obfuscated strings, `InsertService`, unexpected `HttpService`, `TeleportService` or `MarketplaceService` calls.
+4. Delete every script that isn't needed. Art models keep zero scripts ([[07 Characters, VFX and Assets]]).
+5. Check welds, values and attributes for hidden data; check meshes for absurd triangle counts.
+6. Record the asset in the library with `cli.mjs asset add`, noting "scripts removed" or "scripts reviewed".
+7. Only then copy it into the game.
+
+### Filtering player text
+```lua
+--!strict
+local TextService = game:GetService("TextService")
+
+-- Returns filtered text safe to show to everyone, or nil if filtering failed (show nothing then).
+local function filterForEveryone(text: string, fromUserId: number): string?
+	if #text == 0 or #text > 50 then return nil end
+	local ok, result = pcall(function()
+		return TextService:FilterStringAsync(text, fromUserId)
+	end)
+	if not ok then return nil end
+	local ok2, filtered = pcall(function()
+		return result:GetNonChatStringForBroadcastAsync()
+	end)
+	return if ok2 then filtered else nil
+end
+```
+
+## Connections, threads and memory leaks
+- `:Connect` returns an `RBXScriptConnection`. Disconnect it when the thing it serves is gone. `Destroy()` cleans up connections **on that instance**, but not your connections to global signals (`RunService.Heartbeat`, `Players.PlayerAdded`, another player's events).
+- Clear every table keyed by `Player` or `Instance` on `PlayerRemoving` or `Destroying`.
+- Cancel loops you started with `task.cancel(thread)`. Use one Heartbeat loop per system, not one per object, and `:Once()` for one-shot listeners.
+```lua
+player.CharacterAdded:Connect(function(character)
+	local conns: {RBXScriptConnection} = {}
+	local humanoid = character:WaitForChild("Humanoid") :: Humanoid
+	table.insert(conns, humanoid.Died:Connect(function() onDied(player) end))
+	table.insert(conns, RunService.Heartbeat:Connect(function(dt) tickAura(character, dt) end))
+	player.CharacterRemoving:Once(function()
+		for _, c in conns do c:Disconnect() end
+	end)
+end)
+```
+- Leak test: run a 2-player local server for 20+ minutes with respawns and joins, and watch the Developer Console Memory tab and instance counts. Steady growth is a leak (Rule 69).
+- The usual leaks: a table keyed by `Player` never cleared; a connection to a global signal per character or per object; a `task.spawn` loop with no exit; UI screens cloned on every open and never destroyed; effects parented to `nil` and kept in a list forever.
+
+## The task library
+- Use `task.wait(s)`, `task.spawn(fn, ...)` (runs now), `task.defer(fn, ...)` (runs after the current step), `task.delay(s, fn, ...)` and `task.cancel(thread)`. Never use the deprecated `wait`, `spawn` or `delay`, which throttle and hide errors.
+- Don't poll (`while true do task.wait() ... end`) when an event exists. Connect to the event (Rule 55).
+- `task.delay(t, inst.Destroy, inst)` replaces `Debris:AddItem` for timed cleanup, and returns a thread you can cancel if the object is reused.
+- A loop that must stop later keeps its thread: `local thread = task.spawn(loop)`, then `task.cancel(thread)` in the Cleaner.
+- Code that runs inside a signal handler shouldn't assume it runs at the exact moment the signal fired; write handlers that read the current state, so they work with deferred signal behavior too.
+
+## Typing with --!strict
+- `--!strict` is the first line of every Script, LocalScript and ModuleScript, and the Script Analysis window must show zero errors. Export shared shapes from `Shared/Types`:
+```lua
+export type PlayerSave = { Version: number, Coins: number, Receipts: {[string]: number}, Lock: {JobId: string, Time: number}? }
+```
+(The full schema is in "Save schema" above.)
+- Type remote parameters as `unknown` and narrow with `typeof`/`IsA`. Cast with `::` only after a runtime check or for `WaitForChild` results.
+- Give module tables a type when other modules use them heavily (`export type Pool = typeof(setmetatable(...))`, see "Luau").
+- Use the modern syntax: string interpolation with backticks, `if ... then ... else` expressions, compound assignment (`+=`), generalized iteration (`for k, v in t do`), floor division (`//`), `continue`.
+
+## Client: WaitForChild
+- On the client, replication order isn't guaranteed. Get ReplicatedStorage objects, PlayerGui children and the character's parts with `WaitForChild` (with a timeout, `WaitForChild(name, 5)` returns nil, so handle it). On the server, index directly or use `FindFirstChild`, because the server created it.
+- "Infinite yield possible on ..." in Output means a wrong name, an object that exists only on the server, or something streamed out.
+
+## StreamingEnabled pitfalls
+- Streaming is on by default in new places. Distant parts **don't exist on the client** and are removed when streamed out. (LocalScripts also don't run in Workspace, except inside the player's character.)
+- Client code reacts to `CollectionService:GetInstanceAddedSignal(tag)` and `GetInstanceRemovedSignal(tag)` instead of looking up fixed workspace paths.
+- A workspace Instance sent in a server→client remote arrives as `nil` if that client hasn't streamed it. Send IDs or positions, or handle nil.
+- Set `Model.ModelStreamingMode` to `Atomic` for models scripts need whole, and `Persistent` only for the few things that must always exist (lobby boards).
+- Before teleporting a character far away, call `player:RequestStreamAroundAsync(position)` on the server, then `PivotTo`.
+- Test streaming on purpose: walk to the far edge of the map and back, and check that every tagged object's client behavior comes back.
+
+## Performance
+
+### Budgets (studio targets; measure, don't guess)
+| Metric | Target | Where to read it |
+|---|---|---|
+| Client frame rate, PC | 60 FPS in the busiest scene | Developer Console, MicroProfiler |
+| Client frame rate, low-end phone | 30 FPS floor | Real phone, MicroProfiler |
+| Client memory | Flat over 30 minutes; investigate anything above about 1,000 MB on a phone | Developer Console Memory |
+| Server heartbeat | 55+ per second average with a full server | Developer Console (server view) |
+| Server memory | Flat over 2 hours of play | Developer Console (server view), Creator Hub Performance |
+| Script time per system | Under 1 ms per frame each; all scripts under 4 ms | Script Profiler |
+| Remote traffic | Under 20 KB/s average per player, server to client | Developer Console Network |
+| State updates | At most 10 per second per player (Rule 8) | Network tab per remote |
+| Active Humanoid NPCs | 30 or fewer per server for phone-heavy games | Explorer count |
+| Ambient particle emitters | Rate 50 or less each; bursts with `Emit(n)` | Scenic's effects list |
+| Shadow-casting lights | A handful per area; small lights with `Shadows = false` | Scenic's lighting notes |
+
+### Map and spawned-object rules (Builder and Scenic)
+- Anchor everything static (Rule 58). Unanchored only what must move.
+- Decorations: `CanCollide`, `CanTouch`, `CanQuery` and `CastShadow` off.
+- Meshes: `CollisionFidelity` Box or Hull unless walked on in detail (Rule 59); `RenderFidelity` Automatic.
+- Replace unions with meshes for anything repeated.
+- Repeat models through clones of one template, so textures and meshes are shared.
+- Keep spawned objects in `Workspace.Drops`, pooled (Rule 57), with a cap per server (for example 300 drops; the oldest despawn first).
+- Every spawner has a maximum count and a despawn time in Config.
+
+### Profiling tools
+- **Developer Console (F9):** Log, Memory (by category), Network (per remote), Script Profiler, and server views. Works in Studio Play and in live servers.
+- **MicroProfiler (Ctrl+F6 in a running client):** frame-by-frame timing. Pause on a spike and read which labels are long. Wrap your own heavy functions with `debug.profilebegin("Name")` and `debug.profileend()` so they show up by name.
+- **Script Analysis (Studio):** type and lint errors; must be zero.
+- **Creator Hub Performance dashboard:** live crash rate, memory and frame rate across real players and devices ([[12 Live Ops and Launch]]).
+
+### Network rules
+- Batch state into one delta per player per tick (StateSync above).
+- Send small numbers and short strings; never send a model's whole description when an ID will do.
+- Cosmetic, frequent and lossy: UnreliableRemoteEvent. Anything that changes state: RemoteEvent.
+- Large one-time data (an inventory of hundreds of items on join) goes once, then only changes.
+- Pets and followers: the server sends a target every 0.1-0.2 s; clients interpolate. Never replicate a CFrame every frame from the server for cosmetic followers.
+
+## Testing in Studio
+- **Play (F5):** server plus your client with a character. Use the client/server toggle in the Test tab to inspect each side.
+- **Run (F8):** server only, no character. Use it for NPC, spawning and economy loops.
+- **Test > Clients and Servers:** a local server with **2 or more players**. This is required for anything multiplayer: replication, ownership checks, trading, leaderboards, rate limits, PlayerRemoving saves.
+- Use the Device Emulator for phones ([[08 Mobile]]), and a simulated incoming replication lag (Studio Settings > Network) to test laggy remotes.
+- Test the leave paths: leave mid-purchase, leave mid-save, stop the server, then rejoin and compare the data. Playtest writes the evidence (Output excerpts, screenshots) to `games/<slug>/reports/`, and never reports something as tested if it wasn't.
+
+### The test runner (pure functions, in Studio only)
+```lua
+--!strict
+-- ServerScriptService/Tests/Runner (ModuleScript)
+local Runner = {}
+type Test = { name: string, fn: () -> () }
+local tests: {Test} = {}
+
+function Runner.test(name: string, fn: () -> ())
+	table.insert(tests, { name = name, fn = fn })
+end
+
+function Runner.eq(actual: any, expected: any, label: string?)
+	if actual ~= expected then
+		error(`{label or "value"}: expected {tostring(expected)}, got {tostring(actual)}`, 2)
+	end
+end
+
+function Runner.near(actual: number, expected: number, tolerance: number, label: string?)
+	if math.abs(actual - expected) > tolerance then
+		error(`{label or "value"}: expected {expected} ± {tolerance}, got {actual}`, 2)
+	end
+end
+
+function Runner.run(): (number, number)
+	local passed, failed = 0, 0
+	for _, t in tests do
+		local ok, err = pcall(t.fn)
+		if ok then
+			passed += 1
+		else
+			failed += 1
+			warn(`[Test] FAIL {t.name}: {err}`)
+		end
+	end
+	print(`[Test] {passed} passed, {failed} failed`)
+	return passed, failed
+end
+
+return Runner
+```
+```lua
+--!strict
+-- ServerScriptService/Tests/RunAll (ModuleScript): requires every *.spec module, then runs.
+local Runner = require(script.Parent.Runner)
+return function()
+	for _, child in script.Parent:GetChildren() do
+		if child:IsA("ModuleScript") and string.match(child.Name, "%.spec$") then
+			(require(child) :: () -> ())()
+		end
+	end
+	Runner.run()
+end
+```
+```lua
+--!strict
+-- ServerScriptService/Tests/Core.spec (ModuleScript)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Runner = require(script.Parent.Runner)
+local Formulas = require(ReplicatedStorage.Shared.Formulas)
+local Validate = require(ReplicatedStorage.Shared.Validate)
+local Config = require(ReplicatedStorage.Shared.Config)
+
+return function()
+	Runner.test("upgrade cost grows 15% per level", function()
+		-- Formulas.upgradeCost(level) = math.round(100 * 1.15 ^ (level - 1))
+		Runner.eq(Formulas.upgradeCost(1), 100)
+		Runner.eq(Formulas.upgradeCost(2), 115)
+		Runner.eq(Formulas.upgradeCost(3), 132)
+	end)
+	Runner.test("every egg's odds sum to 1", function()
+		for eggId, egg in Config.Eggs do
+			local sum = 0
+			for _, entry in egg.Odds do sum += entry.Chance end
+			Runner.near(sum, 1, 1e-9, eggId)
+		end
+	end)
+	Runner.test("Validate.int rejects NaN, infinity, fractions and out-of-range", function()
+		Runner.eq(Validate.int(0/0, 1, 99), nil)
+		Runner.eq(Validate.int(math.huge, 1, 99), nil)
+		Runner.eq(Validate.int(1.5, 1, 99), nil)
+		Runner.eq(Validate.int(0, 1, 99), nil)
+		Runner.eq(Validate.int("5", 1, 99), nil)
+		Runner.eq(Validate.int(5, 1, 99), 5)
+	end)
+end
+```
+Use `math.round` in cost formulas, not `math.floor`: floating-point math can make `100 * 1.15` come out a hair under 115.
+
+### Injecting DataStore failures (Studio only)
+```lua
+--!strict
+-- ServerScriptService/Services/StoreAdapter
+local DataStoreService = game:GetService("DataStoreService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local StoreAdapter = {}
+
+function StoreAdapter.get(name: string): any
+	local real = DataStoreService:GetDataStore(name)
+	local failRate = if RunService:IsStudio() then Config.Debug.DataStoreFailRate else 0
+	if failRate <= 0 then return real end
+	local wrapper = {}
+	local function maybeFail()
+		if math.random() < failRate then error("[FakeFail] injected DataStore failure") end
+	end
+	function wrapper:UpdateAsync(key: string, transform: any)
+		maybeFail()
+		return real:UpdateAsync(key, transform)
+	end
+	function wrapper:GetAsync(key: string, options: any?)
+		maybeFail()
+		return real:GetAsync(key, options)
+	end
+	return wrapper
+end
+
+return StoreAdapter
+```
+Set `Config.Debug.DataStoreFailRate = 0.3` for the failure test (Rule 68), and back to 0 before handing over. `ConfigCheck` warns if it's above 0 in a live server (it's ignored there anyway).
+
+### Multiplayer test matrix (2-player local server)
+| Area | Test | Pass |
+|---|---|---|
+| Replication | Player A's action shows on Player B's screen | Within one round trip |
+| Ownership | B tries to use A's plot or pet (exploit script) | Rejected |
+| Trading | A and B trade; one leaves mid-confirm | Both inventories correct after rejoin |
+| Leaderboard | Both earn; board updates | Within the board's refresh interval |
+| Rate limits | B spams a remote | A unaffected; server stable |
+| Leave save | A leaves during an autosave | A's rejoin shows the latest data |
+| Shutdown | Stop the server | Both saved within the deadline |
+| Server hop | A leaves and joins a new local server at once | Lock waits, then loads |
+| Party bonus | A and B are friends | Bonus applies to both ([[15 Discovery and Growth]]) |
+| Purchases | A buys in the published place (the owner) | Granted once; B sees the result if public |
+
+### Soak test, in 6 steps
+1. Start a 2-3 player local server.
+2. Every 5 minutes: respawn each character, and every 10 minutes leave and rejoin one player.
+3. Keep the core loop running (an auto-play debug flag helps; never ship it on).
+4. Record client memory, server memory and the Workspace instance count at 0, 5, 10, 20 and 30 minutes.
+5. Any steady growth is a leak: find the table or connection that grows (Rule 11).
+6. Write the numbers into `reports/<date>-soak.md`.
+
+## Reading the Output window
+- Red is an error, with a stack trace (`ServerScriptService.Services.ShopService:42`); click it to jump to the line. Orange is a warning. Fix the **first** error, because later ones often cascade from it.
+- Watch for these: `attempt to index nil with 'X'` (something not loaded or not existing), `Infinite yield possible` (see above), DataStore queue or throttle warnings (too many writes), and `Requested module was required recursively`.
+- Separate server and client messages in multi-client tests (each window shows its own side). In live servers, the Developer Console (F9) shows client and server logs, memory and network. Prefix logs with the system name (`[Shop]`, `[Receipts]`), and never `print` inside loops.
+- Live errors also show in Creator Hub's Error Report. After each release, Liveops reads it hourly for 6 hours ([[12 Live Ops and Launch]]).
+

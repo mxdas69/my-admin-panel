@@ -25,6 +25,9 @@ export const DENIED_TOOLS = [
   "Edit(./.rocrew/**)",
 ];
 
+const BROWSER_AGENTS = ["liveops", "merchant"];
+const BROWSER_SERVER = "roblox-browser";
+
 const BASE_TOOLS = [
   "Read", "Write", "Edit", "MultiEdit", "Glob", "Grep", "LS", "TodoWrite", "NotebookEdit",
   "WebSearch", "WebFetch",
@@ -68,7 +71,7 @@ export class Crew extends EventEmitter {
 
   // ---------- creating work ----------
 
-  addTask({ agent, title, brief = "", game = null, from = "lead", studio, after = [], silent = false, reported = false, size = "normal", model = null }) {
+  addTask({ agent, title, brief = "", game = null, from = "lead", studio, browser, after = [], silent = false, reported = false, size = "normal", model = null }) {
     if (!isAgent(agent)) throw bad(`Unknown agent "${agent}". Agents: ${AGENTS.map((a) => a.id).join(", ")}`);
     if (!title?.trim()) throw bad("A task needs a title.");
     if (game && !this.db.games.some((g) => g.slug === game)) throw bad(`Unknown game "${game}". Create it first.`);
@@ -85,6 +88,9 @@ export class Crew extends EventEmitter {
       game,
       from,
       studio: studio ?? AGENT_BY_ID.get(agent).studio,
+      // The signed-in Roblox browser: Liveops and Merchant get it by default (stats, funnels,
+      // passes), anyone else when the task asks for it.
+      browser: browser ?? BROWSER_AGENTS.includes(agent),
       after,
       size,
       model: model || null,
@@ -231,6 +237,7 @@ export class Crew extends EventEmitter {
         if (hold && !(isLead && task.from === "owner")) continue;
         if (!isLead && workers >= cfg.maxParallel) continue;
         if (task.studio && this.studioHolder) continue;
+        if (this.browserFor(task) && this.browserHolder) continue;
         this.launch(task);
         if (!isLead) workers += 1;
       }
@@ -242,6 +249,11 @@ export class Crew extends EventEmitter {
 
   task(id) {
     return this.db.tasks.find((t) => t.id === id);
+  }
+
+  /** Whether this task gets the signed-in Roblox browser (only once you've signed in). */
+  browserFor(task) {
+    return Boolean(task.browser && this.browserTool?.available());
   }
 
   allowedTools() {
@@ -265,6 +277,8 @@ export class Crew extends EventEmitter {
     task.ran = { model: choice.model, effort: choice.effort ?? null };
     task.error = null;
     if (task.studio) this.studioHolder = task.id;
+    const browserConfig = this.browserFor(task) ? this.browserTool.mcpConfig() : null;
+    if (browserConfig) this.browserHolder = task.id;
     state.lastActiveAt = Date.now();
     this.message(task.agent, task.from === "owner" ? "owner" : "brief", task.from === "owner" ? task.brief : `${task.title}${task.brief ? `\n\n${task.brief}` : ""}`, {
       taskId: task.id,
@@ -280,7 +294,8 @@ export class Crew extends EventEmitter {
       prompt,
       sessionId: state.sessionId,
       permissionMode: cfg.permissionMode,
-      allowedTools: this.allowedTools(),
+      allowedTools: browserConfig ? [...this.allowedTools(), `mcp__${BROWSER_SERVER}`] : this.allowedTools(),
+      mcpConfigs: browserConfig ? [browserConfig] : [],
       disallowedTools: DENIED_TOOLS,
       model: choice.model,
       effort: choice.effort,
@@ -302,8 +317,8 @@ export class Crew extends EventEmitter {
     if (e.type === "init") {
       if (e.sessionId) state.sessionId = e.sessionId;
       const names = (e.mcpServers ?? []).map((s) => s.name).filter(Boolean);
-      if (names.length) this.db.mcpServers = [...new Set([...this.db.mcpServers, ...names])];
-      const studio = (e.mcpServers ?? []).find((s) => /roblox|studio/i.test(s.name));
+      if (names.length) this.db.mcpServers = [...new Set([...this.db.mcpServers, ...names.filter((n) => n !== BROWSER_SERVER)])];
+      const studio = (e.mcpServers ?? []).find((s) => /roblox|studio/i.test(s.name) && s.name !== BROWSER_SERVER);
       if (task.studio && studio && studio.status !== "connected") {
         this.message(task.agent, "system", `Roblox Studio MCP is ${studio.status}. Open Studio and check the MCP connection.`);
       }
@@ -322,6 +337,7 @@ export class Crew extends EventEmitter {
     this.running.delete(task.id);
     task.pid = null;
     if (this.studioHolder === task.id) this.studioHolder = null;
+    if (this.browserHolder === task.id) this.browserHolder = null;
     const state = this.store.agent(task.agent);
     if (res.sessionId) state.sessionId = res.sessionId;
     if (res.ok) state.verdicts = [];
@@ -518,6 +534,11 @@ export class Crew extends EventEmitter {
 
     const game = task.game ? this.db.games.find((g) => g.slug === task.game) : null;
     const meta = [`Task id: ${task.id}`];
+    if (this.browserFor(task)) {
+      meta.push(
+        `Roblox browser: you have the crew's browser (the ${BROWSER_SERVER} tools), signed in to the owner's Roblox account${this.browserTool.accountName() ? ` as ${this.browserTool.accountName()}` : ""}. Use it for the Creator Hub (create.roblox.com: analytics, retention, funnels, monetization, game passes, developer products, thumbnails) and roblox.com. Accept cookie banners and close popups yourself. Never spend or trade Robux, buy anything, change account, security or privacy settings, or message people. If Roblox asks you to sign in again or for a 2-step code, stop and ask the owner with \`cli.mjs ask\`. Prefer reading pages as text (snapshots) over screenshots to save usage. Close the browser when you're done.`,
+      );
+    }
     if (task.interrupted) {
       meta.push("Note: this task was cut off when the RoCrew app stopped (a crash, restart or power cut). Before doing anything, check what you already did (files, Studio, your earlier messages) and carry on from there. Don't redo finished steps or duplicate anything in Studio.");
     }

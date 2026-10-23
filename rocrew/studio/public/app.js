@@ -455,6 +455,7 @@ function setupHtml() {
     [conn.studio?.status === "connected", "Connect Roblox Studio", "In Studio: Assistant → settings → MCP Servers → quick connect for Claude Code. Then press Check again in Settings.", "#/settings"],
     [Boolean(s.owner), "Add your name", "So the crew knows who it's working for.", "#/settings"],
     [conn.gemini?.keySet, "Add a Gemini key (optional)", "For icons, thumbnails and UI art. Free from Google AI Studio.", "#/settings", true],
+    [s.roblox?.signedIn, "Sign in to Roblox (optional)", "Lets the crew read your game's stats and set up passes on the Creator Hub.", "#/settings", true],
     [s.games.length > 0 || s.tasks.length > 0, "Give the Lead your first idea", "Type it in the box above, or ask Pulse for pitches.", "#/pitches"],
   ];
   const must = steps.filter((x) => !x[4]);
@@ -1035,6 +1036,8 @@ PAGES.settings = {
   update(el) {
     const box = el.querySelector("#connections");
     if (box) box.innerHTML = connectionsHtml();
+    const rb = el.querySelector("#roblox-card");
+    if (rb && rb.dataset.sig !== robloxCardHtml()) rb.innerHTML = rb.dataset.sig = robloxCardHtml();
     const rc = el.querySelector("#remote-card");
     const html = remoteCardHtml();
     if (rc && rc.dataset.sig !== html && !rc.contains(document.activeElement)) {
@@ -1076,6 +1079,7 @@ PAGES.settings = {
         <div class="row" style="margin-top:14px"><button class="btn primary" data-act="save-settings">${icon("check")}Save settings</button></div>
       </div>
       <div><div class="card"><div class="row"><h3 class="section-title grow" style="margin:0">Connections</h3><button class="btn small" data-act="check-connections">${icon("refresh")}Check again</button></div><div id="connections">${connectionsHtml()}</div></div>
+        <div class="card" id="roblox-card">${robloxCardHtml()}</div>
         <div class="card" id="remote-card">${remoteCardHtml()}</div>
         <div class="card" id="people">${peopleHtml()}</div></div>
       </div>`;
@@ -1113,6 +1117,24 @@ function modelGridHtml(v, pick) {
       }</label>`;
     })
     .join("");
+}
+
+function robloxCardHtml() {
+  const r = S.state.roblox ?? {};
+  const status = r.signedIn
+    ? `<span class="pill green">${icon("check")} Signed in as ${esc(r.displayName || r.name || "you")}</span>`
+    : r.windowOpen
+      ? `<span class="pill amber"><span class="spinner"></span> Waiting for you to sign in</span>`
+      : `<span class="pill">Not signed in</span>`;
+  return `<h3 class="section-title">${icon("lock")} Roblox account</h3>
+    <p class="muted" style="margin-top:0">Sign in once so the crew can read your game's stats, retention and funnels, and set up game passes and products on the Creator Hub for you. It stays signed in.</p>
+    <div class="row">${status}<span class="grow"></span>
+      ${r.signedIn ? `<button class="btn small" data-act="roblox-check">${icon("refresh")}Check</button><button class="btn ghost small" data-act="roblox-signout">Sign out</button>` : `<button class="btn primary" data-act="roblox-signin" ${r.windowOpen || !r.browser ? "disabled" : ""}>${icon("lock")}Sign in to Roblox</button>`}</div>
+    ${r.windowOpen ? `<div class="banner blue" style="margin:10px 0 0"><b>A browser window opened on this PC.</b>Sign in to Roblox there (with your 2-step code if asked), then close that window. RoCrew checks it worked.</div>` : ""}
+    ${!r.browser ? `<p class="faint" style="font-size:12px">Needs Microsoft Edge or Google Chrome on this PC.</p>` : ""}
+    ${r.error && !r.windowOpen ? `<p class="faint" style="font-size:12px">${esc(r.error)}</p>` : ""}
+    <label class="switch-row"><input type="checkbox" data-change="roblox-visible" ${r.show ? "checked" : ""}><span class="switch"></span><span><b>Show the browser while agents use it</b><br><small class="muted">Off: it runs hidden with the sound off. On: you can watch and take over at any time.</small></span></label>
+    <p class="faint" style="font-size:12px;margin-bottom:0">Your sign-in is kept in a separate browser profile in <span class="mono">.rocrew/browser</span>, never sent anywhere, and agents can't open its files. They're told never to spend or trade Robux or change account settings, and to ask you if Roblox wants a code.</p>`;
 }
 
 function remoteCardHtml() {
@@ -1400,6 +1422,17 @@ const ACTIONS = {
     await refresh();
   },
   "select-all": (el) => el.select(),
+  "roblox-signin": async () => {
+    if (await attempt(() => api("POST", "/api/roblox/signin"))) await refresh();
+  },
+  "roblox-check": async () => {
+    toast("Checking with Roblox…");
+    if (await attempt(() => api("POST", "/api/roblox/check"))) await refresh();
+  },
+  "roblox-signout": async () => {
+    if (!confirm("Sign the crew out of Roblox? You can sign in again any time.")) return;
+    if (await attempt(() => api("POST", "/api/roblox/signout"), "Signed out.")) await refresh();
+  },
   "remote-code": async () => {
     const res = await attempt(() => api("POST", "/api/remote/pair", {}), "Pair code made. Send it to your friend.");
     if (res) await refresh();
@@ -1582,6 +1615,9 @@ const ACTIONS = {
 };
 
 const CHANGES = {
+  "roblox-visible": async (el) => {
+    if (!(await attempt(() => api("POST", "/api/roblox/visible", { visible: el.checked }), el.checked ? "The browser will show while agents use it." : "The browser will run hidden."))) el.checked = !el.checked;
+  },
   "remote-share": async (el) => {
     const res = await attempt(() => api("POST", "/api/remote/share", { on: el.checked }), el.checked ? "" : "Remote Control is off.");
     if (!res) el.checked = !el.checked;

@@ -25,6 +25,8 @@ export const DEFAULTS = {
   port: 4600,
   gemini: { apiKey: "", imageModel: "gemini-3.1-flash-image-preview", textModel: "gemini-flash-latest" },
   roblox: { openCloudKey: "", creatorType: "user", creatorId: "" },
+  // The crew's signed-in Roblox browser: hidden by default; visible lets you watch and step in.
+  robloxBrowser: { visible: false },
 };
 
 const SECRET_PATHS = [["gemini", "apiKey"], ["roblox", "openCloudKey"]];

@@ -18,6 +18,7 @@ import { presetTable } from "./lib/models.mjs";
 import { fetchCharts, fetchDetails, velocity, breakouts, liveNumbers, uploadDecal } from "./lib/roblox.mjs";
 import { generateImage, askGemini } from "./lib/gemini.mjs";
 import { RemoteControl } from "./lib/remote.mjs";
+import { RobloxBrowser } from "./lib/robloxBrowser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(process.env.ROCREW_ROOT ?? path.join(HERE, ".."));
@@ -60,6 +61,14 @@ const remote = new RemoteControl({
   ...(process.env.ROCREW_FAKE_TUNNEL ? { tunnel: fakeTunnel() } : {}),
 });
 remote.on("change", () => crew.changed("remote"));
+
+const robloxBrowser = new RobloxBrowser({ dir: path.join(DATA, "browser"), getShow: () => config.get().robloxBrowser?.visible });
+robloxBrowser.onChange = () => crew.changed("roblox");
+crew.browserTool = {
+  available: () => robloxBrowser.status.signedIn && Boolean(robloxBrowser.browser()),
+  accountName: () => robloxBrowser.status.name,
+  mcpConfig: () => robloxBrowser.mcpConfig(),
+};
 
 /** For tests: a "tunnel" that is just this computer's own address. */
 function fakeTunnel() {
@@ -328,7 +337,7 @@ function connectionsView() {
     checkedAt: connections.checkedAt,
     claude: connections.claude ? { installed: connections.claude.installed, version: connections.claude.version } : null,
     servers,
-    studio: servers.find((s) => /roblox|studio/i.test(s.name)) ?? null,
+    studio: servers.find((s) => /roblox|studio/i.test(s.name) && s.name !== "roblox-browser") ?? null,
     blender: { enabled: blenderEnabled(), server: servers.find((s) => /blender/i.test(s.name)) ?? null },
     gemini: { keySet: cfg.gemini.apiKeySet, imageModel: cfg.gemini.imageModel, textModel: cfg.gemini.textModel },
     roblox: { keySet: cfg.roblox.openCloudKeySet, creatorId: cfg.roblox.creatorId, creatorType: cfg.roblox.creatorType },
@@ -359,6 +368,7 @@ function stateView(req) {
     usage: db.usage ?? null,
     usageHold: crew.usageHold(),
     usageCeilingPct: config.get().usageCeilingPct,
+    roblox: me?.owner ? robloxBrowser.view() : { signedIn: robloxBrowser.status.signedIn },
     connections: connectionsView(),
   };
 }
@@ -426,6 +436,7 @@ route("POST", /^\/api\/tasks$/, async (req) => {
     game: b.game || null,
     from: isAgent(b.from) || b.from === "owner" ? b.from : "lead",
     studio: typeof b.studio === "boolean" ? b.studio : undefined,
+    browser: typeof b.browser === "boolean" ? b.browser : undefined,
     after,
     size: b.size || "normal",
     model: b.model || null,
@@ -737,6 +748,36 @@ route("POST", /^\/api\/remote\/answer$/, async (req) => {
   }
 });
 
+// ---------- the crew's Roblox sign-in ----------
+
+route("POST", /^\/api\/roblox\/signin$/, (req) => {
+  ownerOnly(req);
+  try {
+    robloxBrowser.openSignIn();
+  } catch (err) {
+    throw new HttpError(400, err.message);
+  }
+  return robloxBrowser.view();
+});
+route("POST", /^\/api\/roblox\/check$/, async (req) => {
+  ownerOnly(req);
+  need(!crew.browserHolder, "An agent is using the browser right now. Try again when it's done.");
+  await robloxBrowser.check();
+  return robloxBrowser.view();
+});
+route("POST", /^\/api\/roblox\/signout$/, (req) => {
+  ownerOnly(req);
+  need(!crew.browserHolder, "An agent is using the browser right now. Try again when it's done.");
+  robloxBrowser.signOut();
+  return robloxBrowser.view();
+});
+route("POST", /^\/api\/roblox\/visible$/, async (req) => {
+  ownerOnly(req);
+  config.update({ robloxBrowser: { visible: Boolean((await readJson(req)).visible) } });
+  crew.changed("roblox");
+  return robloxBrowser.view();
+});
+
 // ---------- start with Windows ----------
 
 function startupFile() {
@@ -851,6 +892,9 @@ server.listen(port, host, () => {
   console.log(`\n  RoCrew agent studio is running → http://${shown}:${port}\n  Project: ${ROOT}\n  Stop with Ctrl+C.\n`);
   crew.tick();
   checkConnections().catch(() => {});
+  const recheck = () => robloxBrowser.status.signedIn && !crew.browserHolder && robloxBrowser.check().catch(() => {});
+  setTimeout(recheck, 5000);
+  setInterval(recheck, 6 * 3600000).unref();
   if (process.argv.includes("--open")) openInBrowser(`http://localhost:${port}`);
 });
 server.on("error", (err) => {

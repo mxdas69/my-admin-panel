@@ -13,6 +13,7 @@ import { pickModel } from "../studio/lib/models.mjs";
 import { Crew } from "../studio/lib/crew.mjs";
 import { Store } from "../studio/lib/db.mjs";
 import { Config } from "../studio/lib/config.mjs";
+import { parseWhoAmI } from "../studio/lib/robloxBrowser.mjs";
 import { listPages, findPage, card, readSections, search } from "../studio/lib/vault.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -401,4 +402,32 @@ test("relay messages are encrypted, signed and can't be replayed", async () => {
   r.handleLine(JSON.stringify({ event: "message", message: "not encrypted" }));
   assert.equal(got.length, 1);
   assert.notEqual(keysFor("RC-AAAA-BBBB-CCCC-DDDD").topic, keysFor("RC-AAAA-BBBB-CCCC-DDDE").topic);
+});
+
+test("the Roblox sign-in check reads who is signed in, and never mistakes 'offline' for 'signed out'", () => {
+  assert.deepEqual(parseWhoAmI('<html><body><pre>{"id":123,"name":"mxdas","displayName":"mx"}</pre></body></html>'), { signedIn: true, name: "mxdas", displayName: "mx", userId: 123, error: null });
+  assert.equal(parseWhoAmI('<pre>{"errors":[{"code":0,"message":"Unauthorized"}]}</pre>').signedIn, false);
+  assert.equal(parseWhoAmI(""), null);
+});
+
+test("browser tasks get the signed-in browser one at a time, and only once signed in", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rocrew-browser-"));
+  const store = new Store(path.join(dir, "state.json"));
+  const config = { get: () => ({ maxParallel: 5, usageCeilingPct: 90, modelPreset: "balanced", agentModels: {}, model: "", permissionMode: "safe", extraAllowedTools: [], taskTimeoutMin: 5, maxAutoRounds: 5 }) };
+  const runs = [];
+  const crew = new Crew({ store, config, root: ROOT, runner: (o) => (runs.push(o), { done: new Promise(() => {}), kill() {} }) });
+  let signedIn = false;
+  crew.browserTool = { available: () => signedIn, accountName: () => "mxdas", mcpConfig: () => '{"mcpServers":{"roblox-browser":{}}}' };
+  crew.addTask({ agent: "liveops", title: "Read D1 retention", from: "lead" });
+  crew.tick();
+  assert.deepEqual(runs[0].mcpConfigs, [], "no browser before signing in");
+  signedIn = true;
+  crew.addTask({ agent: "merchant", title: "Create passes", from: "lead" });
+  crew.addTask({ agent: "pulse", title: "Look at charts", from: "lead", browser: true });
+  crew.tick();
+  const merchant = runs.find((r) => r.agent === "merchant");
+  assert.equal(merchant.mcpConfigs.length, 1);
+  assert.ok(merchant.allowedTools.includes("mcp__roblox-browser"));
+  assert.match(merchant.prompt, /signed in to the owner's Roblox account as mxdas/);
+  assert.ok(!runs.some((r) => r.agent === "pulse"), "the second browser task waits for the first");
 });

@@ -1152,14 +1152,14 @@ local byStage: { [number]: BasePart } = {}
 
 local function moveToSaved(player: Player, character: Model)
 	local data = PlayerData.Get(player)
-	local checkpoint = data and byStage[data.Stage]
-	if checkpoint then
-		task.defer(function()
-			if character.Parent then
-				character:PivotTo(checkpoint.CFrame + Vector3.new(0, checkpoint.Size.Y / 2 + 3, 0))
-			end
-		end)
-	end
+	local found = if data then byStage[data.Stage] else nil
+	if not found then return end
+	local checkpoint: BasePart = found
+	task.defer(function()
+		if character.Parent then
+			character:PivotTo(checkpoint.CFrame + Vector3.new(0, checkpoint.Size.Y / 2 + 3, 0))
+		end
+	end)
 end
 
 local function onTouched(checkpoint: BasePart, hit: BasePart)

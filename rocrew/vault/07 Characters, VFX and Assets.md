@@ -319,3 +319,1010 @@ Web research for this page was limited (see the note at the top of References). 
     How: the ReplicatedFirst loading script preloads a list from `Config.Preload` (about 10-30 instances), with a timeout so a slow asset never blocks the game for more than 5 s.
     Done right: The first collect plays its chime and sparkle instantly.
     Done wrong: A 40 s loading screen that preloads every asset in the game.
+
+## Step by step
+
+### Adding a new effect in 9 steps
+
+1. Write the effect's job in one line ("tells the player they got coins", "warns of the boss slam") and pick its tier or recipe below.
+2. Build the template: an anchored, invisible holder Part (`Transparency = 1`, `CanCollide`, `CanTouch` and `CanQuery` off, size 1 x 1 x 1) with Attachments, emitters, beams, lights and a Sound as needed.
+3. Set every emitter's `Enabled = false` (for bursts) and an `EmitCount` attribute.
+4. Set colors from `Config.Colors` (rule 17) and the size and transparency curves from the recipe (rule 16).
+5. Put the template in `ReplicatedStorage.Assets.VFX` with a clear name.
+6. Wire it: the server fires `PlayVFX(name, cframe)`, or the client plays it directly for its own actions (rule 14).
+7. Test in Play at 10, 40 and 120 studs, on the Device Emulator phone preset and at graphics quality 1.
+8. Check the budget (rule 15): count particles at peak with the effect playing 5 times at once.
+9. Register it (`cli.mjs asset add --kind vfx --name "LevelUp" --tags reward,vfx`) and note it in the handoff.
+
+### Adding an NPC in 10 steps
+
+1. Write the NPC's role (shop, quest, enemy, ambient), name and zone in `plan.md`.
+2. Pick the silhouette prop, signature color and icon (rule 4).
+3. Build it from a HumanoidDescription (Luau section) or the Rig Builder, on the game's rig type (rule 1).
+4. Stationary? Anchor the HumanoidRootPart and turn off unused Humanoid states (rule 3).
+5. Add the BillboardGui name tag and, for quests, the "!" icon.
+6. Add an idle animation (2-4 s loop) published to the experience owner (rule 8), with 2-3 variants for crowds (rule 13).
+7. Add a ProximityPrompt (`ActionText` "Talk" or "Shop", `MaxActivationDistance` 8-10, `HoldDuration` 0) or a touch pad.
+8. Add a short voice-like blip or greeting sound (UI group, 0.2-0.5 s).
+9. Put the NPC model in `ServerStorage.Assets.NPCs` (server-spawned) or the zone's model with `ModelStreamingMode = Atomic` so it arrives whole [25].
+10. Test: find the NPC from the zone entrance without UI help, talk to it on a phone, and check its name reads at 30 studs.
+
+### Importing a Blender mesh in 12 steps
+
+1. Confirm the scale convention in `decisions.md` (rule 35). If there isn't one, run the test cube first.
+2. Model to the budget (rules 36-37). Delete hidden faces.
+3. Apply all transforms. Set the origin at the pivot (rule 40).
+4. Name objects with the kit convention.
+5. UV-unwrap and bake maps (color, normal, roughness, metalness) at the budget size, normals OpenGL-style.
+6. Export FBX with selected objects only (plus the Armature for rigs).
+7. In Studio, open Import 3D (File menu, or the Home or Avatar tab), choose the file and read the preview's warnings.
+8. Check the preview size against the test cube convention and the orientation.
+9. Import. Set anchoring, collision fidelity and collision flags (rule 41).
+10. Add a SurfaceAppearance with the uploaded maps if the asset is PBR (rule 38), or set `Color` and `Material` for stylized assets.
+11. Check it in place at quality 1 and quality 10, and next to the 5-stud dummy for scale.
+12. Save as a template in the asset folders, register it, and note triangles and textures in the handoff.
+
+### Bringing in an AI-generated texture or image in 10 steps
+
+1. Write the brief: what it's for (icon, tiling texture, decal, sky panel), target size, palette and style words from `plan.md`.
+2. Generate with `node studio/cli.mjs image --prompt "…" --out games/<slug>/art/<name>.png --aspect 1:1`.
+3. Save the prompt alongside it (`<name>.prompt.txt`).
+4. Post-process (rule 44): crop, resize to a power of two, remove the background or fix seams.
+5. Check it against the palette and the style references. Regenerate if it drifts.
+6. Send it to Review with one clear question (`--review` on the image command, or `cli.mjs review`).
+7. On approval, ask the owner to upload it to the owning account or group (rule 45).
+8. Register the returned id with `cli.mjs asset add` and put it in `Config.Assets`.
+9. Apply it in Studio (ImageLabel, Decal, SurfaceAppearance or MaterialVariant) and test in Play at quality 1 and 10.
+10. Check that moderation has approved it (the image shows for a second test account, not just in your own Studio session).
+
+### Vetting a Creator Store model in 8 steps
+
+1. Prefer assets made by Roblox or verified creators, with no scripts, in the game's art style.
+2. Insert in edit mode (never during Play).
+3. Move it into `ServerStorage.Assets.Quarantine` immediately.
+4. Disable every script inside and run the scanner (Luau section).
+5. Read every script. Delete it unless you can explain every line. Default: delete all scripts in decorative models (rule 32).
+6. Check budgets: parts, unions, textures and collision (rule 33).
+7. Recolor to the palette, anchor, set collision flags, and save it as a template.
+8. Register it, noting the source asset id, and tell Reviewer in the handoff that it passed the scan.
+
+### Scoring a zone in 7 steps
+
+1. Pick the zone's music track (Roblox-provided or owner-uploaded, rule 30) and loop length (60-180 s).
+2. Pick 2-3 ambient loops (wind, birds, lava bubbling) as positional sounds at their sources, with `InverseTapered` rolloff and `RollOffMaxDistance` 50-120.
+3. Add sound beacons at the zone's key objectives ([[06 World and Look]] rule 54).
+4. Set the music in `Config.Zones[id].Music` so the zone controller crossfades to it (rule 29).
+5. Check levels: walk the zone with music, ambience and SFX together. Gameplay SFX must stay clearly louder than music.
+6. Check the music toggle mutes music only.
+7. Note track sources in the asset registry.
+
+## Character and rig specs
+
+| Item | Spec (targets) | Notes |
+|---|---|---|
+| Player rig | R15 (default) or R6 (deliberate) | Locked in avatar settings (rule 1) |
+| Default avatar height | about 5 studs | Community measurements [12], [13]; scales up to about 105% height [8], [9] |
+| Test dummies | 5-stud and 6-stud | Rig Builder; kept in `ServerStorage.Assets.Dev` |
+| Combat hitbox | 4 x 5.5 x 3 box welded to root | Equal for all avatars (rule 2) |
+| Active Humanoid NPCs near players | at most about 20 | Anchored stationary NPCs don't count much |
+| NPC name tag | BillboardGui 6 x 1.5 studs, offset 3.5 up, `MaxDistance` 60 | `LightInfluence` 0 |
+| Quest icon | 2 x 2 studs, accent color, bobbing 0.5 studs over 1.2 s | Only while a quest is available |
+| Pet size | 1.5-3 studs tall (small), 3-5 (large) | Never taller than the player in hubs |
+| Pet follow | Lerp toward an offset 3-5 studs behind and to the side | Client-side (rule 6) |
+| Pets per player shown | 3-6 | Others hidden past 60 studs |
+| Non-humanoid creature | AnimationController + Animator | No Humanoid |
+
+## Animation specs
+
+| Animation | Length | Priority | Loop | Notes |
+|---|---|---|---|---|
+| Idle | 2-4 s | Idle | Yes | 2-3 variants for crowds |
+| Walk or run replacement | 0.6-1 s cycle | Movement | Yes | Via the `Animate` script (rule 12) |
+| Light attack | 0.3-0.6 s | Action | No | Hit marker, 0.05 s fade in |
+| Heavy attack or ability | 0.6-1.2 s | Action2 | No | Longer anticipation, shows a telegraph |
+| Hit reaction | 0.2-0.35 s | Action3 | No | Interrupts attacks |
+| Stun or knockdown | 0.6-1.5 s | Action3 | No | Pairs with a Camera blur for the victim |
+| Emote | 2-6 s | Action | Often | Cancels on movement |
+| Tool use (swing, cast, fish) | 0.4-1 s | Action | No | Marker for the effect |
+| Celebrate (reward, win) | 1-2 s | Action2 | No | Optional, never blocks input more than 1 s |
+| NPC talk | 1.5-3 s | Action | Yes | Plays while a dialog is open |
+
+## VFX recipes
+
+All values are this studio's starting targets. "Emit" means `Enabled = false` plus `Emit(n)` from the player script (the `EmitCount` attribute). Size and Transparency are NumberSequences written as `time: value` pairs. Speed, Lifetime and RotSpeed are NumberRanges written as `min-max`. Textures: use the engine's default sparkle texture (`rbxasset://textures/particles/sparkles_main.dds`) or smoke texture (`rbxasset://textures/particles/smoke_main.dds`) for prototypes, then switch to uploaded, on-style textures.
+
+### Coin burst (pickup)
+
+| Property | Value |
+|---|---|
+| EmitCount | 12 |
+| Lifetime | 0.4-0.7 |
+| Speed | 12-20 |
+| SpreadAngle | 180, 180 |
+| Acceleration | 0, -30, 0 |
+| Drag | 3 |
+| Size | 0: 0.6 · 0.2: 0.8 · 1: 0 |
+| Transparency | 0: 0 · 0.7: 0 · 1: 1 |
+| Color | `#FFD54A` → `#FFB300` |
+| LightEmission / LightInfluence | 0.8 / 0 |
+| RotSpeed | -180 to 180 |
+| Sound | Collect chime, SFX group, PlaybackSpeed 1.0 ± 8% (rule 27) |
+
+### Ambient sparkle (on collectibles and rare items)
+
+| Property | Value |
+|---|---|
+| Rate | 4-8 |
+| Lifetime | 1-1.5 |
+| Speed | 0.5-1 |
+| Shape / ShapeStyle | Box / Surface (covers the item) |
+| Size | 0: 0 · 0.3: 0.35 · 1: 0 |
+| Transparency | 0: 0.2 · 1: 1 |
+| Color | Accent or rarity color |
+| LightEmission / LightInfluence | 1 / 0 |
+| RotSpeed | -90 to 90 |
+
+### Level-up pillar
+
+| Part | Values |
+|---|---|
+| Column emitter | Shape Cylinder, ShapeStyle Surface, EmissionDirection Top, EmitCount 40, Lifetime 0.6-0.9, Speed 18-24, Size 0: 0.4 · 1: 0, Color `#FFF3A0` → `#FFC400`, LightEmission 1 |
+| Ring emitter | Shape Disc, ShapeInOut Outward, EmitCount 24, Lifetime 0.4-0.6, Speed 14-18, SpreadAngle 0, 0, Size 0: 0.5 · 1: 0 |
+| Flash light | PointLight Range 16, Brightness 3, Shadows off, tween Brightness to 0 over 0.4 s |
+| Screen | Optional Camera ColorCorrection Brightness +0.1 for 0.15 s |
+| Sound | Level-up stinger, music ducked to 50% for 1.5 s (rule 29) |
+
+### Hit spark
+
+| Property | Value |
+|---|---|
+| EmitCount | 6-10 |
+| Lifetime | 0.12-0.25 |
+| Speed | 25-40 |
+| SpreadAngle | 60, 60 |
+| Orientation | VelocityParallel |
+| Size | 0: 0.3 · 1: 0 |
+| Color | `#FFFFFF` → `#FFE08A` |
+| LightEmission / LightInfluence | 1 / 0 |
+| Extra | Highlight flash on the target (rule 21), hitstop 0.04-0.06 s on the attacker's track (Luau section), hit sound |
+
+### Dust puff (landing, footstep, drop, dash start)
+
+| Property | Value |
+|---|---|
+| EmitCount | 6-10 |
+| Lifetime | 0.5-0.9 |
+| Speed | 3-6 |
+| SpreadAngle | 80, 10 (flat) |
+| Acceleration | 0, 2, 0 |
+| Drag | 4 |
+| Size | 0: 0.8 · 1: 2.5 |
+| Transparency | 0: 0.4 · 1: 1 |
+| Color | Ground color from the zone palette (for example `#CDBA96`) |
+| Texture | Smoke |
+| LightEmission / LightInfluence | 0 / 1 |
+
+### Smoke column (chimney, crashed ship, campfire)
+
+| Property | Value |
+|---|---|
+| Rate | 3-6 |
+| Lifetime | 4-6 |
+| Speed | 2-3 |
+| SpreadAngle | 10, 10 |
+| Acceleration | 0.5, 1, 0 (drift) |
+| Size | 0: 2 · 1: 8 |
+| Transparency | 0: 0.6 · 0.2: 0.4 · 1: 1 |
+| RotSpeed | -20 to 20 |
+| Color | `#9A9A9A` (light smoke) or `#3A3A3A` (dark) |
+| LightEmission / LightInfluence | 0 / 1 |
+
+### Stylized fire
+
+| Part | Values |
+|---|---|
+| Flame emitter | Rate 20-30, Lifetime 0.6-1, Speed 3-5, SpreadAngle 10, 10, Acceleration 0, 4, 0, Size 0: 1.6 · 1: 0.2, Transparency 0: 0.2 · 0.7: 0.4 · 1: 1, Color `#FFF1A0` → `#FF8A00` → `#C2300A`, LightEmission 1, LightInfluence 0 |
+| Embers emitter | Rate 3, Lifetime 1.5-2.5, Speed 4-7, SpreadAngle 25, 25, Size 0.15 constant, Color `#FFB347`, LightEmission 1 |
+| Light | PointLight Range 14, Brightness 1.5, Color `#FF9A3C`; the client flickers Brightness between 1.2 and 1.8 every 0.1 s. Shadows only if it's the scene's hero light [21] |
+| Sound | Crackle loop, Ambient group, InverseTapered, max distance 40 |
+
+### Magic aura (equipped rare item or buff)
+
+| Property | Value |
+|---|---|
+| Rate | 10 |
+| Lifetime | 1-1.4 |
+| Speed | 1-2 |
+| Shape / ShapeStyle | Cylinder / Surface, around the character |
+| EmissionDirection | Top |
+| Size | 0: 0.2 · 0.5: 0.4 · 1: 0 |
+| Color | Rarity color |
+| LightEmission / LightInfluence | 1 / 0 |
+| VelocityInheritance | 0.5 |
+| Budget | Hidden past 60 studs; off in Reduced effects |
+
+### Portal swirl
+
+| Part | Values |
+|---|---|
+| Swirl emitter | Shape Disc, ShapeInOut Inward, Rate 40, Lifetime 0.8-1.2, Speed 4-6, Size 0: 0.5 · 1: 0, RotSpeed 90-180, Color `#7FE0FF` → `#B57BFF`, LightEmission 1 |
+| Ring | Neon torus mesh in the portal color, slowly rotating (client tween, 6 s per turn) |
+| Sound | Hum loop (Ambient, max 40) and a whoosh on use |
+
+### Guide arrow Beam
+
+| Property | Value |
+|---|---|
+| Width0 / Width1 | 1.5 / 1.5 |
+| Texture | Uploaded arrow strip |
+| TextureMode / TextureLength / TextureSpeed | Wrap / 3 / 1.5 |
+| FaceCamera | true |
+| Segments | 20 |
+| LightEmission / LightInfluence | 1 / 0 |
+| Color | Accent |
+| Transparency | 0: 0.7 · 0.15: 0.1 · 0.85: 0.1 · 1: 0.8 |
+
+### Laser or tether Beam
+
+| Property | Value |
+|---|---|
+| Width0 / Width1 | 0.4 / 0.4 (tether 0.25 / 0.15) |
+| TextureMode / TextureSpeed | Stretch / 2 |
+| FaceCamera | true |
+| Segments | 1 (straight) or 10 (tether with CurveSize 2-4) |
+| LightEmission / LightInfluence | 1 / 0 |
+| Color | Weapon or team color; hazard hue for enemy lasers |
+| Lightning variant | Segments 12, the client randomizes CurveSize0 and CurveSize1 between -3 and 3 every 0.05 s for 0.3 s |
+
+### Sword swing Trail
+
+| Property | Value |
+|---|---|
+| Attachments | Blade base and tip, 2-4 studs apart |
+| Lifetime | 0.18 |
+| MinLength | 0.1 |
+| WidthScale | 0: 1 · 1: 0 |
+| Transparency | 0: 0.2 · 1: 1 |
+| Color | `#FFFFFF` → weapon color |
+| LightEmission | 0.7 |
+| FaceCamera | false |
+| Enabled | Only between the swing and recovery markers (rule 20) |
+
+### Dash or speed Trail
+
+| Property | Value |
+|---|---|
+| Attachments | On the HumanoidRootPart, offsets (0, 1.2, 0) and (0, -1.2, 0) |
+| Lifetime | 0.3 |
+| Transparency | 0: 0.5 · 1: 1 |
+| WidthScale | 0: 1 · 1: 0.2 |
+| Color | Accent or ability color |
+| LightEmission | 0.5 |
+| Extra | FieldOfView +8 for 0.2 s ([[06 World and Look]] rule 59), whoosh sound |
+
+### Heal
+
+| Property | Value |
+|---|---|
+| EmitCount | 16-24 |
+| Shape | Disc around the feet |
+| Lifetime | 0.8-1.1 |
+| Speed | 3-5 |
+| Acceleration | 0, 2, 0 |
+| Texture | Uploaded plus sign |
+| Color | `#6CFF8A` |
+| LightEmission / LightInfluence | 0.6 / 0 |
+| Sound | Soft rising chime |
+
+### Confetti (win, big purchase thank-you)
+
+| Property | Value |
+|---|---|
+| Emitters | 3-4, one color each (a ColorSequence changes over lifetime, not per particle) |
+| EmitCount | 15 per emitter, in two bursts 0.3 s apart |
+| Lifetime | 2-3 |
+| Speed | 30-45 |
+| SpreadAngle | 25, 25 (upward) |
+| Acceleration | 0, -25, 0 |
+| Drag | 1.5 |
+| RotSpeed | -360 to 360 |
+| Size | 0.3 constant |
+| LightEmission / LightInfluence | 0 / 1 |
+
+### Water splash
+
+| Property | Value |
+|---|---|
+| EmitCount | 20 |
+| Lifetime | 0.5-0.8 |
+| Speed | 12-18 |
+| SpreadAngle | 25, 25 |
+| Acceleration | 0, -60, 0 |
+| Size | 0: 0.4 · 1: 0.1 |
+| Transparency | 0: 0.2 · 1: 1 |
+| Color | `#E6FBFF` |
+| LightEmission | 0.3 |
+| Sound | Splash, SFX group, max distance 50 |
+
+### Stylized explosion (no physics)
+
+Build explosions from emitters (a 0.15 s white flash core, an orange fireball with 0.3-0.5 s lifetime, a dust ring and smoke) rather than an `Explosion` instance. An `Explosion` applies blast pressure and can break joints. If you do use one for its look, set `BlastPressure = 0` and `DestroyJointRadiusPercent = 0` and let the server apply damage separately.
+
+## Reward tiers
+
+Tier colors here are placeholders. Use the rarity colors in [[03 Rarity and RNG]] when they differ.
+
+| Tier | Color | Duration | Visuals | Sound | Extra |
+|---|---|---|---|---|---|
+| Common | `#B0B7C3` | 0.3 s | Small burst, 8 particles | Soft pop | none |
+| Uncommon | `#4CD964` | 0.4 s | Burst 14 + ring | Pop + chime | none |
+| Rare | `#2D9CFF` | 0.8 s | Burst 24, ring, short pillar | Bright chime | PointLight flash |
+| Epic | `#A65BFF` | 1.2 s | Pillar, ring, sparkles orbiting 1 s | Chime + whoosh | Camera shake 0.1 studs, music duck |
+| Legendary | `#FFB020` | 2 s | Screen dims to 60% for 0.4 s, gold pillar, confetti | Choir hit | Shake 0.2, toast to the server |
+| Mythic | `#FF3B6B` | 2.5 s | Dim, double pillar, rotating rays (Beams), confetti | Unique stinger | Shake 0.3, server-wide announcement |
+| Secret | Rainbow cycle | 3 s | Everything above, color cycling | Unique stinger + reverse cymbal | Global announcement ([[10 Retention and Social]]) |
+
+Rules: the server decides the tier, and the client only plays it. Players can skip anything over 1 s with a tap after the first reveal. Reduced effects mode keeps the sound and the color but drops the dimming, shake and confetti.
+
+## Audio specs
+
+### SoundGroups
+
+| Group | Starting volume | Contents | Player setting |
+|---|---|---|---|
+| Music | 0.35 | Zone tracks, menu theme | Toggle + slider |
+| SFX | 0.6 | Gameplay sounds, rewards, combat | Slider |
+| UI | 0.5 | Clicks, opens, errors | Follows SFX or own slider |
+| Ambient | 0.4 | Wind, water, crowds, beacons | Follows SFX |
+
+### Sound list every game needs
+
+| Sound | Length | Group | Positional? | Notes |
+|---|---|---|---|---|
+| Button click | 0.05-0.15 s | UI | No | Soft, varied pitch |
+| Open / close panel | 0.1-0.25 s | UI | No | Paired up/down sounds |
+| Error / can't afford | 0.2-0.4 s | UI | No | Low and soft |
+| Collect | 0.1-0.3 s | SFX | Local: no; others: yes | Rising pitch on streaks |
+| Purchase success | 0.4-0.8 s | UI | No | Satisfying "cha-ching" |
+| Level up | 0.8-1.5 s | SFX | No | Ducks music |
+| Hatch / open reveal | per tier | SFX | No | Escalates by tier |
+| Hit / take damage | 0.1-0.3 s | SFX | Yes, max 60 | 3 variants |
+| Footsteps | 0.1-0.2 s | SFX | Yes, max 40 | Per ground material if possible |
+| Gate unlock | 0.6-1.2 s | SFX | Yes, max 80 | Big and celebratory |
+| Warning / telegraph | 0.4-1 s | SFX | Yes, max 80, Linear | Rising pitch |
+| Ambient loop | 20-60 s loops | Ambient | Yes, 50-120, InverseTapered | Per zone |
+| Zone music | 60-180 s loops | Music | No | Crossfade 2 s |
+
+## Creator Store and model safety
+
+| Red flag | Why it matters |
+|---|---|
+| `require(1234567)` (a number) | Loads a module by asset id: code you can't see, which its author can change |
+| `getfenv`, `setfenv`, `loadstring` | Environment tampering and running code from strings |
+| `string.char`, `string.reverse`, `\104\101` escapes, huge single lines | Obfuscation |
+| `HttpService`, `TeleportService`, `InsertService`, `MarketplaceService` prompts | Network calls, teleporting players away, loading assets, selling someone else's items |
+| Scripts in odd places or with odd names (in a tree, named like a Weld, blank names) | Hiding |
+| `PlayerAdded` handlers in a decorative model | Admin grants and backdoors |
+| A model that asks you to enable HTTP requests or LoadStringEnabled | Never do it for an asset |
+
+A scanner hit is a reason to read the script, not proof of malice. An unexplained hit means delete. Reviewer re-runs the scan on the whole place before ship.
+
+**Choosing store assets:** prefer models by Roblox or verified creators, with no scripts, matching the art style, under the budgets. Read the description and the asset's comments if any. A model with an unusually high part count for its size is usually unoptimized. Once a model is kept, the library entry records its source id so it can be checked again later.
+
+## Blender pipeline specs
+
+| Item | Spec (targets) |
+|---|---|
+| Scale | Locked by the test cube (rule 35), written in decisions |
+| Triangles | Hero 10,000, medium 2,000, small 500 per mesh; engine limit about 20,000 |
+| Textures | Hero 1024, props 512, details 256; shared atlases for kits |
+| Maps | Color, normal (OpenGL Y+), roughness, metalness [1] |
+| Origin | Bottom center (props), grip (tools), hinge (doors), root (characters) |
+| Transforms | Applied (all) |
+| Names | `Kit_Wall_4x8`, `Prop_Barrel_A`, `Tool_Sword_Gold` |
+| Export | FBX, selected objects only (+ Armature for rigs) |
+| Import | Import 3D, read the warnings, check scale and orientation |
+| After import | Anchor, collision fidelity, collision flags, `CastShadow` off on small details, template saved |
+| Variants | One template per look; no runtime map swaps (rule 38) |
+| Kit grid | Footprints in multiples of 4 studs so pieces snap with 1-stud or 4-stud grid snapping |
+
+## AI art pipeline
+
+**Prompt template:**
+
+```
+<style> of <subject>, <framing>, <background>, <palette>, <lighting>, <constraints>
+
+Example (tiling texture):
+Stylized hand-painted cobblestone path texture, top-down orthographic, seamless tileable,
+fills the frame edge to edge, warm grey stones #9A9A9A with moss green #6B8F3A gaps,
+soft even lighting with no cast shadows, no text, no logos, square.
+
+Example (UI icon):
+Cute chunky 3D game icon of a golden egg with a glowing crack, centered, 10% padding,
+plain solid #00FF00 background for removal, bold rim light, saturated warm colors,
+no text, no logos, square.
+```
+
+| Output | Size | Format | Must check |
+|---|---|---|---|
+| UI icon | 512 x 512 (shown at 64-128 px) | PNG with real alpha | Reads at 48 px on a phone; no fake checkerboard |
+| Tiling texture | 512 or 1024 square | PNG | Tiles 3 x 3 without seams |
+| Decal / sign art | 512 or 1024 | PNG | Legible at 40 studs |
+| Sky panel | 1024 per face | PNG | Six faces match at the edges (hard to get from AI; prefer store or Roblox skies) |
+| SurfaceAppearance color map | Budget size | PNG | Matches the mesh UVs (usually needs Blender baking, not raw AI output) |
+| Thumbnail and icon | See [[11 Thumbnails, Icons and the Store Page]] | | |
+
+**What AI art is good for:** icons, decals, signs, posters, UI ornaments, concept images to brief Blender work, and stylized tiling textures. **What it's bad at:** UV-matched textures for specific meshes, consistent multi-face skyboxes, normal maps, and anything with text (render text in the UI instead).
+
+## Asset organization
+
+```
+ReplicatedStorage.Assets      (Librarian; clients can see and clone these)
+  VFX/            CoinBurst, LevelUp, HitSpark, Reveal_<Tier> ...
+  Sounds/         UI/, SFX/, Music/, Ambient/
+  Animations/     Animation instances with AnimationId set (ids also in Config.Animations)
+  Pets/           client-rendered pet models (rule 6)
+  Models/         client-cloned props and previews
+  UI/             image templates used by Frame
+ServerStorage.Assets          (Librarian; server only)
+  NPCs/  Enemies/  Drops/  Tools/  Maps/
+  Dev/            test dummies, debug props (never in the live map)
+  Quarantine/     newly inserted store models awaiting the scan
+SoundService                  Music, SFX, UI, Ambient (SoundGroups)
+MaterialService               MaterialVariants ([[06 World and Look]] rule 41)
+```
+
+Naming: PascalCase, type first for kits (`Kit_`, `Prop_`, `Tool_`, `Pet_`, `Reveal_`), then the variant. Every reusable asset is registered with `node studio/cli.mjs asset add --kind <model|vfx|audio|image|animation> --name "…" --roblox-id <id> --tags a,b`.
+
+## Examples from top games
+
+### A guide that's an effect, not a character
+**Game:** Doors ([26])
+**Shows:** Guiding Light, the Hotel's guide entity, narrates and uses glowing blue particles to point players toward their next move.
+**Why it works:** A particle guide can go anywhere, never blocks the path and fits a dark horror world where a human NPC would break the mood.
+**Steal:** A signature guide effect with its own color, used only for help, so players learn "blue sparkles = the way".
+**Avoid:** Using the guide's color for decoration or enemies, which breaks the meaning.
+
+### Hints that highlight the hidden thing
+**Game:** Doors ([26])
+**Shows:** Guiding Light can highlight hidden keys when players are having trouble finding them.
+**Why it works:** The effect solves a frustration (a pixel hunt) without removing the search for players who find the key on their own.
+**Steal:** A delayed Highlight or sparkle on the hidden objective after a stuck timer (rule 21, [[06 World and Look]] rule 53).
+**Avoid:** Highlights that are on from the start, which turn every search into following an outline.
+
+### Effects that carry the player through a chase
+**Game:** Doors ([26])
+**Shows:** During Seek's chase, Guiding Light lights up the path.
+**Why it works:** In a high-stress moment the effect makes the right choice readable at a glance.
+**Steal:** In chases and timed sections, light the correct route with the guide effect and keep wrong routes dark.
+**Avoid:** Chase sequences where the correct door is visually identical to dead ends.
+
+### One guide effect reused across floors
+**Game:** Doors ([26], [29])
+**Shows:** The DOORS Wiki lists Guiding Light on Floor 1 (the Hotel) and in The Mines.
+**Why it works:** New content keeps the same help language, so returning players don't have to relearn what the guide looks like.
+**Steal:** Keep guidance effects, UI feedback and reward effects as shared templates (rule 42) that every new zone or update reuses.
+**Avoid:** Re-inventing the guide effect for each update.
+
+### The player's light is the key tool
+**Game:** Doors ([27], [28])
+**Shows:** Doors is a horror game built around dark rooms, and its wiki has pages for light-source items such as the Shakelight.
+**Why it works:** When darkness is the threat, the light the player carries is both a tool and a VFX moment.
+**Steal:** Make the player's light an item with a strong visual identity (a SpotLight with shadows, a beam cone, a recharge animation), budgeted as the scene's hero light (rule 23).
+**Avoid:** A flat, shadowless light that doesn't change how the room looks.
+
+### Named shopkeepers give shops a face
+**Game:** Grow a Garden ([32], [33])
+**Shows:** Guides name the NPC who runs the Seed Shop and the NPC who manages gear sales, with the two shops on opposite sides of the map.
+**Why it works:** Players say "go to the seed guy". A named character turns a menu into a place and makes updates feel like news ("new stock from the gear NPC").
+**Steal:** Every shop gets a named NPC with a silhouette prop and a name tag (rule 4).
+**Avoid:** Shops that are just a floating button on a box.
+
+### One item, many visible tiers
+**Game:** Grow a Garden ([30], [31])
+**Shows:** Gear guides list sprinklers in tiers (Basic, Godly, Master and others) at very different prices.
+**Why it works:** Tiered versions of the same item are an easy content ladder, and each tier needs to look like its price.
+**Steal:** One base mesh with tier variants: color and material per tier, more particles and glow at higher tiers, and a distinct sound on placement. Separate templates per tier (rule 38).
+**Avoid:** Tiers that look identical, so the expensive one feels like a scam.
+
+### A central asset that visibly levels up
+**Game:** 99 Nights in the Forest ([35])
+**Shows:** Guides describe upgrading the campfire with fuel to expand the map.
+**Why it works:** The campfire is the game's heart. Its size, light and effects show how far the group has come.
+**Steal:** For base and survival games, build the central asset with 3-5 visible upgrade states (bigger model, brighter light, more particles, new sound), each a template.
+**Avoid:** Upgrades that only change a number in the UI.
+
+### Characters to rescue
+**Game:** 99 Nights in the Forest ([34])
+**Shows:** Guides explain how to find and save a lost child character in the forest.
+**Why it works:** A character in danger gives exploring a purpose and an emotional hook beyond loot.
+**Steal:** Rescue or escort NPCs with a strong silhouette, a readable state (scared, following, saved) and a sound cue that helps players find them.
+**Avoid:** Rescue targets that blend into the scenery.
+
+### Assets color-coded to a system
+**Game:** Bee Swarm Simulator ([36])
+**Shows:** The Mushroom Field is described as the first red field available to players.
+**Why it works:** Asset color carries a game system, so the art teaches the rules.
+**Steal:** Link asset colors to a system (element, rarity, team) and keep that mapping in `Config.Colors` (rule 17).
+**Avoid:** Random asset colors that suggest a system that isn't there.
+
+### Functional set pieces in the hub
+**Game:** Pet Simulator 99 ([37])
+**Shows:** The Spawn hub has a shop, a mailbox and leaderboards.
+**Why it works:** Props that are also features (a mailbox you use, a leaderboard you read) make the hub useful and recognizable.
+**Steal:** Build feature props as hero assets with their own silhouette, sound and idle effect (a mailbox flag that bobs when mail arrives).
+**Avoid:** Features that live only in menus, with no object in the world.
+
+### Miniatures reuse assets as previews
+**Game:** Natural Disaster Survival ([38])
+**Shows:** A lobby room has miniature models of four of the game's maps, used in an event quest.
+**Why it works:** Scaled-down copies of existing maps are cheap content that previews the game and gives events a place to hide things.
+**Steal:** Reuse map and zone kits as scaled dioramas in the lobby or shop (scale the model with `Model:ScaleTo`, then audit part counts).
+**Avoid:** Full-detail copies that double the part budget.
+
+### Roblox's own asset-library workflow
+**Game:** Roblox's Environmental Art curriculum and sample places ([14], [15], [16])
+**Shows:** The curriculum develops polished assets, assembles them into a central asset library (sample place with modular assets, props and custom materials) and then constructs the world from it.
+**Why it works:** One library of tested, budgeted pieces makes every zone consistent and fast to build.
+**Steal:** Follow the same three steps for every game: kit, library, assembly (rule 42).
+**Avoid:** Building zones directly from random inserts.
+
+## By genre
+
+**Simulator.** The collect effect is the core loop, so it gets the most polish: coin burst, chime with rising pitch, a number popup ([[05 UI and HUD]]). Pets are client-rendered (rule 6). Reward tiers for eggs and upgrades. Each zone has its own music and ambience. Budget particles hard: many players collect at once.
+
+**Tycoon.** Every purchase builds something with a short build effect (0.4-0.8 s: parts rise or scale in, dust puff, a "build" sound). Droppers and conveyors use simple, cheap effects (one sparkle per drop, or none). The money collect sound is the signature. Upgrade tiers change the machines' look.
+
+**Obby.** Checkpoint touch: burst, chime and a toast. Death: a short, non-gory effect (a poof and a soft sound) and a fast respawn. Hazards animate (spinning, pulsing Neon) so they read as dangerous. Trails and win effects are popular cosmetics. Footstep dust is optional.
+
+**Roleplay and life sim.** Characters and customization are the content: many accessories and clothing, applied through the server (rule 5). NPC townspeople animated on the client (rule 13). Ambient audio per district. Emotes and sit animations. Few combat effects.
+
+**Action and combat.** Animation timing and hit feedback are everything (rules 10, 11): markers, hit sparks, hitstop, Highlight flashes, camera shake of at most 0.3 studs, and 3 hit sound variants. Telegraphs for every enemy attack (rule 24). Custom hitboxes (rule 2).
+
+**Battlegrounds.** Move sets are the product: each ability has a distinct silhouette, color and sound, readable from 60 studs. Ultimates get tier-like escalation. Keep effects short (under 1.5 s) so the screen doesn't flood in 10-player fights. R6 or R15 chosen deliberately (rule 1).
+
+**Survival.** A central asset with upgrade states ([35]). Day/night ambience changes. Resource gather effects (wood chips, stone dust) by material. Creature NPCs on AnimationControllers, telegraphs for attacks, and campfire light as the hero light.
+
+**Horror.** Sound does most of the work: positional cues with tuned rolloff (rule 28), silence, sudden stingers. The player's light is a hero item ([27], [28]). Monster telegraphs are audio first. A guide effect for stuck players ([26]). Few, deliberate particles (dust in light beams, breath fog).
+
+**Tower defense.** Each tower has a distinct silhouette, an idle animation and an attack effect readable at the board's camera distance. Enemy types are distinguishable by shape and color. Hit effects are tiny and cheap because hundreds happen per wave. Upgrades change the tower's look per tier.
+
+**RNG and collection.** The reveal is the product: the reward tiers table, skippable after the first reveal, with server-wide announcements for top tiers. Collectibles have idle effects by rarity, hidden past 60 studs. The index needs consistent 3D previews or icons ([[05 UI and HUD]]).
+
+**Shooter.** Muzzle flash (a 0.05 s flash emitter and a PointLight), tracers (a Beam or short Trail), impact effects by material, and hit markers with sound. Recoil animations. Effects must never hide targets. Sound positional with Linear rolloff for gunshots so direction reads.
+
+**Racing.** Vehicle trails at speed, drift smoke (dust puff variant on the wheels), boost flames, and engine sound with PlaybackSpeed tied to speed (0.8-1.6). Checkpoint pass effect. Effects stay cheap because cars move fast across streaming areas.
+
+**Sports.** Ball trail at speed, goal celebration (confetti, crowd cheer, camera), kick and catch animations synced with markers, and a crowd ambience loop. Team colors on effects.
+
+**Party and social hangout.** Emotes, sit and dance animations, cosmetic trails and auras, and celebration effects for minigame wins. Music is central (zone and stage music). Keep effects friendly and short.
+
+**Story and puzzle.** Effects mark interactable puzzle pieces (subtle ambient sparkle in the puzzle color). Story NPCs need talk animations and clear silhouettes. Cutscene effects stay under 5 s. Music changes per chapter.
+
+**Farming and fishing.** Growth stages as separate templates with a small pop effect on each stage change. Harvest burst and sound. Fishing: a cast trail, a bobber splash, a bite telegraph (ripple and sound) and a catch reveal by rarity. Tiered tools look their tier ([30], [31]).
+
+## Luau
+
+### Animation track cache (client)
+
+```lua
+--!strict
+-- StarterPlayerScripts/Controllers/AnimationController (ModuleScript): load once per character, reuse tracks
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ANIMS = ReplicatedStorage.Assets.Animations -- Animation instances; set Priority attribute if not Action
+
+local AnimationController = {}
+local tracks: { [string]: AnimationTrack } = {}
+
+local function loadTracks(character: Model)
+	table.clear(tracks)
+	local humanoid = character:WaitForChild("Humanoid") :: Humanoid
+	local animator = humanoid:WaitForChild("Animator") :: Animator
+	for _, anim in ANIMS:GetChildren() do
+		if anim:IsA("Animation") then
+			local track = animator:LoadAnimation(anim)
+			local priority = anim:GetAttribute("Priority")
+			track.Priority = if typeof(priority) == "string"
+				then (Enum.AnimationPriority :: any)[priority]
+				else Enum.AnimationPriority.Action
+			tracks[anim.Name] = track
+		end
+	end
+end
+
+function AnimationController.play(name: string, fade: number?, speed: number?): AnimationTrack?
+	local track = tracks[name]
+	if track then
+		track:Play(fade or 0.05, 1, speed or 1)
+	end
+	return track
+end
+
+function AnimationController.Start()
+	local player = Players.LocalPlayer
+	player.CharacterAdded:Connect(loadTracks)
+	if player.Character then loadTracks(player.Character) end
+end
+
+return AnimationController
+```
+
+### Effect player (client)
+
+```lua
+--!strict
+-- StarterPlayerScripts/Controllers/VfxController (ModuleScript).
+-- Templates: anchored invisible holder Parts in ReplicatedStorage.Assets.VFX with emitters, beams, lights, sounds.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local VFX = ReplicatedStorage.Assets.VFX
+local MAX_DISTANCE = 200
+
+local VfxController = {}
+VfxController.reduced = false -- set from the player's settings
+
+function VfxController.play(name: string, cf: CFrame)
+	local camera = workspace.CurrentCamera
+	if camera and (camera.CFrame.Position - cf.Position).Magnitude > MAX_DISTANCE then return end
+	local template = VFX:FindFirstChild(name)
+	if not (template and template:IsA("BasePart")) then return end
+
+	local holder = template:Clone()
+	holder.CFrame = cf
+	holder.Parent = workspace -- parent before Emit so particles appear
+
+	local longest = 0.2
+	for _, d in holder:GetDescendants() do
+		if d:IsA("ParticleEmitter") then
+			local count = d:GetAttribute("EmitCount")
+			local n = if typeof(count) == "number" then count else 10
+			if VfxController.reduced then n = math.ceil(n / 2) end
+			d:Emit(n)
+			longest = math.max(longest, d.Lifetime.Max)
+		elseif d:IsA("PointLight") then
+			TweenService:Create(d, TweenInfo.new(0.4), { Brightness = 0 }):Play()
+		elseif d:IsA("Sound") then
+			d:Play()
+			longest = math.max(longest, d.TimeLength)
+		end
+	end
+	task.delay(longest + 0.1, function() holder:Destroy() end)
+end
+
+function VfxController.Start()
+	ReplicatedStorage.Remotes.PlayVFX.OnClientEvent:Connect(function(name: unknown, cf: unknown)
+		if typeof(name) == "string" and typeof(cf) == "CFrame" then
+			VfxController.play(name, cf)
+		end
+	end)
+end
+
+return VfxController
+```
+
+### Hitstop, hit flash and camera shake (client)
+
+```lua
+--!strict
+-- Call on the attacker's client at the "Hit" marker. Cosmetic only; the server decides damage.
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local Feel = {}
+
+function Feel.hitstop(track: AnimationTrack, seconds: number?)
+	track:AdjustSpeed(0)
+	task.delay(seconds or 0.05, function()
+		if track.IsPlaying then track:AdjustSpeed(1) end
+	end)
+end
+
+local flash = Instance.new("Highlight")
+flash.FillColor = Color3.new(1, 1, 1)
+flash.OutlineTransparency = 1
+flash.FillTransparency = 1
+flash.DepthMode = Enum.HighlightDepthMode.Occluded
+
+function Feel.flash(target: Model)
+	flash.Adornee = target
+	flash.FillTransparency = 0.3
+	flash.Parent = target
+	TweenService:Create(flash, TweenInfo.new(0.1), { FillTransparency = 1 }):Play()
+end
+
+function Feel.shake(amplitude: number, duration: number)
+	local character = Players.LocalPlayer.Character
+	local found = if character then character:FindFirstChildOfClass("Humanoid") else nil
+	if not found then return end
+	local humanoid: Humanoid = found
+	local amp = math.min(amplitude, 0.3) -- studio cap (reward tiers table)
+	local stopAt = os.clock() + duration
+	task.spawn(function()
+		while os.clock() < stopAt and humanoid.Parent do
+			humanoid.CameraOffset = Vector3.new((math.random() - 0.5) * 2 * amp, (math.random() - 0.5) * 2 * amp, 0)
+			task.wait(0.02)
+		end
+		humanoid.CameraOffset = Vector3.zero
+	end)
+end
+
+return Feel
+```
+
+### SoundGroups (edit mode) and the sound helper (client)
+
+```lua
+-- Edit mode (command bar): create the four SoundGroups once
+local SoundService = game:GetService("SoundService")
+for name, volume in { Music = 0.35, SFX = 0.6, UI = 0.5, Ambient = 0.4 } do
+	local group = SoundService:FindFirstChild(name)
+	if not group then
+		group = Instance.new("SoundGroup")
+		group.Name = name
+		group.Volume = volume
+		group.Parent = SoundService
+	end
+end
+```
+
+```lua
+--!strict
+-- ReplicatedStorage.Shared.Sfx (ModuleScript, client use): pitch variance + throttle (rule 27)
+local SoundService = game:GetService("SoundService")
+local Sfx = {}
+local lastPlayed: { [Sound]: number } = {}
+
+function Sfx.play(template: Sound, parent: Instance?, variance: number?)
+	local now = os.clock()
+	if (lastPlayed[template] or 0) > now - 0.05 then return end
+	lastPlayed[template] = now
+	local sound = template:Clone()
+	local v = variance or 0.08
+	sound.PlaybackSpeed = template.PlaybackSpeed * (1 + (math.random() * 2 - 1) * v)
+	sound.Parent = parent or SoundService -- SoundService = non-positional; a Part or Attachment = positional
+	sound.Ended:Once(function() sound:Destroy() end)
+	sound:Play()
+end
+
+return Sfx
+```
+
+### Music crossfader (client)
+
+```lua
+--!strict
+-- StarterPlayerScripts/Controllers/MusicController (ModuleScript). Tracks live in ReplicatedStorage.Assets.Sounds.Music,
+-- each with SoundGroup = Music, Looped = true and a TargetVolume attribute.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
+local TRACKS = ReplicatedStorage.Assets.Sounds.Music
+local FADE = TweenInfo.new(2, Enum.EasingStyle.Sine)
+
+local MusicController = {}
+local current: Sound? = nil
+local playing: { [string]: Sound } = {}
+
+function MusicController.playTrack(name: string)
+	local template = TRACKS:FindFirstChild(name)
+	if not (template and template:IsA("Sound")) then return end
+	local nextSound = playing[name]
+	if not nextSound then
+		nextSound = template:Clone()
+		nextSound.Parent = SoundService
+		playing[name] = nextSound
+	end
+	if nextSound == current then return end
+	local old = current
+	current = nextSound
+	if old then
+		local fading: Sound = old
+		TweenService:Create(fading, FADE, { Volume = 0 }):Play()
+		task.delay(FADE.Time, function()
+			if fading ~= current then fading:Pause() end
+		end)
+	end
+	local target = nextSound:GetAttribute("TargetVolume")
+	nextSound.Volume = 0
+	if not nextSound.IsPlaying then nextSound:Resume() end
+	TweenService:Create(nextSound, FADE, { Volume = if typeof(target) == "number" then target else 0.5 }):Play()
+end
+
+function MusicController.duck(seconds: number)
+	local group = SoundService:FindFirstChild("Music")
+	if not (group and group:IsA("SoundGroup")) then return end
+	local normal = group.Volume
+	TweenService:Create(group, TweenInfo.new(0.15), { Volume = normal * 0.5 }):Play()
+	task.delay(seconds, function()
+		TweenService:Create(group, TweenInfo.new(0.5), { Volume = normal }):Play()
+	end)
+end
+
+return MusicController
+```
+
+### NPC from a HumanoidDescription (server)
+
+```lua
+--!strict
+-- ServerScriptService/Services/NpcService (ModuleScript). Builds a stationary, cheap NPC.
+local Players = game:GetService("Players")
+local NpcService = {}
+
+function NpcService.spawnStationary(name: string, cf: CFrame, bodyColor: Color3, parent: Instance): Model
+	local desc = Instance.new("HumanoidDescription")
+	desc.HeadColor = bodyColor
+	desc.TorsoColor = bodyColor
+	desc.LeftArmColor, desc.RightArmColor = bodyColor, bodyColor
+	desc.LeftLegColor, desc.RightLegColor = bodyColor, bodyColor
+
+	local npc = Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+	npc.Name = name
+	local humanoid = npc:FindFirstChildOfClass("Humanoid") :: Humanoid
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None -- custom BillboardGui instead
+	for _, state in { Enum.HumanoidStateType.Climbing, Enum.HumanoidStateType.Swimming,
+		Enum.HumanoidStateType.FallingDown, Enum.HumanoidStateType.Ragdoll } do
+		humanoid:SetStateEnabled(state, false)
+	end
+	local root = npc:FindFirstChild("HumanoidRootPart") :: BasePart
+	root.Anchored = true
+	npc:PivotTo(cf)
+	npc.Parent = parent -- parent last
+	return npc
+end
+
+return NpcService
+```
+
+### Preload the first minute (ReplicatedFirst)
+
+```lua
+--!strict
+-- Part of the ReplicatedFirst loading LocalScript. Config.Preload lists names under ReplicatedStorage.Assets.
+local ContentProvider = game:GetService("ContentProvider")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local assets = ReplicatedStorage:WaitForChild("Assets")
+local list: { Instance } = {}
+for _, path in { "VFX/CoinBurst", "VFX/LevelUp", "Sounds/UI/Click", "Sounds/SFX/Collect" } do
+	local node: Instance? = assets
+	for part in string.gmatch(path, "[^/]+") do
+		node = if node then node:WaitForChild(part, 5) else nil
+	end
+	if node then table.insert(list, node) end
+end
+
+local done = false
+task.spawn(function()
+	ContentProvider:PreloadAsync(list)
+	done = true
+end)
+local started = os.clock()
+while not done and os.clock() - started < 5 do task.wait(0.1) end -- never block more than 5 s
+```
+
+### Quarantine scanner (command bar)
+
+```lua
+-- Edit mode. Lists every script in Quarantine with flags. A hit means read it; unexplained means delete.
+local target = game:GetService("ServerStorage").Assets.Quarantine
+local FLAGS = { "require%s*%(%s*%d", "getfenv", "setfenv", "loadstring", "string%.char", "string%.reverse",
+	"\\%d%d%d", "HttpService", "TeleportService", "InsertService", "MarketplaceService", "PlayerAdded" }
+local count = 0
+for _, d in target:GetDescendants() do
+	if d:IsA("LuaSourceContainer") then
+		count += 1
+		if d:IsA("BaseScript") then d.Enabled = false end
+		local src: string = (d :: any).Source -- readable from Studio, not from game scripts
+		local hits, longest = {}, 0
+		for _, pattern in FLAGS do
+			if string.find(src, pattern) then table.insert(hits, pattern) end
+		end
+		for line in string.gmatch(src, "[^\n]+") do longest = math.max(longest, #line) end
+		warn(d:GetFullName(), d.ClassName, #src .. " chars", "longest line " .. longest,
+			#hits > 0 and ("FLAGS: " .. table.concat(hits, ", ")) or "no flags")
+	end
+end
+print(count, "scripts found in Quarantine")
+```
+
+## Checklist
+
+- [ ] The rig type is written in `plan.md` and set in the avatar settings.
+- [ ] Doors, seats and hitboxes are tested with a 6-stud dummy (or scales are clamped).
+- [ ] Stationary NPCs are anchored with unused states off; Humanoid NPCs near players stay at about 20 or fewer.
+- [ ] Every job NPC has a silhouette prop, signature color and a name tag readable at 30 studs.
+- [ ] Cosmetics are applied through the server with `ApplyDescription`.
+- [ ] Pets and companions are rendered by clients.
+- [ ] Every Animation is owned by the experience owner (or Roblox) and plays in a Play session of the published place.
+- [ ] Tracks are loaded once per character; priorities are set per the animation specs table.
+- [ ] Hit effects are synced to animation markers; the server decides damage.
+- [ ] All cosmetic VFX are spawned on clients from `ReplicatedStorage.Assets.VFX` templates.
+- [ ] Effects meet the budgets (bursts ≤ 60, ambient Rate ≤ 20, a Reduced effects setting exists).
+- [ ] Effect colors come from `Config.Colors`; no hazard hue on rewards.
+- [ ] Reward tiers escalate and anything over 1 s is skippable.
+- [ ] Trails are enabled only during motion; Highlights stay well under 31.
+- [ ] Every Sound has a SoundGroup; music and SFX can be muted separately and the setting saves.
+- [ ] Every player action has a sound; repeated sounds vary in pitch and are throttled.
+- [ ] Gameplay-critical 3D sounds use Linear rolloff with a set max distance.
+- [ ] Music crossfades per zone and ducks under big stingers.
+- [ ] Every audio asset is Roblox-provided, owner-uploaded or shared with the experience, and noted in the registry.
+- [ ] Every inserted model was quarantined and scanned; no unexplained scripts remain.
+- [ ] No `require(<number>)`, `getfenv`, `setfenv` or `loadstring` anywhere in the place.
+- [ ] Imported meshes match the scale convention and the triangle and texture budgets.
+- [ ] SurfaceAppearance variants are separate templates; no runtime map changes.
+- [ ] AI images were reviewed and approved, post-processed, uploaded by the owner and registered.
+- [ ] Every reusable asset is in the agreed folders with a clear name and registered with `cli.mjs asset add`.
+- [ ] First-minute assets are preloaded with a 5 s cap.
+
+## Common mistakes
+
+- Calling `LoadAnimation` every time an attack plays.
+- Animations owned by a personal account in a group game, so they silently don't play.
+- Every animation left at Core priority, so walking overrides attacks.
+- Effects timed to the button press instead of the contact frame.
+- Server-created particles for every coin, flooding replication.
+- Particles that pop out at full size instead of fading.
+- `LightEmission = 1` on smoke, so it glows like neon.
+- The same sparkle for common and legendary rewards.
+- Long unskippable reveal sequences on the 50th egg.
+- Trails left on permanently, smearing across the map on respawn.
+- A Highlight on every enemy, hitting the 31 limit.
+- Screen tints put in Lighting, so everyone flashes red when one player is hit.
+- Music louder than gameplay sounds, with no way to mute it.
+- The same click sound at the same pitch fifty times a second.
+- Uploading music without the rights to it.
+- Free models trusted because they "look fine", with scripts never opened.
+- Huge, unoptimized store or AI-generated meshes with precise collision used as background decoration.
+- A 1024 texture on every small prop.
+- Trying to change SurfaceAppearance maps from a script at runtime.
+- AI images with fake checkerboard transparency, or text baked into them.
+- Assets uploaded to an agent's or crew member's account instead of the experience owner's.
+- Lookalike characters or items copied from another game.
+
+## References
+
+Research note: this page's web research was cut short when the session's shared web search limit ran out, so it reuses sources from searches done for [[06 World and Look]]. Core API details for ParticleEmitter, Beam, Trail, Animator, Sound and the Creator Store are written from the crew's knowledge of the engine without a citation. Verify them in Studio and add citations in a later research pass.
+
+[1] PBR textures (SurfaceAppearance guide) — https://create.roblox.com/docs/en-us/art/modeling/surface-appearance.md — the four supported maps, entered as asset ids in the Properties window.
+[2] SurfaceAppearance class — https://create.roblox.com/docs/en-us/reference/engine/classes/SurfaceAppearance — AlphaMode, emissive properties; rendering varies by device and quality.
+[3] SurfaceAppearance API reference (developer.roblox.com) — https://developer.roblox.com/api-reference/class/SurfaceAppearance — ColorMap is the albedo; most properties can't be changed by scripts.
+[4] Surface appearances (developer article) — https://developer.roblox.com/en-us/articles/surface-appearances — the original PBR article covering the same maps.
+[5] SurfaceAppearance (robloxapi.github.io) — https://robloxapi.github.io/ref-temp/class/SurfaceAppearance.html — map properties are plugin-security, with a changelog of security changes.
+[6] Materials — https://create.roblox.com/docs/en-us/parts/materials.md — MaterialVariant vs SurfaceAppearance; the Material Manager.
+[7] MaterialVariant — https://create.roblox.com/docs/en-us/reference/engine/classes/MaterialVariant — lives under MaterialService; global or per-part use.
+[8] R15 scaling announcement thread — https://devforum.roblox.com/t/r15-scaling-avatar-game-join/30724 — avatar scaling ranges at launch.
+[9] Body scaling (Roblox Wiki) — https://roblox.fandom.com/wiki/Body_scaling — height and width scaling caps.
+[10] R15 (Roblox Wiki) — https://roblox.fandom.com/wiki/R15 — the R15 rig.
+[11] Should I Restrict Game to R15? — https://devforum.roblox.com/t/should-i-restrict-game-to-r15/450516 — design for the largest R15; custom scaling can be turned off.
+[12] Fetch Player Height — https://devforum.roblox.com/t/fetch-player-height/2205072 — community figures for avatar height in studs.
+[13] R15 Character Scaling (thread, page 2) — https://devforum.roblox.com/t/r15-character-scaling/30642?page=2 — developer discussion and measurements of R15 scaling.
+[14] Environmental art curriculum — https://create.roblox.com/docs/tutorials/curriculums/environmental-art — polished assets, a central asset library, world construction.
+[15] Environmental Art: Assemble an Asset Library (sample place) — https://www.roblox.com/games/14447787049/Environmental-Art-Assemble-an-Asset-Library — sample modular assets, props and custom materials.
+[16] Environmental Art: Construct Your World (sample place) — https://www.roblox.com/games/14447826396/Environmental-Art-Construct-Your-World — the world built from the library.
+[17] Creator Hub tutorials index — https://create.roblox.com/docs/tutorials.md — lists the guide on modular assets that snap together.
+[18] Post-processing effects — https://create.roblox.com/docs/environment/post-processing-effects — Camera effects show only for one player; ColorCorrection for feedback like a low-health tint.
+[19] Post processing effects (developer article) — https://developer.roblox.com/articles/post-processing-effects — the older version of the same guide.
+[20] Enhance indoor environments — https://create.roblox.com/docs/tutorials/use-case-tutorials/lighting/enhance-indoor-environments — local lights under Soft don't cast shadows like the sun.
+[21] Enhance outdoor environments with realistic lighting — https://create.roblox.com/docs/en-us/tutorials/use-case-tutorials/lighting/enhance-outdoor-environments — a campfire's light casting crisp shadows under Realistic.
+[22] Increase Range Limit of Lights — https://devforum.roblox.com/t/increase-range-limit-of-lights/68336?page=10 — the local light range cap.
+[23] Bloxy News on Unified Lighting — https://x.com/Bloxy_News/status/1881791225822327102 — groundwork for increased light ranges and attenuation.
+[24] Global lighting — https://create.roblox.com/docs/environment/lighting — LightingStyle Realistic vs Soft.
+[25] Instance streaming — https://create.roblox.com/docs/en-us/workspace/streaming — ModelStreamingMode (Atomic and others) for models that must arrive whole.
+[26] Roblox DOORS Walkthrough – All Monsters and How to Survive Them — https://progameguides.com/roblox/roblox-doors-walkthrough-all-monsters-and-how-to-survive-them/ — Guiding Light's particles, chase path lighting and key hints.
+[27] Doors (game) — https://en.wikipedia.org/wiki/Doors_(game) — overview of Doors as a Roblox horror game.
+[28] Shakelight (DOORS Wiki) — https://doors-game.fandom.com/wiki/Shakelight — a light-source item in Doors.
+[29] The Mines (DOORS Wiki) — https://doors-game.fandom.com/wiki/The_Mines — the floor where Guiding Light also appears.
+[30] Grow a Garden Gear guide: All Gears and what they do — https://www.sportskeeda.com/roblox-news/grow-garden-gear-guide-all-gears — tiered gear such as sprinklers.
+[31] Grow a Garden gear guide (BlueStacks) — https://www.bluestacks.com/blog/game-guides/roblox/rl-grow-a-garden-gear-guide-en.html — gear tiers and prices.
+[32] Grow a Garden Seed Shop and Gear Shop stock explained — https://deltiasgaming.com/?p=207402 — the shop NPCs and restocks.
+[33] Where to find the Gear Shop in Grow a Garden — https://esports.gg/news/roblox/where-to-find-the-gear-shop-in-grow-a-garden — Gear Shop location opposite the Seed Shop.
+[34] Squid Kid in 99 Nights in the Forest: how to find and save the child — https://www.sportskeeda.com/roblox-news/squid-kid-99-nights-forest-how-find-save-child — rescue characters.
+[35] 99 Nights in the Forest beginner's guide — https://www.theclick.gg/99-nights-in-the-forest-beginners-guide/ — campfire upgrades expand the map.
+[36] Mushroom Field (Bee Swarm Simulator Wiki) — https://bee-swarm-simulator.fandom.com/wiki/Mushroom_Field — the first red field.
+[37] Pet Simulator 99 areas (bloxodes wiki) — https://bloxodes.com/wiki/pet-simulator-99/areas — Spawn hub with shop, mailbox and leaderboards.
+[38] Natural Disaster Survival Mega Token guide — https://dotesports.com/roblox/news/natural-disaster-survival-mega-token-guide-the-hunt-mega-edition — miniature map models in the lobby.
+[39] Atmospheric effects — https://create.roblox.com/docs/en-us/environment/atmosphere — Atmosphere Density hides distant objects.
+
+Related: [[00 Start Here]] · [[02 The Core Loop]] · [[03 Rarity and RNG]] · [[05 UI and HUD]] · [[06 World and Look]] · [[08 Mobile]] · [[09 Shops and Monetization]] · [[10 Retention and Social]] · [[11 Thumbnails, Icons and the Store Page]] · [[13 Building It Right]] · [[14 Roblox Studio Workflow]] · [[Claude Design Prompts]]

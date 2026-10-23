@@ -18,10 +18,13 @@ const HELP = `RoCrew CLI — node studio/cli.mjs <command> [options]
 Work
   status                                   Games, open tasks and what waits on the owner
   task add --agent <id> --title "…" [--brief "…" | --brief-file f] [--game slug]
-           [--after t1,t2] [--studio yes|no] [--size small|normal|big] [--model opus|sonnet|haiku]
+           [--after t1,t2] [--studio yes|no] [--browser yes|no] [--size small|normal|big] [--model opus|sonnet|haiku]
                                            Queue work for an agent (prints the task id).
                                            --size small: quick, mechanical work on a lighter model.
                                            --size big: hard design or code on Opus with more thinking.
+                                           --browser yes: give the agent the browser signed in to the owner's
+                                           Roblox account (Creator Hub stats, funnels, passes). On by default
+                                           for liveops and merchant.
   task list [--game slug] [--all]          Open tasks (or every task with --all)
   say --to <id> "…"                         Post a handoff note on the team feed
 
@@ -193,6 +196,7 @@ switch (cmd) {
         game,
         after: list(o.after),
         studio: yesNo(o.studio),
+        browser: yesNo(o.browser),
         size: typeof o.size === "string" ? o.size : undefined,
         model: typeof o.model === "string" ? o.model : undefined,
         from: ME,
