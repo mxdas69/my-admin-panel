@@ -95,8 +95,8 @@ export class Tunnel {
         log = (log + chunk.toString()).slice(-4000);
         const m = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/.exec(log);
         // The address is printed before Cloudflare can route to it ("Error 1033" until then):
-        // wait for a registered connection, then for the address to actually answer.
-        if (m && !this.url && /Registered tunnel connection/i.test(log)) {
+        // wait until the address actually answers.
+        if (m && !this.url) {
           this.url = m[0];
           waitUntilReachable(this.url).then(() => {
             clearTimeout(timer);
