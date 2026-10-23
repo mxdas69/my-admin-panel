@@ -181,13 +181,24 @@ export class Crew extends EventEmitter {
   usageHold() {
     const u = this.db.usage;
     if (!u) return null;
-    const ceiling = this.config.get().usageCeilingPct;
+    const cfg = this.config.get();
+    const ceiling = cfg.usageCeilingPct;
     const now = Date.now();
     for (const [label, w] of [["5-hour", u.fiveHour], ["weekly", u.week]]) {
       if (!w) continue;
       const stale = w.resetsAt && now >= w.resetsAt;
       if (!stale && (w.pct >= ceiling || (u.status === "rejected" && w.pct >= 99))) {
         return { window: label, pct: w.pct, resetsAt: w.resetsAt, ceiling };
+      }
+    }
+    // Weekly pacing: allow an even share of the week so far, plus a 10% head start.
+    const w = u.week;
+    if (cfg.paceWeekly !== false && w?.resetsAt && now < w.resetsAt) {
+      const elapsed = Math.min(1, Math.max(0, 1 - (w.resetsAt - now) / (7 * 86400000)));
+      const allowed = Math.min(ceiling, Math.round(elapsed * 100 + 10));
+      if (w.pct >= allowed) {
+        const resumeAt = w.resetsAt - 7 * 86400000 + ((w.pct - 10) / 100) * 7 * 86400000;
+        return { window: "weekly", pct: w.pct, resetsAt: Math.max(now, resumeAt), ceiling: allowed, pacing: true };
       }
     }
     return null;

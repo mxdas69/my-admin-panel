@@ -499,3 +499,15 @@ test("live updates by long-polling return as soon as something changes", async (
   assert.ok(r.json.events.length >= 1);
   assert.ok(Date.now() - started < 5000);
 });
+
+test("weekly pacing spreads the plan across the week", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rocrew-pace-"));
+  const store = new Store(path.join(dir, "state.json"));
+  const config = { get: () => ({ maxParallel: 3, usageCeilingPct: 90, paceWeekly: true }) };
+  const crew = new Crew({ store, config, root: ROOT, runner: () => ({ done: new Promise(() => {}), kill() {} }) });
+  const twoDaysIn = Math.floor((Date.now() + 5 * 86400000) / 1000); // resets in 5 days, so 2 days used
+  crew.recordUsage({ unifiedWindows: { seven_day: { utilization: 0.2, resetsAt: twoDaysIn } } });
+  assert.equal(crew.usageHold(), null, "20% after 2 days is within pace (about 39%)");
+  crew.recordUsage({ unifiedWindows: { seven_day: { utilization: 0.5, resetsAt: twoDaysIn } } });
+  assert.equal(crew.usageHold()?.pacing, true, "50% after 2 days is ahead of pace");
+});

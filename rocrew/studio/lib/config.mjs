@@ -21,6 +21,9 @@ export const DEFAULTS = {
   maxAutoRounds: 12,
   // Stop starting new work when either plan window (5-hour or weekly) passes this, until it resets.
   usageCeilingPct: 90,
+  // Spread the weekly plan over the week: new work waits whenever the crew is ahead of an even
+  // pace (for example 30% used only 2 days in), so it never burns the whole week in one night.
+  paceWeekly: true,
   host: "127.0.0.1",
   port: 4600,
   gemini: { apiKey: "", imageModel: "gemini-3.1-flash-image-preview", textModel: "gemini-flash-latest" },

@@ -411,7 +411,7 @@ PAGES.home = {
     const cards = [];
     const conn = s.connections;
     el.querySelector("#home-banner").innerHTML = s.usageHold
-      ? `<div class="banner amber"><b>${icon("pause")} New work is waiting for your Claude plan.</b> Your ${esc(s.usageHold.window)} usage is at ${s.usageHold.pct}% (the limit you set is ${s.usageHold.ceiling}%). The crew picks up again ${s.usageHold.resetsAt ? `in about ${untilText(s.usageHold.resetsAt)}` : "when it resets"}. Messages you send the Lead still go through.${isOwner() ? ` <a href="#/settings">Change the limit</a>` : ""}</div>`
+      ? `<div class="banner amber"><b>${icon("pause")} New work is waiting for your Claude plan.</b> ${s.usageHold.pacing ? `You've used ${s.usageHold.pct}% of this week's plan, which is ahead of an even pace (${s.usageHold.ceiling}% so far), so the crew is spreading the rest across the week.` : `Your ${esc(s.usageHold.window)} usage is at ${s.usageHold.pct}% (the limit you set is ${s.usageHold.ceiling}%).`} The crew picks up again ${s.usageHold.resetsAt ? `in about ${untilText(s.usageHold.resetsAt)}` : "when it resets"}. Messages you send the Lead still go through.${isOwner() ? ` <a href="#/settings">Change the limit</a>` : ""}</div>`
       : "";
     const setup = setupHtml();
     const box = el.querySelector("#setup");
@@ -1150,6 +1150,7 @@ function modelsCardHtml(v) {
     <label class="field" style="margin-top:12px">Force one model for everyone <small>Optional. Overrides the table, for example <span class="mono">sonnet</span> or a full model id. Leave empty to use the table.</small><input class="input mono" id="set-model" value="${esc(v.model)}" placeholder="use the table"></label>
     <label class="field">Stop new work at <small>When your 5-hour or weekly plan usage passes this, agents wait until it resets. What you send the Lead still runs.</small>
       <span class="row"><input class="input" type="number" min="10" max="100" id="set-usageCeilingPct" value="${v.usageCeilingPct}" style="width:90px"><span>%</span></span></label>
+    <label class="check"><input type="checkbox" id="set-paceWeekly" ${v.paceWeekly !== false ? "checked" : ""}><span><b>Make my weekly plan last the whole week</b><br><small class="muted">The crew never gets ahead of an even pace (about 14% a day, plus a small head start), so it can't use your whole week in one night. Your own messages to the Lead still go through.</small></span></label>
     ${u ? `<div class="usage-box">${usageBars(u)}<small class="faint">Last reported by Claude Code ${ago(u.at)}.</small></div>` : `<p class="faint" style="font-size:12px;margin:0">Usage shows here after the first agent run.</p>`}
   </div>`;
 }
@@ -1293,6 +1294,7 @@ async function saveSettings() {
     modelPreset: document.querySelector('input[name="preset"]:checked')?.value ?? "balanced",
     agentModels: Object.fromEntries([...document.querySelectorAll("[data-model-agent]")].map((x) => [x.dataset.modelAgent, x.value])),
     usageCeilingPct: val("set-usageCeilingPct"),
+    paceWeekly: document.getElementById("set-paceWeekly")?.checked ?? true,
     permissionMode: document.querySelector('input[name="perm"]:checked')?.value ?? "safe",
     extraAllowedTools: val("set-extraAllowedTools").split(",").map((s) => s.trim()).filter(Boolean),
     maxParallel: val("set-maxParallel"),
