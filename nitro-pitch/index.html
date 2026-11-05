@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="np-build" content="20261105151827">
+<meta name="np-build" content="20261105153041">
 <title>Nitro Pitch</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700;800;900&family=Saira:wght@400;500;600&display=swap">
@@ -2672,11 +2672,15 @@ function sidePt(s,y,out){
   for(let i=0;i<=64;i++){const t=-Math.PI/2+i/64*Math.PI;ringPt(s,t,out);const d=Math.abs(out.y-y);if(d<bd){bd=d;best=t;}}
   return ringPt(s,best,out);
 }
-function loft(S,NZ,NT){
+function loft(S,NZ,NT,wells){
   const z0=S[0].z,z1=S[S.length-1].z,pos=[],uv=[],idx=[],p=new V();
   for(let i=0;i<=NZ;i++){
     const z=lerp(z0,z1,.5-.5*Math.cos(Math.PI*i/NZ)),s=secAt(S,z);
-    for(let j=0;j<=NT;j++){ringPt(s,j/NT*Math.PI*2,p);pos.push(p.x,p.y,p.z);uv.push((z-z0)/(z1-z0),j/NT);}
+    for(let j=0;j<=NT;j++){
+      ringPt(s,j/NT*Math.PI*2,p);
+      if(wells)for(const w of wells){const dz=z-w.z,dy=p.y-w.y;if(dz*dz+dy*dy<w.r*w.r&&Math.abs(p.x)>w.x)p.x=sign(p.x)*w.x;}
+      pos.push(p.x,p.y,p.z);uv.push((z-z0)/(z1-z0),j/NT);
+    }
   }
   const R=NT+1;
   for(let i=0;i<NZ;i++)for(let j=0;j<NT;j++){const a=i*R+j,b=a+R;idx.push(a,a+1,b,b,a+1,b+1);}
@@ -2693,8 +2697,8 @@ function loft(S,NZ,NT){
   for(let i=0;i<=NZ;i++){const a=i*R,b=a+NT;const x=n.getX(a)+n.getX(b),y=n.getY(a)+n.getY(b),z=n.getZ(a)+n.getZ(b),l=Math.hypot(x,y,z)||1;n.setXYZ(a,x/l,y/l,z/l);n.setXYZ(b,x/l,y/l,z/l);}
   return g;
 }
-function archGeo(r,w){
-  const s=new THREE.Shape(),ri=r+1.2,ro=r+4.4,a0=.1,a1=Math.PI-.1;
+function archGeo(r,w,thick){
+  const s=new THREE.Shape(),ri=r+1.2,ro=r+1.2+(thick||5.4),a0=-.12,a1=Math.PI+.12;
   s.moveTo(Math.cos(a0)*ro,Math.sin(a0)*ro);
   s.absarc(0,0,ro,a0,a1,false);
   s.lineTo(Math.cos(a1)*ri,Math.sin(a1)*ri);
@@ -2727,13 +2731,15 @@ const RIMCOLS={silver:{name:'Silver',c:0xcfd8e6},black:{name:'Black',c:0x24272e}
 // Boosts: flame colours plus an extra particle style for some
 const BOOSTS={team:{name:'Standard'},flame:{name:'Inferno',c:[0xff5a14,0xffcf6a]},plasma:{name:'Plasma',c:[0xb84dff,0x7ff0ff]},toxic:{name:'Toxic',c:[0x4cf03a,0xdcff9a]},frost:{name:'Frost',c:[0x6fc8ff,0xeef9ff],fx:'snow'},prism:{name:'Prism',c:null},comet:{name:'Comet',c:[0xffc94a,0xfff3d0],fx:'spark'},ember:{name:'Ember',c:[0xff4416,0xffa860],fx:'ember'},phantom:{name:'Phantom',c:[0x9fb3c6,0xf0f5ff],fx:'smoke'}};
 const TOPPERS={none:'None',halo:'Halo',fin:'Fin',crown:'Crown',antenna:'Antenna'};
+const ROOFS={black:'Black',body:'Body colour',accent:'Accent'};
 const GOALS={shockwave:'Shockwave',supernova:'Supernova',vortex:'Vortex',thunder:'Thunder',confetti:'Confetti',pixel:'Pixel Burst',fireworks:'Fireworks',blackhole:'Black Hole'};
-const SKIN_OPTS={paint:PAINTS,decal:DECALS,finish:FINISHES,accent:ACCENTS,rim:RIMS,rimCol:RIMCOLS,boost:BOOSTS,topper:TOPPERS,goal:GOALS};
-const SKIN_DEF={paint:'team',decal:'stripes',finish:'gloss',accent:'white',rim:'spoke',rimCol:'silver',boost:'team',topper:'none',goal:'shockwave'};
+const SKIN_OPTS={paint:PAINTS,roof:ROOFS,decal:DECALS,finish:FINISHES,accent:ACCENTS,rim:RIMS,rimCol:RIMCOLS,boost:BOOSTS,topper:TOPPERS,goal:GOALS};
+const SKIN_DEF={paint:'team',roof:'black',decal:'stripes',finish:'gloss',accent:'white',rim:'spoke',rimCol:'silver',boost:'team',topper:'none',goal:'shockwave'};
 function cleanSkin(s){const o={};for(const k in SKIN_DEF)o[k]=s&&own(SKIN_OPTS[k],s[k])?s[k]:SKIN_DEF[k];return o;}
 function randomSkin(){const o={};for(const k in SKIN_DEF){const ks=Object.keys(SKIN_OPTS[k]);o[k]=ks[Math.random()*ks.length|0];}if(Math.random()<.55)o.topper='none';if(Math.random()<.5)o.paint='team';return o;}
 const TEAM_HEX=[0x3b8bff,0xff7d1f];
 function boostCols(team,b){const B=BOOSTS[b];return B&&B.c?B.c:team===0?[0x5aa8ff,0xe8f4ff]:[0xff9a3a,0xfff0dc];}
+const hexToRgba=(c,a)=>rgbaHex(c,a);
 const rgbaHex=(c,a)=>{const n=parseInt(c.slice(1),16);return'rgba('+(n>>16&255)+','+(n>>8&255)+','+(n&255)+','+a+')';};
 function shadeHex(c,k){const n=parseInt(c.slice(1),16);let r=n>>16&255,g=n>>8&255,b=n&255;if(k<0){r*=1+k;g*=1+k;b*=1+k;}else{r+=(255-r)*k;g+=(255-g)*k;b+=(255-b)*k;}return'#'+((1<<24)|(Math.round(r)<<16)|(Math.round(g)<<8)|Math.round(b)).toString(16).slice(1);}
 // The body colour: a team shade, or a painted body that keeps the team colour on its stripes and lights
@@ -2795,16 +2801,20 @@ const DEFS={
     mirrorZ:10,skirtL:42,nozX:17,
   },
 };
+// Chunky tyres: a touch bigger and wider than before on every body
+for(const k in DEFS){const W=DEFS[k].wheels;for(const wd of[W.front,W.rear]){wd.r=Math.round(wd.r*10.8)/10;wd.w+=2;}}
 const geoCache={},wheelCache={},matCache={},teamCache={};
 function buildBodyGeos(key){
   if(geoCache[key])return geoCache[key];
   const D=DEFS[key],rest=COM_REST+BODIES[key].off.y,P=[];
   const add=(role,geo,m)=>P.push({role,geo,m});
   const S=prepSecs(D.body,D.bodyDef),C=prepSecs(D.cabin,D.cabinDef);
-  add('paint',loft(S,48,44));
-  add('cabin',loft(C,28,36));
   const W=D.wheels,p=new V();
-  for(const wd of[W.front,W.rear])for(const sx of[-1,1])add('paint',archGeo(wd.r,wd.w+3),mtx(sx*(W.x+.6),-rest+wd.r,wd.z));
+  // Wheel wells: the body is cut back round each tyre so the wheels sit out in the open under flared arches
+  const wells=[W.front,W.rear].map(wd=>({z:wd.z,y:-rest+wd.r,r:wd.r+3.4,x:W.x-wd.w/2-1.2}));
+  add('paint',loft(S,72,48,wells));
+  add('cabin',loft(C,28,36));
+  for(const wd of[W.front,W.rear])for(const sx of[-1,1]){add('solid',archGeo(wd.r+.6,wd.w+5),mtx(sx*(W.x+.9),-rest+wd.r,wd.z));add('trim',archGeo(wd.r-.4,wd.w-1,.9),mtx(sx*(W.x-1.6),-rest+wd.r,wd.z));}
   const zF=S[S.length-1].z,zR=S[0].z;
   const sF=secAt(S,zF-6),sR=secAt(S,zR+1.5),sM=secAt(S,0),sN=secAt(S,zF);
   // Lights: lamps, a team-coloured running-light brow over each, and a full-width tail bar
@@ -3046,7 +3056,11 @@ function liveryTex(team,skin,glow){
     g.fillStyle=pc.base;g.fillRect(0,0,w,h);
     if(pc.carbon)for(let y=0;y<h;y+=8)for(let x=0;x<w;x+=8){const o=((x+y)/8)%2;g.fillStyle=o?'#262a31':'#16181d';g.fillRect(x,y,8,4);g.fillStyle=o?'#16181d':'#262a31';g.fillRect(x,y+4,8,4);}
     drawDecal(g,w,h,skin.decal,P,false);
-    for(const[a,b]of[[.5,.75],[1,.75]]){const gr=g.createLinearGradient(0,a*h,0,b*h);gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(.38,pc.deep);gr.addColorStop(1,'#07090d');g.fillStyle=gr;g.fillRect(0,Math.min(a,b)*h,w,.25*h);}
+    // Lower body: a hard-edged band of dark cladding below the doors, and dark lower bumpers on both ends
+    const clad='#121419';
+    for(const[a,b]of[[.5,.75],[1,.75]]){const gr=g.createLinearGradient(0,a*h,0,b*h);gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(.12,hexToRgba(pc.deep,.55));gr.addColorStop(.16,clad);gr.addColorStop(1,clad);g.fillStyle=gr;g.fillRect(0,Math.min(a,b)*h,w,.25*h);}
+    g.fillStyle=clad;g.fillRect(0,.43*h,7,.57*h);g.fillRect(0,0,7,.07*h);g.fillRect(w-7,.43*h,7,.57*h);g.fillRect(w-7,0,7,.07*h);
+    g.fillStyle=pc.acc2;g.globalAlpha=.85;g.fillRect(0,(.5+.25*.16-.004)*h,w,.004*h);g.fillRect(0,(1-.25*.16)*h,w,.004*h);g.globalAlpha=1;
     // Belt-line pinstripe (a wider team-colour band on painted bodies), sills and panel shut lines
     g.fillStyle=pc.acc2;const bw=pc.ov?.016:.007;g.fillRect(0,(.5-bw/2)*h,w,bw*h);g.fillRect(0,0,w,bw*.6*h);g.fillRect(0,(1-bw*.6)*h,w,bw*.6*h);
     g.strokeStyle='rgba(0,0,0,.4)';g.lineWidth=2;
@@ -3070,7 +3084,7 @@ function teamBase(team){
     tire:new THREE.MeshStandardMaterial({map:treadTex,roughness:.9,metalness:0,side:THREE.DoubleSide}),
     caliper:new THREE.MeshStandardMaterial({color:TEAM_HEX[team],roughness:.35,metalness:.3}),
     head:new THREE.MeshBasicMaterial({color:new THREE.Color(0xeaf4ff).multiplyScalar(1.6*GLOW),toneMapped:false}),
-    tail:new THREE.MeshBasicMaterial({color:new THREE.Color(0xff1030).multiplyScalar(1.4*GLOW),toneMapped:false}),
+    tail:new THREE.MeshBasicMaterial({color:new THREE.Color(0xff2208).multiplyScalar(1.15*GLOW),toneMapped:false}),
     glow:new THREE.MeshBasicMaterial({color:new THREE.Color(team===0?0x4aa0ff:0xff8a2a).multiplyScalar(1.2*GLOW),toneMapped:false}),
     halo:new THREE.MeshBasicMaterial({color:new THREE.Color(team===0?0x8cc4ff:0xffb76a).multiplyScalar(1.35*GLOW),toneMapped:false}),
     gold:new THREE.MeshStandardMaterial({color:0xe7b84e,roughness:.22,metalness:1}),
@@ -3078,22 +3092,24 @@ function teamBase(team){
   };
 }
 const cabCache={};
-function cabinMat(paintHex){
-  if(cabCache[paintHex])return cabCache[paintHex];
-  const cab=(paintCol,glass)=>(g,w,h)=>{
-    g.fillStyle=paintCol;g.fillRect(0,0,w,h);g.fillStyle=glass;
+function cabinMat(paintHex,roofHex){
+  const ck=paintHex+roofHex;if(cabCache[ck])return cabCache[ck];
+  const cab=(paintCol,glass,roofCol)=>(g,w,h)=>{
+    g.fillStyle=paintCol;g.fillRect(0,0,w,h);
+    if(roofCol){g.fillStyle=roofCol;g.fillRect(.17*w,.165*h,.6*w,.17*h);}
+    g.fillStyle=glass;
     const R=(u0,u1,v0,v1)=>g.fillRect(u0*w,v0*h,(u1-u0)*w,(v1-v0)*h);
     R(.16,.8,.025,.17);R(.16,.8,.33,.475);R(.76,1,.045,.455);R(0,.2,.08,.42);
     g.fillStyle=paintCol;R(.5,.54,0,.2);R(.5,.54,.3,.5);
   };
-  const cabinTex=canvasTex(512,256,cab(paintHex,'#03060b'));
+  const cabinTex=canvasTex(512,256,cab(paintHex,'#03060b',roofHex));
   // Green channel is roughness, blue is metalness: painted roof and pillars versus clean glass
   const cabinRough=canvasTex(512,256,cab('#005c73','#000a00'),false);
   cabinTex.flipY=cabinRough.flipY=false;
-  return cabCache[paintHex]=new THREE.MeshStandardMaterial({map:cabinTex,roughnessMap:cabinRough,metalnessMap:cabinRough,roughness:1,metalness:1,envMapIntensity:.85});
+  return cabCache[ck]=new THREE.MeshStandardMaterial({map:cabinTex,roughnessMap:cabinRough,metalnessMap:cabinRough,roughness:1,metalness:1,envMapIntensity:.85});
 }
 function carMats(team,skin){
-  const key=team+'|'+skin.paint+'|'+skin.decal+'|'+skin.finish+'|'+skin.accent+'|'+skin.rimCol+'|'+skin.boost;
+  const key=team+'|'+skin.paint+'|'+skin.roof+'|'+skin.decal+'|'+skin.finish+'|'+skin.accent+'|'+skin.rimCol+'|'+skin.boost;
   if(matCache[key])return matCache[key];
   const T=teamBase(team),fin=FINISHES[skin.finish],bc=boostCols(team,skin.boost),pc=paintCol(team,skin.paint);
   const rc=RIMCOLS[skin.rimCol].c<0?TEAM_HEX[team]:RIMCOLS[skin.rimCol].c;
@@ -3102,7 +3118,7 @@ function carMats(team,skin){
   const paint=new THREE.MeshPhysicalMaterial(Object.assign({map:liveryTex(team,skin,false)},finish));
   if(glow){paint.emissiveMap=liveryTex(team,skin,true);paint.emissive=new THREE.Color(0xffffff);paint.emissiveIntensity=1.2*GLOW;}
   return matCache[key]=Object.assign({},T,{
-    paint,cabin:cabinMat(pc.base),
+    paint,cabin:cabinMat(pc.base,skin.roof==='black'?'#101217':skin.roof==='accent'?ACCENTS[skin.accent]:''),
     solid:new THREE.MeshPhysicalMaterial(Object.assign({color:new THREE.Color(pc.base).convertSRGBToLinear()},finish)),
     accent:new THREE.MeshStandardMaterial({color:new THREE.Color(ACCENTS[skin.accent]).convertSRGBToLinear(),roughness:.35,metalness:.4}),
     rim:new THREE.MeshStandardMaterial({color:rc,roughness:skin.rimCol==='black'?.42:.2,metalness:skin.rimCol==='black'?.6:.95}),
@@ -3479,7 +3495,7 @@ const hex6=n=>'#'+n.toString(16).padStart(6,'0');
 const GAR_TABS={
   body:()=>[{h:'Car',k:'body',o:Object.keys(BODIES).map(k=>({v:k,t:BODIES[k].name,s:BODIES[k].kind}))}],
   decal:()=>[{h:'Decal',k:'decal',o:Object.keys(DECALS).map(k=>({v:k,t:DECALS[k]}))}],
-  paint:()=>[{h:'Body colour',k:'paint',o:Object.keys(PAINTS).map(k=>({v:k,t:PAINTS[k].name,c:'linear-gradient(90deg,'+(PAINTS[k].c?PAINTS[k].c[0]+' 50%,'+PAINTS[k].c[1]:'#1e6dff 50%,#ff6812')+' 50%)'}))},{h:'Finish',k:'finish',o:Object.keys(FINISHES).map(k=>({v:k,t:FINISHES[k].name}))},{h:'Accent colour',k:'accent',o:Object.keys(ACCENTS).map(k=>({v:k,t:k[0].toUpperCase()+k.slice(1),c:ACCENTS[k]}))}],
+  paint:()=>[{h:'Body colour',k:'paint',o:Object.keys(PAINTS).map(k=>({v:k,t:PAINTS[k].name,c:'linear-gradient(90deg,'+(PAINTS[k].c?PAINTS[k].c[0]+' 50%,'+PAINTS[k].c[1]:'#1e6dff 50%,#ff6812')+' 50%)'}))},{h:'Roof',k:'roof',o:Object.keys(ROOFS).map(k=>({v:k,t:ROOFS[k],c:k==='black'?'#101217':k==='accent'?'conic-gradient(#eef3fb,#f0be4c,#d8203c,#28d8ea,#eef3fb)':'linear-gradient(90deg,#1e6dff 50%,#ff6812 50%)'}))},{h:'Finish',k:'finish',o:Object.keys(FINISHES).map(k=>({v:k,t:FINISHES[k].name}))},{h:'Accent colour',k:'accent',o:Object.keys(ACCENTS).map(k=>({v:k,t:k[0].toUpperCase()+k.slice(1),c:ACCENTS[k]}))}],
   wheels:()=>[{h:'Rims',k:'rim',o:Object.keys(RIMS).map(k=>({v:k,t:RIMS[k]}))},{h:'Rim colour',k:'rimCol',o:Object.keys(RIMCOLS).map(k=>({v:k,t:RIMCOLS[k].name,c:RIMCOLS[k].c<0?'linear-gradient(90deg,#3b8bff 50%,#ff7d1f 50%)':hex6(RIMCOLS[k].c)}))}],
   boost:()=>[{h:'Boost',k:'boost',o:Object.keys(BOOSTS).map(k=>({v:k,t:BOOSTS[k].name,c:k==='team'?'linear-gradient(90deg,#3b8bff 50%,#ff7d1f 50%)':k==='prism'?'conic-gradient(#ff5050,#ffd84a,#4cf06a,#4ad8ff,#a45cff,#ff5050)':hex6(BOOSTS[k].c[0])}))}],
   topper:()=>[{h:'Topper',k:'topper',o:Object.keys(TOPPERS).map(k=>({v:k,t:TOPPERS[k]}))}],
