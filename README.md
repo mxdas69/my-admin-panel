@@ -7,7 +7,7 @@
 When the file is opened from disk and GitHub is reachable, it runs the newest build from this repo (checking `main`, then the working branch). If GitHub is blocked or offline, it runs the copy inside the file.
 
 - Main menu with Play, Free Play, Garage and Settings. Play opens Bots (1v1, 2v2 or 3v3 against Rookie, Pro or All-Star bots), Friends and Training
-- Friends: play a friend online with no server and nothing to install. One player picks Host a game and sends the invite code through any chat, the other picks Join a game, pastes it and sends back the reply code, and the two browsers connect directly (WebRTC). The host runs the match; bots fill the other seats. Most home networks work; some school and work networks block direct connections
+- Friends: play a friend online with nothing to install. One player picks Host a game and gets a six-letter code; the other picks Join a game and types it. The code is matched up through the free public PeerJS matchmaking server, which only passes the two connection descriptions between the browsers; the game itself runs browser to browser (WebRTC). If that server is blocked or down, a long-code option swaps the connection details by copy and paste with no server at all. The host runs the match; bots fill the other seats. Most home networks work; some school and work networks block direct connections
 - Training: Striker, Aerial and Goalie packs of eight shots each, at three difficulties. A shot starts when you move; R retries, N skips, B goes back
 - Bot teammates rotate between attacking, support and defence, and chip in with the odd quick chat
 - Six original cars on five hitbox classes: Vanta and Boxer (balanced), Stiletto (long and low), Bulwark (tall), Javelin (long and flat), Rook (hybrid)

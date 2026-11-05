@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="np-build" content="20261105143057">
+<meta name="np-build" content="20261105151827">
 <title>Nitro Pitch</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700;800;900&family=Saira:wght@400;500;600&display=swap">
@@ -122,6 +122,9 @@ h2{margin:0;font-family:var(--display);font-weight:900;font-size:44px;line-heigh
 .note{margin:0;padding:9px 12px;background:var(--panel2);border-left:4px solid var(--amber);font-size:14px}
 .note.good{border-left-color:#43d17a}
 #netUi{display:flex;flex-direction:column;gap:14px}
+.short{box-sizing:border-box;width:100%;background:#070b14;color:var(--fg);border:1px solid var(--line);padding:10px 8px;text-align:center;font-family:var(--display);font-weight:900;font-size:52px;line-height:1.05;letter-spacing:.3em;text-indent:.3em;text-transform:uppercase}
+input.short::placeholder{color:#2c3a55}
+input.short:focus{outline:2px solid var(--amber);outline-offset:1px}
 #showroom{position:absolute;right:0;bottom:0;width:calc(100% - 470px);max-width:900px;height:min(64%,600px);pointer-events:none}
 #showroom #garage{position:absolute;inset:0;height:auto;background:radial-gradient(46% 40% at 50% 66%,#20345a80 0,transparent 100%)}
 #garSlot #garage{position:relative;height:170px}
@@ -3324,6 +3327,7 @@ const isTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 const GAMEKEYS=new Set(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Tab']);
 function inMatch(){return !game.attract&&!game.paused&&game.mode!=='over';}
 addEventListener('keydown',e=>{
+  if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'))return;
   if(e.repeat&&GAMEKEYS.has(e.code)&&inMatch()){e.preventDefault();return;}
   keys[e.code]=true;if(!e.repeat)tap[e.code]=true;
   if(inMatch()&&GAMEKEYS.has(e.code))e.preventDefault();
@@ -3451,7 +3455,9 @@ function placeGarage(){
   $('showroom').hidden=!wide||!(screen==='home'||screen==='garage');
 }
 function showScreen(s){
-  screen=s;
+  const prev=screen;screen=s;
+  // Leaving Friends before anyone connected gives the code back
+  if(prev==='friends'&&s!=='friends'&&!NET.open&&!game.net){sigClose();netClose();NET.ui='idle';netRender();}
   for(const el of document.querySelectorAll('#menu .scr'))el.hidden=el.dataset.scr!==s;
   placeGarage();
   if(s==='garage')renderGarageTab();
@@ -3878,7 +3884,7 @@ function frame(now){
    Browser to browser over WebRTC, no game server. The host makes an invite code, the friend pastes it and sends a
    reply code back, and the two pages connect directly. The host runs the match; the friend's page sends its
    controls and draws what the host's page shows (cars, ball, replays), smoothed over a short buffer. */
-const NET={pc:null,st:null,ev:null,role:null,ui:'idle',peer:null,err:'',code:'',t0:0,seq:0,snaps:[],off:null,inp:{throttle:0,steer:0,pitch:0,roll:0,boost:false,jump:false,hb:false,air:false},jSeq:0,jSeen:0,jHold:0,myJ:0,lastJ:false,side:'rival',size:2,car:null,lastScore:'',open:false};
+const NET={ws:null,short:'',busy:false,pc:null,st:null,ev:null,role:null,ui:'idle',peer:null,err:'',code:'',t0:0,seq:0,snaps:[],off:null,inp:{throttle:0,steer:0,pitch:0,roll:0,boost:false,jump:false,hb:false,air:false},jSeq:0,jSeen:0,jHold:0,myJ:0,lastJ:false,side:'rival',size:2,car:null,lastScore:'',open:false};
 const NET_OK=!!window.RTCPeerConnection;
 function netB64(u8){let s='';for(let i=0;i<u8.length;i++)s+=String.fromCharCode(u8[i]);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
 function netUnB64(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;}
@@ -3894,6 +3900,71 @@ async function netUnpack(code){
   const o=JSON.parse(new TextDecoder().decode(u));return{type:o.t,sdp:o.s};
 }
 function netWaitIce(pc){return new Promise(r=>{if(pc.iceGatheringState==='complete')return r();const t=setTimeout(r,4000);pc.addEventListener('icegatheringstatechange',()=>{if(pc.iceGatheringState==='complete'){clearTimeout(t);r();}});});}
+/* Six-letter codes go through a free public matchmaking server (the open PeerJS one). It only passes the two
+   connection descriptions between the browsers; the game itself still runs browser to browser. If that server
+   is blocked or down, the long codes below still work without it. */
+const NET_SIG='wss://0.peerjs.com:443/peerjs?key=peerjs',NET_PRE='nitropitch-',NET_ABC='ABCDEFGHJKLMNPQRSTUVWXYZ';
+function netShortCode(){let s='';for(const v of crypto.getRandomValues(new Uint8Array(6)))s+=NET_ABC[v%NET_ABC.length];return s;}
+function sigClose(){const w=NET.ws;NET.ws=null;if(w){clearInterval(w.hb);w.onsig=null;try{w.close();}catch(e){}}}
+function sigOpen(id){
+  return new Promise((res,rej)=>{
+    let ws,done=false;
+    const fail=msg=>{if(done)return;done=true;clearTimeout(to);try{ws.close();}catch(e){}rej(new Error(msg));};
+    const to=setTimeout(()=>fail('Could not reach the matchmaking server'),9000);
+    try{ws=new WebSocket((window.__npSig||NET_SIG)+'&id='+encodeURIComponent(id)+'&token='+Math.random().toString(36).slice(2,12)+'&version=1.5.4');}catch(e){fail('Could not reach the matchmaking server');return;}
+    ws.onmessage=e=>{
+      let m;try{m=JSON.parse(e.data);}catch(err){return;}
+      if(!done){
+        if(m.type==='OPEN'){done=true;clearTimeout(to);ws.hb=setInterval(()=>{if(ws.readyState===1)ws.send('{"type":"HEARTBEAT"}');},5000);res(ws);}
+        else if(m.type==='ID-TAKEN'){const er=new Error('taken');er.taken=true;done=true;clearTimeout(to);try{ws.close();}catch(x){}rej(er);}
+        else if(m.type==='ERROR')fail((m.payload&&m.payload.msg)||'The matchmaking server said no');
+        return;
+      }
+      if(ws.onsig)ws.onsig(m);
+    };
+    ws.onerror=()=>fail('Could not reach the matchmaking server');
+    ws.onclose=()=>{fail('Could not reach the matchmaking server');clearInterval(ws.hb);if(NET.ws===ws&&!NET.open&&ws.onsig)netFail(new Error('Lost the matchmaking server'));};
+  });
+}
+const netDesc=d=>({type:d.type,sdp:d.sdp});
+// Host: claim a six-letter code and answer whoever joins with it
+async function netHostShort(){
+  try{
+    NET.role='host';NET.ui='working';netRender();sigClose();
+    let ws=null,code='';
+    for(let k=0;k<5&&!ws;k++){code=netShortCode();try{ws=await sigOpen(NET_PRE+code);}catch(e){if(!e.taken)throw e;}}
+    if(!ws)throw new Error('Could not get a free code, try again');
+    NET.ws=ws;NET.short=code;NET.ui='hostShort';netRender();
+    ws.onsig=async m=>{
+      if(m.type!=='OFFER'||NET.open||NET.busy||!m.payload||!m.payload.sdp)return;
+      NET.busy=true;
+      try{
+        const pc=netNewPc();pc.ondatachannel=e=>netWire(e.channel);
+        await pc.setRemoteDescription(m.payload.sdp);await pc.setLocalDescription(await pc.createAnswer());await netWaitIce(pc);
+        if(NET.ws===ws)ws.send(JSON.stringify({type:'ANSWER',dst:m.src,payload:{sdp:netDesc(pc.localDescription)}}));
+      }catch(e){netFail(e);}
+      NET.busy=false;
+    };
+  }catch(e){netFail(e);}
+}
+// Friend: knock on the host's code with an offer and wait for the answer
+async function netJoinShort(raw){
+  const code=String(raw||'').toUpperCase().replace(/[^A-Z]/g,'');
+  if(code.length!==6){netFail(new Error('Codes are six letters'));return;}
+  try{
+    NET.role='guest';NET.ui='working';netRender();sigClose();
+    const ws=NET.ws=await sigOpen(NET_PRE+'g'+netShortCode()+netShortCode());
+    const pc=netNewPc();
+    netWire(pc.createDataChannel('st',{ordered:false,maxRetransmits:0}));netWire(pc.createDataChannel('ev',{ordered:true}));
+    await pc.setLocalDescription(await pc.createOffer());await netWaitIce(pc);
+    const miss=setTimeout(()=>{if(!NET.open&&NET.ws===ws)netFail(new Error('No game found with code '+code));},15000);
+    ws.onsig=async m=>{
+      if(m.type==='ANSWER'&&m.payload&&m.payload.sdp){clearTimeout(miss);try{await pc.setRemoteDescription(m.payload.sdp);NET.ui='connecting';netRender();}catch(e){netFail(e);}}
+      else if(m.type==='EXPIRE'){clearTimeout(miss);netFail(new Error('No game found with code '+code));}
+    };
+    ws.send(JSON.stringify({type:'OFFER',dst:NET_PRE+code,payload:{sdp:netDesc(pc.localDescription)}}));
+  }catch(e){netFail(e);}
+}
 function netNewPc(){
   netClose(true);
   const pc=NET.pc=new RTCPeerConnection({iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']}]});
@@ -3927,13 +3998,13 @@ async function netJoin(invite){
   }catch(e){netFail(e);}
 }
 function netOpened(){
-  if(NET.open)return;NET.open=true;NET.t0=performance.now();
+  if(NET.open)return;NET.open=true;NET.t0=performance.now();sigClose();
   NET.ui=NET.role==='host'?'hostReady':'guestReady';
   netEv({t:'hello',body:game.body,skin:game.skin});
   netRender();toast('FRIEND CONNECTED');
 }
 function netEv(o){if(NET.ev&&NET.ev.readyState==='open')try{NET.ev.send(JSON.stringify(o));}catch(e){}}
-function netFail(e){NET.ui='error';NET.err=(e&&e.message)||'Something went wrong';netRender();}
+function netFail(e){sigClose();NET.ui='error';NET.err=(e&&e.message)||'Something went wrong';netRender();}
 function netClose(quiet){
   NET.open=false;
   try{if(NET.st)NET.st.close();if(NET.ev)NET.ev.close();if(NET.pc)NET.pc.close();}catch(e){}
@@ -3942,7 +4013,7 @@ function netClose(quiet){
 }
 function netLost(){
   if(!NET.pc&&!NET.open)return;
-  const was=game.net;netClose(true);NET.ui='lost';NET.role=null;game.net=null;
+  const was=game.net;sigClose();netClose(true);NET.ui='lost';NET.role=null;game.net=null;
   if(was&&!game.attract){startAttract();showScreen('friends');}
   netRender();toast('CONNECTION LOST');
 }
@@ -4051,14 +4122,18 @@ function netApplySnap(dt){
 function netRender(){
   const el=$('netUi');if(!el)return;
   const ta=(id,ro,ph)=>'<textarea id="'+id+'" class="code" rows="4" spellcheck="false" '+(ro?'readonly':'placeholder="'+ph+'"')+'></textarea>';
+  const longHost='<button class="ghost" id="netLongHost">Use a long code instead</button>',longJoin='<button class="ghost" id="netLongJoin">I have a long code</button>';
   let h='';
   if(!NET_OK)h='<p class="lede">This browser cannot make direct connections, so online play is not available here.</p>';
   else if(NET.ui==='idle'||NET.ui==='lost'||NET.ui==='error'){
     if(NET.ui==='lost')h+='<p class="note">The connection to your friend dropped.</p>';
     if(NET.ui==='error')h+='<p class="note">'+esc(NET.err)+'</p>';
-    h+='<nav class="nav"><button class="navb" id="netHostB"><b>Host a game</b><small>Make an invite code and send it to your friend</small></button><button class="navb" id="netJoinB"><b>Join a game</b><small>Paste the invite code your friend sent you</small></button></nav>'+
-      '<p class="lede">No server or install: the two browsers connect directly. You swap two codes through any chat. Some school and work networks block direct connections; home networks usually work.</p>';
-  }else if(NET.ui==='working')h='<p class="lede">Making your code… this takes a few seconds.</p>';
+    h+='<nav class="nav"><button class="navb" id="netHostB"><b>Host a game</b><small>Get a six-letter code to give your friend</small></button><button class="navb" id="netJoinB"><b>Join a game</b><small>Type the six-letter code your friend gives you</small></button></nav>'+
+      '<p class="lede">Nothing to install: the two browsers connect directly. Some school and work networks block this; home networks usually work. If a code will not connect, pick the long-code option on the next screen.</p>';
+  }else if(NET.ui==='working')h='<p class="lede">Setting up… this takes a few seconds.</p>';
+  else if(NET.ui==='hostShort')h='<div class="opt"><span class="lab">Tell your friend this code</span><div class="short" id="netShortOut" aria-live="polite">'+esc(NET.short)+'</div><button class="ghost" id="netCopyShort">Copy code</button></div>'+
+      '<p class="lede">Waiting for your friend to join. Keep this screen open.</p>'+longHost;
+  else if(NET.ui==='joinShort')h='<div class="opt"><span class="lab">Type your friend\'s code</span><input id="netShortIn" class="short" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCDEF" aria-label="Six-letter code"><button class="go" id="netJoinGo">Join</button></div>'+longJoin;
   else if(NET.ui==='hostCode')h='<div class="opt"><span class="lab">1. Send this invite code to your friend</span>'+ta('netCode',1)+'<button class="ghost" id="netCopy">Copy invite code</button></div>'+
       '<div class="opt"><span class="lab">2. Paste the reply code they send back</span>'+ta('netReply',0,'Reply code')+'<button class="go" id="netConnect">Connect</button></div>';
   else if(NET.ui==='joinPaste')h='<div class="opt"><span class="lab">Paste the invite code from your friend</span>'+ta('netInvite',0,'Invite code')+'<button class="go" id="netMake">Make reply code</button></div>';
@@ -4071,10 +4146,16 @@ function netRender(){
   else if(NET.ui==='guestReady')h='<p class="note good">Connected. Waiting for your friend to start the match.</p>';
   el.innerHTML=h;
   const on=(id,f)=>{const b=$(id);if(b)b.onclick=f;};
-  on('netHostB',()=>netHost());on('netJoinB',()=>{NET.role='guest';NET.ui='joinPaste';netRender();});
+  const copy=(text,el2)=>{try{navigator.clipboard.writeText(text).catch(()=>{if(el2&&el2.select){el2.select();document.execCommand('copy');}});}catch(e){if(el2&&el2.select){el2.select();document.execCommand('copy');}}toast('CODE COPIED');};
+  on('netHostB',()=>netHostShort());on('netJoinB',()=>{sigClose();NET.role='guest';NET.ui='joinShort';netRender();});
+  on('netLongHost',()=>{sigClose();netHost();});on('netLongJoin',()=>{sigClose();NET.role='guest';NET.ui='joinPaste';netRender();});
+  on('netJoinGo',()=>netJoinShort($('netShortIn').value));
   on('netConnect',()=>netAccept($('netReply').value));on('netMake',()=>netJoin($('netInvite').value));
   on('netStart',()=>netStartMatch());
-  on('netCopy',()=>{const t=$('netCode');t.select();try{navigator.clipboard.writeText(t.value).catch(()=>document.execCommand('copy'));}catch(e){document.execCommand('copy');}toast('CODE COPIED');});
+  on('netCopy',()=>copy($('netCode').value,$('netCode')));on('netCopyShort',()=>copy(NET.short,null));
+  const si=$('netShortIn');
+  if(si){si.addEventListener('input',()=>{const v=si.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,6);if(si.value!==v)si.value=v;});
+    si.addEventListener('keydown',e=>{if(e.key==='Enter')netJoinShort(si.value);});if(!isTouch)si.focus();}
   if($('netCode'))$('netCode').value=NET.code;
   if($('segNetMode')){if(NET.size===1)NET.side='rival';setSeg('segNetMode',NET.size);setSeg('segNetSide',NET.side);
     seg('segNetMode',v=>{NET.size=+v;if(NET.size===1){NET.side='rival';setSeg('segNetSide','rival');}});seg('segNetSide',v=>{NET.side=NET.size===1?'rival':v;setSeg('segNetSide',NET.side);});}
