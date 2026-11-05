@@ -6,10 +6,13 @@
 
 When the file is opened from disk and GitHub is reachable, it runs the newest build from this repo (checking `main`, then the working branch). If GitHub is blocked or offline, it runs the copy inside the file.
 
-- Main menu with Play (1v1, 2v2 or 3v3 against Rookie, Pro or All-Star bots), Free Play, Garage and Settings
+- Main menu with Play, Free Play, Garage and Settings. Play opens Bots (1v1, 2v2 or 3v3 against Rookie, Pro or All-Star bots), Friends and Training
+- Friends: play a friend online with no server and nothing to install. One player picks Host a game and sends the invite code through any chat, the other picks Join a game, pastes it and sends back the reply code, and the two browsers connect directly (WebRTC). The host runs the match; bots fill the other seats. Most home networks work; some school and work networks block direct connections
+- Training: Striker, Aerial and Goalie packs of eight shots each, at three difficulties. A shot starts when you move; R retries, N skips, B goes back
 - Bot teammates rotate between attacking, support and defence, and chip in with the odd quick chat
-- Five cars with different hitboxes: Vanta (balanced), Stiletto (long and low), Bulwark (tall), Javelin (long and flat), Rook (hybrid)
-- Garage: decals, paint finish and accent colour, rim style and colour, boost colour, toppers and six goal explosions (Shockwave, Supernova, Vortex, Thunder, Confetti, Pixel Burst). Team colour always stays the main paint, and bots get random looks
+- Six original cars on five hitbox classes: Vanta and Boxer (balanced), Stiletto (long and low), Bulwark (tall), Javelin (long and flat), Rook (hybrid)
+- Garage: body colour (team shades or painted Black, White, Silver, Carbon), 25 decals (some glow and pulse: Lava, Neon Grid, Circuit), five finishes, ten accent colours, five rim styles and colours, nine boosts (some with their own particles), four toppers and eight goal explosions (Shockwave, Supernova, Vortex, Thunder, Confetti, Pixel Burst, Fireworks, Black Hole). Bots get random looks
+- Effects: hit sparks in the hitter's colour with a ring burst on hard hits, a ball trail in the last hitter's colour, a sonic boom ring at supersonic and dust on hard landings
 - Free Play: just you and the ball with endless boost. R puts the ball back in the centre and F drops it onto your roof for dribble and flick practice
 - Quick chat on 1 to 4
 - Five arenas: Night, Sunset, Snow, Neon and Day
