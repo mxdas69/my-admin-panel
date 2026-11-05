@@ -15,6 +15,8 @@ When the file is opened from disk and GitHub is reachable, it runs the newest bu
 - Effects: hit sparks in the hitter's colour with a ring burst on hard hits, a ball trail in the last hitter's colour, a sonic boom ring at supersonic and dust on hard landings
 - Free Play: just you and the ball with endless boost. R puts the ball back in the centre and F drops it onto your roof for dribble and flick practice
 - Quick chat on 1 to 4
+- Mutators for bot matches: ball size (normal, big, small), gravity (normal, low, high), boost (normal, unlimited, none) and demolitions (normal, off, on contact). Online matches use the host's mutators
+- Music: a soft synthwave loop generated in the browser, full volume in the menus and quieter during play, with its own slider in Settings
 - Five arenas: Night, Sunset, Snow, Neon and Day
 - Handling built on soccar physics: speed-based turning, boost, jumps, double jumps, directional flips, flip cancels, wavedashes, flip resets, air roll, wall and ceiling driving, bumps and demolitions
 - Car-ball touches use the genre's rules: a dead, grippy contact plus an extra kick that repeats while contact lasts. Dribbles stay on the roof, and front, 45° and musty flicks out of a dribble send the ball at roughly 60 to 75 km/h

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="np-build" content="20261105153041">
+<meta name="np-build" content="20261105154202">
 <title>Nitro Pitch</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700;800;900&family=Saira:wght@400;500;600&display=swap">
@@ -122,6 +122,9 @@ h2{margin:0;font-family:var(--display);font-weight:900;font-size:44px;line-heigh
 .note{margin:0;padding:9px 12px;background:var(--panel2);border-left:4px solid var(--amber);font-size:14px}
 .note.good{border-left-color:#43d17a}
 #netUi{display:flex;flex-direction:column;gap:14px}
+.muts{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center}
+.muts .lab{font-size:12px}
+.muts .seg button{font-size:14px;padding:7px 2px}
 .short{box-sizing:border-box;width:100%;background:#070b14;color:var(--fg);border:1px solid var(--line);padding:10px 8px;text-align:center;font-family:var(--display);font-weight:900;font-size:52px;line-height:1.05;letter-spacing:.3em;text-indent:.3em;text-transform:uppercase}
 input.short::placeholder{color:#2c3a55}
 input.short:focus{outline:2px solid var(--amber);outline-offset:1px}
@@ -256,6 +259,13 @@ table.stats{width:100%;border-collapse:collapse;font-variant-numeric:tabular-num
           <div class="seg seg6" id="segArena"><button data-v="night" class="on">Night</button><button data-v="sunset">Sunset</button><button data-v="snow">Snow</button><button data-v="neon">Neon</button><button data-v="day">Day</button><button data-v="random">Random</button></div></div>
         <div class="opt"><span class="lab">Match length</span>
           <div class="seg" id="segLen"><button data-v="120">2:00</button><button data-v="300" class="on">5:00</button><button data-v="480">8:00</button></div></div>
+        <div class="opt"><span class="lab">Mutators</span>
+          <div class="muts">
+            <span class="lab">Ball</span><div class="seg" id="segMutBall"><button data-v="normal" class="on">Normal</button><button data-v="big">Big</button><button data-v="small">Small</button></div>
+            <span class="lab">Gravity</span><div class="seg" id="segMutGrav"><button data-v="normal" class="on">Normal</button><button data-v="low">Low</button><button data-v="high">High</button></div>
+            <span class="lab">Boost</span><div class="seg" id="segMutBoost"><button data-v="normal" class="on">Normal</button><button data-v="unlimited">Unlimited</button><button data-v="none">None</button></div>
+            <span class="lab">Demos</span><div class="seg" id="segMutDemos"><button data-v="normal" class="on">Normal</button><button data-v="off">Off</button><button data-v="anyhit">On contact</button></div>
+          </div></div>
         <button class="go" id="btnPlay">Kick off</button>
       </div>
       <div class="scr" data-scr="garage" hidden>
@@ -287,7 +297,8 @@ table.stats{width:100%;border-collapse:collapse;font-variant-numeric:tabular-num
             <div class="seg" id="segGlow"><button data-v="0">Off</button><button data-v="1" class="on">Low</button><button data-v="2">High</button></div></div>
         </div>
         <div class="pane" data-pane="sound" hidden>
-          <div class="sliders"><label class="slider"><span>Volume</span><input type="range" id="volume" min="0" max="100" step="5"><output id="volumeOut">70</output></label></div>
+          <div class="sliders"><label class="slider"><span>Volume</span><input type="range" id="volume" min="0" max="100" step="5"><output id="volumeOut">70</output></label>
+            <label class="slider"><span>Music</span><input type="range" id="music" min="0" max="100" step="5"><output id="musicOut">35</output></label></div>
           <p class="lede">M mutes and unmutes during a match.</p>
         </div>
       </div>
@@ -371,7 +382,8 @@ function normalAt(x,y,z,o){
 }
 
 /* ============ PHYSICS: 120 Hz fixed step, soccar-style constants (1 unit = 1 cm) ============ */
-const STEP=1/120,G=650,BR=92.75,MB=30,MC=180,K2=3600;
+const STEP=1/120,MB=30,MC=180,K2=3600;
+let G=650,BR=92.75;   // mutators can change gravity and the ball size
 // Air control torques and damping (rad/s^2) and the angular speed cap, straight from the game's own constants
 const T_P=12.46,T_Y=9.11,T_R=38.35,D_P=2.88,D_Y=1.92,D_R=4.79,W_MAX=5.5;
 const BOOST_GND=991.67,BOOST_AIR=1058.33,BOOST_USE=33.3;
@@ -750,7 +762,9 @@ function carCar(a,b){
   const vn=_d.copy(b.v).sub(a.v).dot(n);
   if(vn>=0)return;
   const sa=a.v.dot(n),sb=-b.v.dot(n);
-  if(a.team!==b.team){
+  const dm=game.mut?game.mut.demos:'normal';
+  if(a.team!==b.team&&dm!=='off'){
+    if(dm==='anyhit'&&-vn>200){if(sa>=sb)demolish(b,a);else demolish(a,b);return;}
     if(a.sonic&&sa>=sb&&a.f.dot(n)>.5){demolish(b,a);return;}
     if(b.sonic&&sb>=sa&&-b.f.dot(n)>.5){demolish(a,b);return;}
   }
@@ -818,7 +832,7 @@ const BOT={
 const pick=(v,ok,d)=>ok.includes(v)?v:d;
 const game={mode:'play',attract:true,time:0,tick:0,timeLeft:300,overtime:false,score:[0,0],cd:0,goalT:0,kickoffLive:true,paused:false,
   level:pick(store.level,['rookie','pro','allstar'],'pro'),length:pick(store.length,[120,300,480],300),size:pick(store.size,[1,2,3],2),body:pick(store.body,Object.keys(BODIES),'vanta'),skin:null,
-  threat:0,threatT:0,goalSpeed:0,lastEval:-9,replayI:0,scoredBy:0,touchLog:[],evalTouch:null,prevThreat:0};
+  mut:{ball:'normal',grav:'normal',boost:'normal',demos:'normal'},threat:0,threatT:0,goalSpeed:0,lastEval:-9,replayI:0,scoredBy:0,touchLog:[],evalTouch:null,prevThreat:0};
 let bots=[];
 let ballCam=store.ballCam!==false;
 const esc=s=>String(s).replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
@@ -872,7 +886,7 @@ function startCountdown(){
   game.mode='countdown';game.cd=3;lastCd=4;recCount=0;recHead=0;
 }
 function startAttract(){
-  unlockPointer();
+  unlockPointer();applyMutators(null);
   if(game.net==='host')netEv({t:'menu'});else if(game.net==='guest')netEv({t:'bye'});
   game.net=null;
   game.attract=true;game.paused=false;game.free=false;game.train=null;
@@ -882,8 +896,16 @@ function startAttract(){
   $('replayTag').hidden=true;$('skipTag').hidden=true;
   setAudioLevels(0);
 }
+const MUT_BALL={normal:1,big:1.5,small:.72},MUT_GRAV={normal:650,low:325,high:1300};
+function applyMutators(m){
+  m=m||{};
+  BR=92.75*(MUT_BALL[m.ball]||1);G=MUT_GRAV[m.grav]||650;
+  game.mut={ball:MUT_BALL[m.ball]?m.ball:'normal',grav:MUT_GRAV[m.grav]?m.grav:'normal',boost:['unlimited','none'].includes(m.boost)?m.boost:'normal',demos:['off','anyhit'].includes(m.demos)?m.demos:'normal'};
+  ballMesh.scale.setScalar(BR/92.75);
+  predCache.forEach(e=>e.tick=-99);
+}
 function startMatch(){
-  initAudio();matchArena();
+  initAudio();matchArena();applyMutators(store.mut);
   game.attract=false;game.paused=false;game.free=false;game.train=null;game.score=[0,0];game.overtime=false;game.timeLeft=game.length;game.time=0;
   buildRoster();
   $('menu').hidden=true;$('pause').hidden=true;$('over').hidden=true;$('hud').hidden=false;$('board').hidden=true;
@@ -972,6 +994,7 @@ function record(){
 function fixedStep(dt){
   game.time+=dt;game.tick++;
   if(game.free&&player)player.boost=100;
+  if(game.mut&&game.mut.boost!=='normal'){const b=game.mut.boost==='unlimited'?100:0;for(const c of cars)c.boost=b;}
   if(game.train)trainStep(dt);
   for(const c of cars){c.pp.copy(c.p);c.pq.copy(c.q);}
   ball.pp.copy(ball.p);ball.pq.copy(ball.q);
@@ -1030,7 +1053,7 @@ function startReplay(){
 }
 /* Free play: you, the ball and endless boost. R puts the ball back in the centre, F drops it onto your roof */
 function startFreePlay(){
-  initAudio();matchArena();
+  initAudio();matchArena();applyMutators(null);
   game.attract=false;game.paused=false;game.free=true;game.train=null;game.net=null;game.score=[0,0];game.overtime=false;game.timeLeft=0;game.time=0;
   const keep=game.size;game.size=1;buildRoster();game.size=keep;
   bots.length=0;
@@ -1071,7 +1094,7 @@ function trainShot(pack,i,lv){
   return{b:[p0.x,p0.y,p0.z],bv:[(t.x-p0.x)/T,(t.y-p0.y+.5*G*T*T)/T,(t.z-p0.z)/T],c:[0,-F.hz+180],boost:60,face:1};
 }
 function startTraining(pack){
-  initAudio();matchArena();
+  initAudio();matchArena();applyMutators(null);
   game.attract=false;game.paused=false;game.free=false;game.score=[0,0];game.overtime=false;game.time=0;game.net=null;
   game.train={pack,lv:['rookie','pro','allstar'].includes(store.trainLv)?store.trainLv:'pro',i:0,res:new Array(TRAIN_N).fill(null),state:'wait',t:0,S:null};
   const keep=game.size;game.size=1;buildRoster();game.size=keep;bots.length=0;
@@ -1599,6 +1622,49 @@ function sfxGoal(good){
   const base=good?262:196;
   [0,.32,.64].forEach((d,i)=>setTimeout(()=>{tone(base*(1+i*.25),base*(1+i*.25),.6,.12,'sawtooth');tone(base*(1+i*.25)*1.5,base*(1+i*.25)*1.5,.6,.05,'square');},d*1000));
   noiseHit(2500,1.1,.45);tone(90,30,.9,.6);
+}
+
+/* Music: a soft synthwave loop played by the browser (drums, bass, arpeggio and pads over Am F C G).
+   Full volume in the menus, quieter during a match, off at zero on the slider. */
+const MUS={bpm:104,prog:[[57,60,64],[53,57,60],[48,52,55],[55,59,62]],on:false,t:0,i:0,bus:null,lp:null,timer:0,duck:1};
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+const musVol=()=>clamp(store.music==null?35:+store.music,0,100)/100;
+function startMusic(){
+  if(!AC||MUS.on||musVol()<=0)return;MUS.on=true;
+  const b=MUS.bus=AC.createGain();b.gain.value=0;b.connect(master);
+  const lp=MUS.lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=3200;lp.connect(b);
+  const dl=AC.createDelay(1),fb=AC.createGain(),wet=AC.createGain();dl.delayTime.value=60/MUS.bpm*.75;fb.gain.value=.3;wet.gain.value=.2;
+  lp.connect(dl);dl.connect(fb);fb.connect(dl);dl.connect(wet);wet.connect(b);
+  MUS.t=AC.currentTime+.12;MUS.i=0;musicLevel();
+  MUS.timer=setInterval(musTick,40);
+}
+function stopMusic(){if(!MUS.on)return;MUS.on=false;clearInterval(MUS.timer);const b=MUS.bus;b.gain.setTargetAtTime(0,AC.currentTime,.2);setTimeout(()=>b.disconnect(),1500);}
+function musicLevel(){if(!MUS.on)return;MUS.bus.gain.setTargetAtTime(musVol()*.5*MUS.duck,AC.currentTime,.4);}
+function musicDuck(k){if(Math.abs(k-MUS.duck)<.01)return;MUS.duck=k;musicLevel();}
+function musTick(){
+  if(!MUS.on)return;
+  const s16=60/MUS.bpm/4;
+  while(MUS.t<AC.currentTime+.2){musStep(MUS.i,MUS.t,s16);MUS.t+=s16;MUS.i++;}
+}
+function musEnv(g,t,a,peak,d){g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(peak,t+a);g.gain.exponentialRampToValueAtTime(.0005,t+a+d);}
+function musOsc(type,f,t,dur,peak,a,cut,out){
+  const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=f;
+  let last=o;if(cut){const fl=AC.createBiquadFilter();fl.type='lowpass';fl.frequency.setValueAtTime(cut[0],t);fl.frequency.exponentialRampToValueAtTime(cut[1],t+dur);o.connect(fl);last=fl;}
+  last.connect(g);g.connect(out||MUS.lp);musEnv(g,t,a,peak,dur);o.start(t);o.stop(t+a+dur+.05);return o;
+}
+function musNoise(t,type,f,peak,d){
+  const s=AC.createBufferSource(),fl=AC.createBiquadFilter(),g=AC.createGain();s.buffer=noiseBuf;fl.type=type;fl.frequency.value=f;
+  s.connect(fl);fl.connect(g);g.connect(MUS.lp);musEnv(g,t,.002,peak,d);s.start(t,Math.random()*1.5);s.stop(t+d+.05);
+}
+function musStep(i,t,s16){
+  const bar=(i>>4)%4,s=i%16,ch=MUS.prog[bar],intro=i<64;
+  if(s%4===0&&!(intro&&bar<2)){const o=musOsc('sine',150,t,.28,.55,.003,null);o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(42,t+.14);}
+  if((s===4||s===12)&&!intro){musNoise(t,'bandpass',1900,.16,.16);musOsc('triangle',190,t,.08,.08,.002,null);}
+  if(s%2===1&&!(intro&&bar<1))musNoise(t,'highpass',7500,s%4===3?.05:.028,.045);
+  if(s%2===0)musOsc('sawtooth',mtof(ch[0]-24+(s%8===6?12:0)),t,s16*1.7,.11,.006,[900,220]);
+  const arp=[0,1,2,1,0,2,1,2][s%8],n=(s%8===7?ch[0]+12:ch[arp])+12;
+  musOsc('square',mtof(n),t,.16,.035,.003,[3600,700]);
+  if(s===0){const L=60/MUS.bpm*4;for(const m of ch){for(const dt of[-6,6]){const o=musOsc('sawtooth',mtof(m),t,L*.9,.014,.5,[1100,700]);o.detune.value=dt;}}}
 }
 
 /* ============ RENDERING ============ */
@@ -3157,7 +3223,8 @@ function buildCarVis(key,team,skin){
   const G=buildBodyGeos(key),M=carMats(team,skin),D=DEFS[key];
   const root=new THREE.Group(),hc=new THREE.Group(),body=new THREE.Group(),off=BODIES[key].off;
   hc.position.set(0,off.y,off.z);root.add(hc);hc.add(body);
-  for(const[role,geo]of G.roles){const m=new THREE.Mesh(geo,M[role]);m.castShadow=role!=='glow'&&role!=='head'&&role!=='tail';body.add(m);}
+  let tailMat=null;
+  for(const[role,geo]of G.roles){const m=new THREE.Mesh(geo,M[role]);m.castShadow=role!=='glow'&&role!=='head'&&role!=='tail';if(role==='tail'){m.material=tailMat=M.tail.clone();}body.add(m);}
   const topper=addTopper(body,G,skin.topper,M,M.accent);
   const nozMat=new THREE.MeshBasicMaterial({color:new THREE.Color(M.flameHex).multiplyScalar(.08),toneMapped:false});
   const flames=[],cores=[];
@@ -3186,7 +3253,7 @@ function buildCarVis(key,team,skin){
   under.position.y=-G.rest+1.5;hc.add(under);
   const bc=new THREE.Color(M.flameHex);
   return{root,body,wheels,flames,cores,flare,nozMat,under,flameHex:M.flameHex,M,skin,topper,G,lean:0,pitch:0,roll:0,by:0,bv:0,susp:0,skid:[null,null],plate:null,blob:null,trails:[],
-    bRGB:[bc.r*.55,bc.g*.55,bc.b*.55],prism:M.prism};
+    bRGB:[bc.r*.55,bc.g*.55,bc.b*.55],prism:M.prism,tailMat,tailBase:tailMat?tailMat.color.clone():null,tailK:1};
 }
 // Prism boost: one shared colour that drifts round the hue wheel
 const _prism=new THREE.Color();
@@ -3213,7 +3280,7 @@ function addCarVis(c){
 }
 function removeCarVis(c){
   const v=c.vis;if(!v)return;
-  scene.remove(v.root);scene.remove(v.blob);v.blob.material.dispose();
+  scene.remove(v.root);scene.remove(v.blob);v.blob.material.dispose();if(v.tailMat)v.tailMat.dispose();
   v.nozMat.dispose();v.flare.material.dispose();v.under.material.dispose();v.under.geometry.dispose();
   for(const r of v.trails){scene.remove(r.mesh);r.g.dispose();ribbons.splice(ribbons.indexOf(r),1);}
   if(v.plate){scene.remove(v.plate);v.plate.material.map.dispose();v.plate.material.dispose();}
@@ -3262,6 +3329,9 @@ function poseCar(c,p,q,boost,visible,dt,live){
   const lat=c.onGround?clamp(c.steerS*vf/2300,-1,1):0;
   v.lean+=(lat*.07-v.lean)*Math.min(1,dt*7);
   const brake=c.onGround&&c.input.throttle*vf<-50;
+  // Brake lights glow brighter when braking or reversing
+  const tk=c.onGround&&(brake||(c.input.throttle<-.1&&vf<60))?2.3:1;
+  if(v.tailMat&&tk!==v.tailK){v.tailK=tk;v.tailMat.color.copy(v.tailBase).multiplyScalar(tk);}
   const acc=c.onGround?(c.boosting?-.035:brake?.04:c.input.throttle*-.014):0;
   v.pitch+=(acc-v.pitch)*Math.min(1,dt*6);
   v.body.rotation.z=v.lean;v.body.rotation.x=v.pitch;
@@ -3489,6 +3559,8 @@ $('menu').addEventListener('click',e=>{
 seg('segMode',v=>{game.size=+v;store.size=game.size;if(game.attract)startAttract();});
 seg('segLevel',v=>{game.level=v;store.level=v;});
 seg('segLen',v=>{game.length=+v;store.length=game.length;});
+store.mut=Object.assign({ball:'normal',grav:'normal',boost:'normal',demos:'normal'},store.mut||{});
+for(const[id,k]of[['segMutBall','ball'],['segMutGrav','grav'],['segMutBoost','boost'],['segMutDemos','demos']]){seg(id,v=>{store.mut[k]=v;});setSeg(id,store.mut[k]);}
 // Garage: pick a tab, then a chip; the showroom car and your car in the stadium update straight away
 const GOAL_DESC={shockwave:'A ring of light and sparks',supernova:'A core swells and bursts twice',vortex:'Sparks spiral out of the net',thunder:'Lightning strikes the ball',confetti:'Paper confetti rains down',pixel:'The ball shatters into cubes',fireworks:'Rockets burst over the goal',blackhole:'Pulls everything in, then blows'};
 const hex6=n=>'#'+n.toString(16).padStart(6,'0');
@@ -3554,6 +3626,10 @@ setGlow([0,1,2].includes(store.glow)?store.glow:1);
 const volGain=()=>clamp(store.vol==null?70:+store.vol,0,100)/100;
 function setVolume(v){store.vol=clamp(Math.round(+v),0,100);saveStore();$('volume').value=store.vol;$('volumeOut').textContent=store.vol;if(master&&!muted)master.gain.value=volGain();}
 $('volume').addEventListener('input',e=>setVolume(e.target.value));
+function setMusic(v){store.music=clamp(Math.round(+v),0,100);saveStore();$('music').value=store.music;$('musicOut').textContent=store.music;if(store.music<=0)stopMusic();else if(AC){startMusic();musicLevel();}}
+$('music').addEventListener('input',e=>setMusic(e.target.value));
+const firstTouch=()=>{initAudio();startMusic();removeEventListener('pointerdown',firstTouch);removeEventListener('keydown',firstTouch);};
+addEventListener('pointerdown',firstTouch);addEventListener('keydown',firstTouch);
 setSeg('segMode',game.size);setSeg('segLevel',game.level);setSeg('segLen',game.length);
 updateCarInfo();
 $('camTag').textContent=ballCam?'BALL CAM':'CAR CAM';
@@ -3891,6 +3967,7 @@ function frame(now){
   updateParticles(pdt);
   if(!window.__npHold)updateCamera(pdt);
   if(!game.attract){updateHud(dt);if(!game.paused&&game.mode!=='over')setAudioLevels(game.mode==='play'||game.mode==='goal'?1:.5);}
+  if(MUS.on)musicDuck(game.attract||game.mode==='over'||game.paused?1:game.mode==='replay'||game.mode==='goal'?.7:.4);
   if(game.net==='host')netSendSnap(now);
   renderFrame(frameT);
   renderGarage(dt);
@@ -4050,7 +4127,7 @@ function netStartMatch(){
   if(NET.role!=='host'||!NET.open)return;
   game.net='host';game.size=NET.size;
   startMatch();lockPointer();
-  netEv({t:'start',size:game.size,arena:curArena,me:cars.indexOf(NET.car),roster:cars.map(c=>({team:c.team,name:c===player?'Host':c.name,body:c.bodyKey,skin:c.skin}))});
+  netEv({t:'start',mut:game.mut,size:game.size,arena:curArena,me:cars.indexOf(NET.car),roster:cars.map(c=>({team:c.team,name:c===player?'Host':c.name,body:c.bodyKey,skin:c.skin}))});
 }
 const NET_CAR=16,NET_HEAD=17;
 let netBuf=null,netSent=0;
@@ -4097,6 +4174,7 @@ function netSendInput(){
   try{NET.st.send(b);}catch(e){}
 }
 function netGuestStart(m){
+  applyMutators(m.mut);
   game.net='guest';game.attract=false;game.paused=false;game.free=false;game.train=null;game.size=m.size;
   for(const c of cars)if(c.vis)removeCarVis(c);
   cars=m.roster.map((r,i)=>makeCar(r.team,i===m.me?'You':r.name,own(BODIES,r.body)?r.body:'vanta',i===m.me,cleanSkin(r.skin)));
@@ -4179,9 +4257,9 @@ function netRender(){
 netRender();
 
 // Test hook used for automated balance checks
-window.__np={NET,netStartMatch,goalFx,startTraining,setupShot,trainNext,renderer,updateSun,game,ball,cars:()=>cars,bots:()=>bots,player:()=>player,Bot,fixedStep,afterReplay,resetField,startMatch,startAttract,BOT,BODIES,sd,cam,frame,keys,post:()=>!!post,camDbg:()=>({camArm,ballBlend,camPos:camPos.clone(),camAnchor:camAnchor.clone(),camDir:camDir.clone(),camUp:camUp.clone()}),gfx:()=>({level:gfxLevel,auto:gfxAuto,quality:+quality.toFixed(2),shadow:sun.castShadow,samples:post?post.rt.samples:-1,bloom:post?+post.comp.uniforms.uBloom.value.toFixed(2):-1,pr:+renderer.getPixelRatio().toFixed(2)}),clearFx(){for(const p of FX.P)p.life=0;for(const p of SMOKE.P)p.life=0;}};
+window.__np={MUS,applyMutators,phys:()=>({BR,G}),NET,netStartMatch,goalFx,startTraining,setupShot,trainNext,renderer,updateSun,game,ball,cars:()=>cars,bots:()=>bots,player:()=>player,Bot,fixedStep,afterReplay,resetField,startMatch,startAttract,BOT,BODIES,sd,cam,frame,keys,post:()=>!!post,camDbg:()=>({camArm,ballBlend,camPos:camPos.clone(),camAnchor:camAnchor.clone(),camDir:camDir.clone(),camUp:camUp.clone()}),gfx:()=>({level:gfxLevel,auto:gfxAuto,quality:+quality.toFixed(2),shadow:sun.castShadow,samples:post?post.rt.samples:-1,bloom:post?+post.comp.uniforms.uBloom.value.toFixed(2):-1,pr:+renderer.getPixelRatio().toFixed(2)}),clearFx(){for(const p of FX.P)p.life=0;for(const p of SMOKE.P)p.life=0;}};
 
-setVolume(store.vol==null?70:store.vol);
+setVolume(store.vol==null?70:store.vol);$('music').value=store.music==null?35:store.music;$('musicOut').textContent=$('music').value;
 placeGarage();
 startAttract();
 requestAnimationFrame(loop);
