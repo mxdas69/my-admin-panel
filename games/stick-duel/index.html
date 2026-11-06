@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stick Duel</title>
+<style>
+html,body{margin:0;height:100%;background:#08060f;color:#f4f1ff;font-family:system-ui,"Segoe UI",sans-serif;overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+.ui{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#08060fd9;padding:16px}
+.card{background:#171230;border:1px solid #352b66;border-radius:18px;padding:26px;max-width:460px;text-align:center}
+h1{margin:0 0 6px;font:900 46px/1 "Arial Black",system-ui}h1 b{color:#ff4fa3}
+p{color:#a89fd0;line-height:1.5;margin:8px 0 14px}
+button{font:800 17px system-ui;border:0;border-radius:10px;padding:12px 18px;margin:4px;cursor:pointer;background:#272052;color:#f4f1ff}
+button.y{background:#ff4fa3;color:#2a0016}
+button:focus-visible{outline:3px solid #ff4fa3;outline-offset:2px}
+.keys{display:grid;grid-template-columns:1fr 1fr;gap:12px;text-align:left;font-size:13px;color:#a89fd0;margin:10px 0 16px}
+.keys b{display:block;color:#f4f1ff;margin-bottom:4px}
+kbd{background:#272052;border-radius:5px;padding:1px 6px;color:#f4f1ff;font-weight:700;font-family:inherit}
+a.back{position:fixed;left:12px;top:10px;color:#a89fd0;text-decoration:none;font:700 14px system-ui;z-index:5;background:#171230cc;padding:6px 12px;border-radius:999px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<a class="back" href="../index.html">‹ Games</a>
+<canvas id="c"></canvas>
+<div class="ui" id="menu"><div class="card">
+  <h1>Stick <b>Duel</b></h1>
+  <p id="sub">Knock the other fighter off the stage. The more damage they have, the further they fly. Three lives each.</p>
+  <div class="keys"><div><b style="color:#4fd8ff">Player 1</b><kbd>A</kbd> <kbd>D</kbd> move<br><kbd>W</kbd> jump (twice in the air)<br><kbd>S</kbd> drop through<br><kbd>F</kbd> punch · <kbd>G</kbd> kick</div>
+  <div><b style="color:#ff4fa3">Player 2</b><kbd>←</kbd> <kbd>→</kbd> move<br><kbd>↑</kbd> jump<br><kbd>↓</kbd> drop through<br><kbd>K</kbd> punch · <kbd>L</kbd> kick</div></div>
+  <div><button class="y" data-m="cpu">vs Computer</button><button data-m="2p">2 players</button></div>
+</div></div>
+<script>
+'use strict';
+const cv=document.getElementById('c'),g=cv.getContext('2d'),menu=document.getElementById('menu');
+const W=1200,H=700,clamp=(x,a,b)=>x<a?a:x>b?b:x,rnd=(a,b)=>a+Math.random()*(b-a);
+let S=1,OX=0,OY=0,DPR=1;
+function resize(){DPR=Math.min(2,devicePixelRatio||1);cv.width=innerWidth*DPR;cv.height=innerHeight*DPR;S=Math.min(cv.width/W,cv.height/H);OX=(cv.width-W*S)/2;OY=(cv.height-H*S)/2;}
+addEventListener('resize',resize);resize();
+const keys={},taps={};
+addEventListener('keydown',e=>{keys[e.code]=true;if(!e.repeat)taps[e.code]=true;if(e.code.startsWith('Arrow')||e.code==='Space')e.preventDefault();audio();});
+addEventListener('keyup',e=>{keys[e.code]=false;});
+let AC=null;
+function audio(){if(!AC)try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}if(AC&&AC.state==='suspended')AC.resume();}
+function blip(f0,f1,d,v,type){if(!AC)return;const t=AC.currentTime,o=AC.createOscillator(),gn=AC.createGain();o.type=type||'square';o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f1,t+d);gn.gain.setValueAtTime(v,t);gn.gain.exponentialRampToValueAtTime(.0005,t+d);o.connect(gn);gn.connect(AC.destination);o.start(t);o.stop(t+d+.02);}
+/* Stage: a main floor plus three thin platforms you can jump up through */
+const PLAT=[{x1:180,x2:1020,y:560,solid:true},{x1:290,x2:470,y:420},{x1:730,x2:910,y:420},{x1:520,x2:680,y:290}];
+const ATK={p:{start:.06,act:.09,rec:.16,reach:50,dmg:6,kb:240,grow:6.5,col:'#fff'},k:{start:.13,act:.1,rec:.26,reach:64,dmg:11,kb:340,grow:9.5,col:'#ffe07a'}};
+const CTL=[{l:'KeyA',r:'KeyD',u:'KeyW',d:'KeyS',p:'KeyF',k:'KeyG'},{l:'ArrowLeft',r:'ArrowRight',u:'ArrowUp',d:'ArrowDown',p:'KeyK',k:'KeyL',p2:'Numpad1',k2:'Numpad2'}];
+let F=[],state='menu',mode='cpu',parts=[],shake=0,banner='',bannerT=0,last=performance.now(),t=0;
+function mkF(i){return{i,x:i?760:440,y:200,vx:0,vy:0,face:i?-1:1,dmg:0,stocks:3,jumps:2,ground:false,atk:null,atkT:0,hit:false,stun:0,inv:1.2,prevU:false,prevA:false,cpuT:0,drop:0,col:i?'#ff4fa3':'#4fd8ff'};}
+function start(m){mode=m;F=[mkF(0),mkF(1)];state='play';menu.hidden=true;banner='Fight!';bannerT=1;audio();}
+document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>start(b.dataset.m));
+function input(f){
+  if(f.i===1&&mode==='cpu')return cpu(f);
+  const c=CTL[f.i],K=k=>keys[k]||taps[k];return{l:K(c.l),r:K(c.r),u:K(c.u),d:K(c.d),p:K(c.p)||K(c.p2),k:K(c.k)||K(c.k2)};
+}
+// The computer walks in, swings when close, jumps to follow you and heads back to the stage when knocked off
+function cpu(f){
+  const o=F[0],dx=o.x-f.x,dy=o.y-f.y,I={};
+  f.cpuT-=1/60;
+  if(f.x<200||f.x>1000||f.y>560){I.r=f.x<600;I.l=f.x>=600;if(f.vy>0&&f.jumps>0)I.u=Math.random()<.2;return I;}
+  if(Math.abs(dx)>55){I.r=dx>0;I.l=dx<0;}
+  if(dy<-80&&f.ground&&Math.random()<.04)I.u=true;
+  if(dy>60&&f.ground&&f.y<560)I.d=Math.random()<.03;
+  if(Math.abs(dx)<70&&Math.abs(dy)<60&&f.cpuT<=0){if(Math.random()<.35)I.k=true;else I.p=true;f.cpuT=rnd(.18,.45);}
+  return I;
+}
+function step(f,dt){
+  const I=input(f),o=F[1-f.i];
+  if(f.inv>0)f.inv-=dt;
+  if(f.stun>0){f.stun-=dt;}
+  else{
+    const mv=(I.r?1:0)-(I.l?1:0),sp=f.ground?430:330;
+    f.vx+=(mv*sp-f.vx)*Math.min(1,dt*(f.ground?14:5));
+    if(mv&&!f.atk)f.face=mv;
+    if(I.u&&!f.prevU&&f.jumps>0){f.vy=f.ground?-820:-760;f.jumps--;f.ground=false;blip(330,520,.08,.03,'triangle');}
+    if(I.d&&f.ground)f.drop=.25;
+    const a=I.p?'p':I.k?'k':null;
+    if(a&&!f.prevA&&!f.atk){f.atk=a;f.atkT=0;f.hit=false;}
+    f.prevA=!!a;
+  }
+  f.prevU=!!I.u;
+  if(f.atk){
+    const A=ATK[f.atk];f.atkT+=dt;
+    if(!f.hit&&f.atkT>A.start&&f.atkT<A.start+A.act&&o.inv<=0){
+      const hx=f.x+f.face*A.reach,hy=f.y-48;
+      if(Math.abs(o.x-hx)<34&&Math.abs((o.y-50)-hy)<52){
+        f.hit=true;o.dmg+=A.dmg;const kb=A.kb+o.dmg*A.grow;
+        o.vx=f.face*kb*.75;o.vy=-kb*.62;o.stun=kb/1700;o.ground=false;o.atk=null;
+        shake=Math.min(.4,kb/2500);blip(f.atk==='k'?160:240,70,.12,.08,'sawtooth');
+        for(let i=0;i<14;i++)parts.push({x:hx,y:hy,vx:rnd(-300,300)+f.face*200,vy:rnd(-300,200),t:.4,c:A.col});
+      }
+    }
+    if(f.atkT>A.start+A.act+A.rec)f.atk=null;
+  }
+  f.vy+=1800*dt;if(f.vy>1400)f.vy=1400;
+  const py=f.y;f.x+=f.vx*dt;f.y+=f.vy*dt;f.drop-=dt;
+  f.ground=false;
+  for(const P of PLAT){
+    if(f.x>P.x1-8&&f.x<P.x2+8&&f.vy>=0&&py<=P.y+1&&f.y>=P.y&&(P.solid||f.drop<=0)){f.y=P.y;f.vy=0;f.ground=true;f.jumps=2;}
+  }
+  if(f.ground&&f.stun<=0)f.vx*=Math.pow(.0001,dt*(f.atk?3:0));
+  // Blast zones: off the sides, the top or the bottom costs a life
+  if(f.x<-220||f.x>W+220||f.y>H+260||f.y<-520){
+    f.stocks--;for(let i=0;i<30;i++)parts.push({x:clamp(f.x,10,W-10),y:clamp(f.y,10,H-10),vx:rnd(-500,500),vy:rnd(-500,500),t:.7,c:f.col});
+    blip(520,60,.5,.08,'sawtooth');shake=.4;
+    if(f.stocks<=0){state='over';setTimeout(()=>{menu.hidden=false;document.getElementById('sub').textContent=(mode==='cpu'?(f.i===1?'You win!':'The computer wins.'):'Player '+(2-f.i)+' wins!')+' Play again?';},900);}
+    Object.assign(f,{x:600,y:120,vx:0,vy:0,dmg:0,inv:2,stun:0,atk:null,jumps:2});
+  }
+}
+function update(dt){
+  t+=dt;bannerT-=dt;shake=Math.max(0,shake-dt);
+  for(const p of parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=600*dt;p.t-=dt;}parts=parts.filter(p=>p.t>0);
+  if(state!=='play')return;
+  for(const f of F)step(f,dt);
+  for(const k in taps)taps[k]=false;
+  // Fighters push each other apart a little
+  const a=F[0],b=F[1],dx=b.x-a.x;if(Math.abs(dx)<26&&Math.abs(a.y-b.y)<60){const s=Math.sign(dx)||1,o=(26-Math.abs(dx))/2;a.x-=s*o;b.x+=s*o;}
+}
+function limb(x1,y1,x2,y2){g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke();}
+function drawF(f){
+  if(f.inv>0&&Math.floor(t*12)%2)return;
+  const x=f.x,y=f.y,s=f.face,run=f.ground&&Math.abs(f.vx)>40?Math.sin(t*14):0,air=!f.ground;
+  g.strokeStyle=f.col;g.lineWidth=7;g.lineCap='round';g.shadowColor=f.col;g.shadowBlur=14;
+  const hip={x,y:y-38},neck={x:x+s*3,y:y-78};
+  limb(hip.x,hip.y,neck.x,neck.y);
+  g.beginPath();g.arc(x+s*5,y-94,13,0,6.283);g.stroke();
+  let kick=f.atk==='k'&&f.atkT>ATK.k.start*.6&&f.atkT<ATK.k.start+ATK.k.act+.05,punch=f.atk==='p'&&f.atkT>ATK.p.start*.5&&f.atkT<ATK.p.start+ATK.p.act+.04;
+  // legs
+  if(kick){limb(hip.x,hip.y,x+s*60,y-46);limb(hip.x,hip.y,x-s*8,y);}
+  else if(air){limb(hip.x,hip.y,x+s*14,y-12);limb(hip.x,hip.y,x-s*12,y-6);}
+  else{limb(hip.x,hip.y,x+run*16,y);limb(hip.x,hip.y,x-run*16,y);}
+  // arms
+  if(punch){limb(neck.x,neck.y+6,x+s*54,y-58);limb(neck.x,neck.y+6,x-s*10,y-48);}
+  else if(f.stun>0){limb(neck.x,neck.y+6,x-s*20,y-104);limb(neck.x,neck.y+6,x+s*16,y-104);}
+  else{limb(neck.x,neck.y+6,x+s*12-run*10,y-44);limb(neck.x,neck.y+6,x-s*10+run*10,y-46);}
+  g.shadowBlur=0;
+}
+function draw(){
+  g.setTransform(1,0,0,1,0,0);const gr=g.createLinearGradient(0,0,0,cv.height);gr.addColorStop(0,'#140c2e');gr.addColorStop(1,'#08060f');g.fillStyle=gr;g.fillRect(0,0,cv.width,cv.height);
+  const sx=shake?rnd(-10,10)*shake:0,sy=shake?rnd(-10,10)*shake:0;
+  g.setTransform(S,0,0,S,OX+sx,OY+sy);
+  for(let i=0;i<40;i++){g.fillStyle='rgba(255,255,255,'+(.15+((i*37)%10)/40)+')';g.fillRect((i*197)%W,(i*113)%(H*.6),2,2);}
+  for(const P of PLAT){g.fillStyle=P.solid?'#2a2155':'#3a2f75';g.fillRect(P.x1,P.y,P.x2-P.x1,P.solid?26:10);g.fillStyle=P.solid?'#6c5ce7':'#a29bfe';g.fillRect(P.x1,P.y,P.x2-P.x1,4);}
+  if(F.length)for(const f of F)drawF(f);
+  for(const p of parts){g.globalAlpha=clamp(p.t*2.5,0,1);g.fillStyle=p.c;g.fillRect(p.x-3,p.y-3,6,6);}g.globalAlpha=1;
+  // damage and lives
+  F.forEach((f,i)=>{const x=i?W-260:60;g.fillStyle='#0008';g.fillRect(x,H-92,200,74);g.fillStyle=f.col;g.font='800 15px system-ui';g.textAlign='left';
+    g.fillText(i===1&&mode==='cpu'?'COMPUTER':'PLAYER '+(i+1),x+14,H-70);
+    const d=Math.round(f.dmg);g.fillStyle=d<50?'#fff':d<100?'#ffd166':'#ff5d5d';g.font='900 34px system-ui';g.fillText(d+'%',x+14,H-32);
+    for(let k=0;k<f.stocks;k++){g.fillStyle=f.col;g.beginPath();g.arc(x+130+k*22,H-44,7,0,6.283);g.fill();}});
+  if(bannerT>0){g.globalAlpha=clamp(bannerT*2,0,1);g.fillStyle='#fff';g.font='900 70px "Arial Black",system-ui';g.textAlign='center';g.fillText(banner,W/2,H/2-60);g.globalAlpha=1;}
+}
+function loop(now){requestAnimationFrame(loop);const dt=Math.min(.033,(now-last)/1000);last=now;update(dt);draw();}
+requestAnimationFrame(loop);
+window.__sd={start,get F(){return F;},get state(){return state;},keys,update};
+</script>
+</body>
+</html>

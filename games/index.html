@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arcade</title>
+<style>
+:root{--bg:#0a0d18;--panel:#131a2e;--panel2:#1b2440;--line:#28345a;--fg:#eef2ff;--dim:#97a2c7;--acc:#ffcc33}
+*{box-sizing:border-box}
+html,body{margin:0;background:radial-gradient(110% 70% at 50% -10%,#1b2350 0,var(--bg) 60%) fixed;color:var(--fg);font-family:system-ui,"Segoe UI",sans-serif;min-height:100%}
+a{color:inherit}
+.wrap{max-width:1180px;margin:0 auto;padding:22px 16px 48px}
+header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.logo{font:900 34px/1 "Arial Black",system-ui;letter-spacing:-.02em;margin:0}
+.logo span{color:var(--acc)}
+.search{flex:1;min-width:200px;max-width:420px;margin-left:auto;background:var(--panel);border:2px solid var(--line);color:var(--fg);border-radius:999px;padding:11px 18px;font:inherit;font-size:15px}
+.search:focus{outline:none;border-color:var(--acc)}
+.cats{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.cats button{font:700 14px system-ui;color:var(--dim);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 15px;cursor:pointer}
+.cats button.on{background:var(--fg);color:#0a0d18;border-color:var(--fg)}
+h2{font:800 15px system-ui;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:22px 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
+.game{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;text-decoration:none;transition:transform .14s,border-color .14s,box-shadow .14s}
+.game:hover,.game:focus-visible{transform:translateY(-4px);border-color:var(--acc);box-shadow:0 14px 34px #0008;outline:none}
+.thumb{aspect-ratio:16/10;display:grid;place-items:center;position:relative;overflow:hidden}
+.thumb svg{width:62%;height:62%;filter:drop-shadow(0 6px 14px #0007)}
+.badge{position:absolute;top:10px;left:10px;font:800 11px system-ui;letter-spacing:.06em;text-transform:uppercase;background:#000a;color:#fff;border-radius:6px;padding:4px 8px}
+.badge.r{left:auto;right:10px;background:var(--acc);color:#221800}
+.meta{padding:12px 14px 14px}
+.meta b{display:block;font-size:18px}
+.meta small{color:var(--dim);font-size:13px;line-height:1.4}
+.empty{color:var(--dim)}
+footer{margin-top:34px;color:var(--dim);font-size:13px;line-height:1.6}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 class="logo">Arca<span>de</span></h1>
+    <input class="search" id="q" type="search" placeholder="Search games" aria-label="Search games" autocomplete="off">
+  </header>
+  <div class="cats" id="cats" role="toolbar" aria-label="Categories"></div>
+  <section id="recentBox" hidden><h2>Recently played</h2><div class="grid" id="recent"></div></section>
+  <h2 id="allTitle">All games</h2>
+  <div class="grid" id="all"></div>
+  <p class="empty" id="none" hidden>No games match that search.</p>
+  <footer>Every game here is a single file that runs in the browser, online or off. Two-player games share one keyboard; Nitro Pitch also plays online with a friend using a six-letter code.</footer>
+</div>
+<script>
+'use strict';
+const ART={
+  pitch:'<svg viewBox="0 0 120 80"><ellipse cx="60" cy="66" rx="50" ry="8" fill="#0006"/><circle cx="86" cy="34" r="20" fill="#e8eef8"/><path d="M76 20l10 6 10-6M70 40l6 10M102 40l-6 10" stroke="#1b2440" stroke-width="3" fill="none"/><path d="M14 54q4-16 22-18h22q12 2 14 18z" fill="#3b8bff"/><rect x="24" y="30" width="28" height="9" rx="3" fill="#0b1430"/><circle cx="26" cy="56" r="8" fill="#151b2e"/><circle cx="62" cy="56" r="8" fill="#151b2e"/><path d="M6 48h10" stroke="#ffcc33" stroke-width="4"/></svg>',
+  brawl:'<svg viewBox="0 0 120 80"><rect x="44" y="10" width="10" height="60" rx="4" fill="#4fb2ff"/><rect x="66" y="22" width="10" height="44" rx="4" fill="#ff9a3c" opacity=".85"/><circle cx="26" cy="44" r="12" fill="#4fb2ff"/><rect x="32" y="41" width="18" height="6" fill="#1a2340"/><circle cx="96" cy="40" r="12" fill="#ff9a3c"/><path d="M60 44h10M28 44h-2" stroke="#9fe0ff" stroke-width="3"/><circle cx="96" cy="40" r="20" fill="none" stroke="#fff" stroke-width="2"/></svg>',
+  stick:'<svg viewBox="0 0 120 80" stroke-linecap="round" stroke-width="5" fill="none"><g stroke="#4fd8ff"><circle cx="38" cy="18" r="7"/><path d="M38 25v24M38 49l-10 18M38 49l9 18M38 32l22-6M38 32l-12 10"/></g><g stroke="#ff4fa3"><circle cx="84" cy="22" r="7"/><path d="M84 29v22M84 51l-8 16M84 51l12 14M84 36l-16 10M84 36l12-12"/></g><path d="M62 24l6-5M63 30l7 1" stroke="#fff" stroke-width="3"/></svg>',
+  tanks:'<svg viewBox="0 0 120 80"><path d="M10 14h40v16M70 66h40V50M60 8v26" stroke="#5ac8a8" stroke-width="6" fill="none"/><g transform="translate(30 52) rotate(-20)"><rect x="-15" y="-11" width="30" height="22" rx="3" fill="#3dffb0"/><rect x="2" y="-3" width="20" height="6" fill="#3dffb0"/><circle r="7" fill="#1b5c47"/></g><g transform="translate(92 26) rotate(160)"><rect x="-15" y="-11" width="30" height="22" rx="3" fill="#ffb13d"/><rect x="2" y="-3" width="20" height="6" fill="#ffb13d"/><circle r="7" fill="#6b4614"/></g><circle cx="62" cy="44" r="4" fill="#fff"/><path d="M50 50l12-6 10 10" stroke="#fff6" stroke-width="2" stroke-dasharray="3 3" fill="none"/></svg>',
+  drift:'<svg viewBox="0 0 120 80"><path d="M6 64q50-60 108-40" stroke="#3a3d42" stroke-width="22" fill="none"/><path d="M6 64q50-60 108-40" stroke="#fff4" stroke-width="2" stroke-dasharray="8 8" fill="none"/><path d="M30 52q14-8 26-10M34 58q14-8 26-10" stroke="#222" stroke-width="3" fill="none"/><g transform="translate(76 30) rotate(-28)"><rect x="-16" y="-9" width="32" height="18" rx="5" fill="#ff5a3c"/><rect x="-3" y="-7" width="9" height="14" fill="#111a"/></g><circle cx="52" cy="44" r="6" fill="#ddd6"/><circle cx="44" cy="48" r="8" fill="#ddd4"/></svg>',
+  dash:'<svg viewBox="0 0 120 80"><rect x="0" y="58" width="52" height="22" fill="#120726"/><rect x="0" y="58" width="52" height="3" fill="#00f0ff"/><rect x="70" y="50" width="50" height="30" fill="#120726"/><rect x="70" y="50" width="50" height="3" fill="#00f0ff"/><path d="M92 50l7-14 7 14z" fill="#ff3d6e"/><path d="M60 22l6 7-6 7-6-7z" fill="#ffe14d"/><circle cx="30" cy="38" r="9" fill="#00f0ff"/><circle cx="18" cy="42" r="6" fill="#ff3df2" opacity=".5"/><circle cx="9" cy="46" r="4" fill="#ff3df2" opacity=".3"/></svg>',
+};
+const GAMES=[
+  {id:'nitro-pitch',url:'../nitro-pitch/index.html',name:'Nitro Pitch',desc:'Rocket-powered car soccer in 3D. Bots, training, and online with a friend.',cat:['Sports','Multiplayer','3D'],art:'pitch',bg:'linear-gradient(135deg,#123a8a,#0b6b5e)',badge:'Online 1v1',fresh:true},
+  {id:'build-brawl',url:'build-brawl/index.html',name:'Build Brawl',desc:'1v1 arena shooter. Throw up walls, take cover, outplay the bot.',cat:['Action','Shooter'],art:'brawl',bg:'linear-gradient(135deg,#0d1a3d,#3a1d0d)',badge:'1v1',fresh:true},
+  {id:'stick-duel',url:'stick-duel/index.html',name:'Stick Duel',desc:'Knock your friend off the stage. Two players on one keyboard, or vs the computer.',cat:['Action','2 Player','Fighting'],art:'stick',bg:'linear-gradient(135deg,#1e1048,#4a0f3a)',badge:'2 players',fresh:true},
+  {id:'ricochet-tanks',url:'ricochet-tanks/index.html',name:'Ricochet Tanks',desc:'Bouncing shells in a new maze every round. One hit and you are out.',cat:['Action','2 Player'],art:'tanks',bg:'linear-gradient(135deg,#0b2a22,#1d3b10)',badge:'2 players',fresh:true},
+  {id:'drift-racer',url:'drift-racer/index.html',name:'Drift Racer',desc:'Three laps against three rivals. Handbrake into the corners and slide.',cat:['Racing'],art:'drift',bg:'linear-gradient(135deg,#1c3a22,#4a1a12)',fresh:true},
+  {id:'neon-dash',url:'neon-dash/index.html',name:'Neon Dash',desc:'Endless neon runner. Jump the gaps and saws, grab the gems, go faster.',cat:['Arcade'],art:'dash',bg:'linear-gradient(135deg,#13052e,#3a0a4a)',fresh:true},
+];
+const $=s=>document.querySelector(s);
+let cat='All',recent=[];
+try{recent=JSON.parse(localStorage.getItem('arcadeRecent')||'[]').filter(id=>GAMES.some(g=>g.id===id));}catch(e){}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function card(g){return`<a class="game" href="${esc(g.url)}" data-id="${esc(g.id)}"><div class="thumb" style="background:${g.bg}">${ART[g.art]}${g.badge?`<span class="badge">${esc(g.badge)}</span>`:''}${g.fresh?'<span class="badge r">New</span>':''}</div><div class="meta"><b>${esc(g.name)}</b><small>${esc(g.desc)}</small></div></a>`;}
+function render(){
+  const q=$('#q').value.trim().toLowerCase();
+  const list=GAMES.filter(g=>(cat==='All'||g.cat.includes(cat))&&(!q||(g.name+' '+g.desc+' '+g.cat.join(' ')).toLowerCase().includes(q)));
+  $('#all').innerHTML=list.map(card).join('');$('#none').hidden=list.length>0;
+  $('#allTitle').textContent=cat==='All'&&!q?'All games':list.length+' game'+(list.length===1?'':'s');
+  const rs=recent.map(id=>GAMES.find(g=>g.id===id)).filter(Boolean);
+  $('#recentBox').hidden=!rs.length||!!q||cat!=='All';$('#recent').innerHTML=rs.slice(0,4).map(card).join('');
+}
+const cats=['All',...new Set(GAMES.flatMap(g=>g.cat))];
+$('#cats').innerHTML=cats.map(c=>`<button data-c="${esc(c)}"${c==='All'?' class="on"':''}>${esc(c)}</button>`).join('');
+$('#cats').onclick=e=>{const b=e.target.closest('button');if(!b)return;cat=b.dataset.c;for(const x of $('#cats').children)x.classList.toggle('on',x===b);render();};
+$('#q').addEventListener('input',render);
+document.addEventListener('click',e=>{const a=e.target.closest('a.game');if(!a)return;recent=[a.dataset.id,...recent.filter(id=>id!==a.dataset.id)].slice(0,8);try{localStorage.setItem('arcadeRecent',JSON.stringify(recent));}catch(x){}});
+addEventListener('keydown',e=>{if(e.key==='/'&&document.activeElement!==$('#q')){e.preventDefault();$('#q').focus();}});
+render();
+</script>
+</body>
+</html>

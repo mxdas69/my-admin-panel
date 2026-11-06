@@ -26,3 +26,16 @@ When the file is opened from disk and GitHub is reachable, it runs the newest bu
 - Camera: 110° FOV, distance 270, height 100, 3° down, stiffness 0.45 by default, smoothed with critically damped springs. All five can be changed in Settings
 - Glow setting (Off, Low, High) in Settings and the pause screen, plus a volume slider
 - Graphics setting (Auto, High, Medium, Low, Lowest). Auto drops anti-aliasing, bloom, shadows and then resolution while frames stay slow, and remembers where it settled. The game clock follows real time down to 10 frames a second, so a slow computer looks choppier but never plays in slow motion
+
+## Arcade
+
+`games/index.html` is a games page with search and categories. Every game is original, a single HTML file with no downloads, and works offline:
+
+- Build Brawl: 1v1 top-down arena shooter against a bot (easy, normal, hard). Build walls to block shots; first to 5 rounds
+- Stick Duel: platform fighter for two players on one keyboard, or against the computer. The more damage someone has, the further they fly
+- Ricochet Tanks: two players or against the computer, in a new random maze each round. Shells bounce off walls and one hit wins the round
+- Drift Racer: top-down racing, three laps against three rivals or a time trial, with a handbrake for drifting
+- Neon Dash: one-button endless runner (keyboard, mouse or touch)
+- Nitro Pitch, linked from the same page
+
+To add another game, put it in its own folder under `games/` and add an entry to the `GAMES` list in `games/index.html`. Only add games you made or ones whose creators allow hosting (for example an open-source licence), and keep their licence file and credit.

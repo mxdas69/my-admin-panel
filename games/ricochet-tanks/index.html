@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ricochet Tanks</title>
+<style>
+html,body{margin:0;height:100%;background:#060d0b;color:#eafff6;font-family:system-ui,"Segoe UI",sans-serif;overflow:hidden}
+canvas{display:block;width:100vw;height:100vh}
+.ui{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#060d0bd9;padding:16px}
+.card{background:#10211c;border:1px solid #23473d;border-radius:18px;padding:26px;max-width:460px;text-align:center}
+h1{margin:0 0 6px;font:900 44px/1 "Arial Black",system-ui}h1 b{color:#3dffb0}
+p{color:#93c5b5;line-height:1.5;margin:8px 0 14px}
+button{font:800 17px system-ui;border:0;border-radius:10px;padding:12px 18px;margin:4px;cursor:pointer;background:#1b3a32;color:#eafff6}
+button.y{background:#3dffb0;color:#00261a}
+button:focus-visible{outline:3px solid #3dffb0;outline-offset:2px}
+.keys{display:grid;grid-template-columns:1fr 1fr;gap:12px;text-align:left;font-size:13px;color:#93c5b5;margin:10px 0 16px}
+.keys b{display:block;color:#eafff6;margin-bottom:4px}
+kbd{background:#1b3a32;border-radius:5px;padding:1px 6px;color:#eafff6;font-weight:700;font-family:inherit}
+a.back{position:fixed;left:12px;top:10px;color:#93c5b5;text-decoration:none;font:700 14px system-ui;z-index:5;background:#10211ccc;padding:6px 12px;border-radius:999px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<a class="back" href="../index.html">‹ Games</a>
+<canvas id="c"></canvas>
+<div class="ui" id="menu"><div class="card">
+  <h1>Ricochet <b>Tanks</b></h1>
+  <p id="sub">A new maze every round. Shots bounce off walls, one hit wins the round, and yes, you can hit yourself. First to 5.</p>
+  <div class="keys"><div><b style="color:#3dffb0">Player 1</b><kbd>W</kbd> <kbd>S</kbd> drive<br><kbd>A</kbd> <kbd>D</kbd> turn<br><kbd>Space</kbd> fire</div><div><b style="color:#ffb13d">Player 2</b><kbd>↑</kbd> <kbd>↓</kbd> drive<br><kbd>←</kbd> <kbd>→</kbd> turn<br><kbd>Enter</kbd> or <kbd>M</kbd> fire</div></div>
+  <div><button class="y" data-m="cpu">vs Computer</button><button data-m="2p">2 players</button></div>
+</div></div>
+<script>
+'use strict';
+const cv=document.getElementById('c'),g=cv.getContext('2d'),menu=document.getElementById('menu');
+const CW=9,CH=6,CS=120,W=CW*CS,H=CH*CS,clamp=(x,a,b)=>x<a?a:x>b?b:x,rnd=(a,b)=>a+Math.random()*(b-a);
+let S=1,OX=0,OY=0,DPR=1;
+function resize(){DPR=Math.min(2,devicePixelRatio||1);cv.width=innerWidth*DPR;cv.height=innerHeight*DPR;S=Math.min(cv.width/W,(cv.height-60*DPR)/H)*.96;OX=(cv.width-W*S)/2;OY=(cv.height-H*S)/2+20*DPR;}
+addEventListener('resize',resize);resize();
+const keys={},taps={};
+addEventListener('keydown',e=>{keys[e.code]=true;if(!e.repeat)taps[e.code]=true;if(e.code.startsWith('Arrow')||e.code==='Space'||e.code==='Enter')e.preventDefault();audio();});
+addEventListener('keyup',e=>{keys[e.code]=false;});
+let AC=null;
+function audio(){if(!AC)try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}if(AC&&AC.state==='suspended')AC.resume();}
+function blip(f0,f1,d,v,type){if(!AC)return;const t=AC.currentTime,o=AC.createOscillator(),gn=AC.createGain();o.type=type||'square';o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f1,t+d);gn.gain.setValueAtTime(v,t);gn.gain.exponentialRampToValueAtTime(.0005,t+d);o.connect(gn);gn.connect(AC.destination);o.start(t);o.stop(t+d+.02);}
+/* Maze: a random spanning tree over the cells, then some extra walls knocked out so there are loops to fight around */
+let walls=[],open=[];   // open[y][x] = {r:bool,d:bool} passages to the right and down
+function makeMaze(){
+  open=[...Array(CH)].map(()=>[...Array(CW)].map(()=>({r:false,d:false})));
+  const seen=[...Array(CH)].map(()=>Array(CW).fill(false)),st=[[0,0]];seen[0][0]=true;
+  while(st.length){const[x,y]=st[st.length-1],n=[[1,0],[-1,0],[0,1],[0,-1]].map(([a,b])=>[x+a,y+b]).filter(([a,b])=>a>=0&&b>=0&&a<CW&&b<CH&&!seen[b][a]);
+    if(!n.length){st.pop();continue;}const[nx,ny]=n[Math.random()*n.length|0];
+    if(nx>x)open[y][x].r=true;else if(nx<x)open[y][nx].r=true;else if(ny>y)open[y][x].d=true;else open[ny][x].d=true;
+    seen[ny][nx]=true;st.push([nx,ny]);}
+  for(let y=0;y<CH;y++)for(let x=0;x<CW;x++){if(x<CW-1&&Math.random()<.22)open[y][x].r=true;if(y<CH-1&&Math.random()<.22)open[y][x].d=true;}
+  walls=[[0,0,W,0],[0,H,W,H],[0,0,0,H],[W,0,W,H]];
+  for(let y=0;y<CH;y++)for(let x=0;x<CW;x++){if(x<CW-1&&!open[y][x].r)walls.push([(x+1)*CS,y*CS,(x+1)*CS,(y+1)*CS]);if(y<CH-1&&!open[y][x].d)walls.push([x*CS,(y+1)*CS,(x+1)*CS,(y+1)*CS]);}
+}
+const T=4;   // half wall thickness
+function inWall(x,y,r){for(const w of walls){if(x>Math.min(w[0],w[2])-T-r&&x<Math.max(w[0],w[2])+T+r&&y>Math.min(w[1],w[3])-T-r&&y<Math.max(w[1],w[3])+T+r)return w;}return null;}
+function push(t){
+  for(const w of walls){const x1=Math.min(w[0],w[2])-T,x2=Math.max(w[0],w[2])+T,y1=Math.min(w[1],w[3])-T,y2=Math.max(w[1],w[3])+T;
+    const cx=clamp(t.x,x1,x2),cy=clamp(t.y,y1,y2),dx=t.x-cx,dy=t.y-cy,d=Math.hypot(dx,dy);
+    if(d<t.r){if(d<1e-3){t.x+=t.r;continue;}t.x=cx+dx/d*t.r;t.y=cy+dy/d*t.r;}}
+}
+/* ---------- tanks and shells ---------- */
+const CTL=[{f:'KeyW',b:'KeyS',l:'KeyA',r:'KeyD',fire:['Space']},{f:'ArrowUp',b:'ArrowDown',l:'ArrowLeft',r:'ArrowRight',fire:['Enter','KeyM','NumpadEnter']}];
+let tanks=[],shells=[],parts=[],state='menu',mode='cpu',score=[0,0],roundT=0,banner='',bannerT=0,last=performance.now();
+function mkT(i){const cx=i?CW-1:0,cy=i?CH-1:0;return{i,x:cx*CS+CS/2,y:cy*CS+CS/2,ang:i?Math.PI:0,r:17,cd:0,alive:true,col:i?'#ffb13d':'#3dffb0',prevF:false,path:[],pathT:0};}
+function newRound(){makeMaze();tanks=[mkT(0),mkT(1)];shells=[];state='count';roundT=1.4;banner='Round '+(score[0]+score[1]+1);bannerT=1.4;}
+function start(m){mode=m;score=[0,0];menu.hidden=true;audio();newRound();}
+document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>start(b.dataset.m));
+function fire(t){
+  if(t.cd>0||shells.filter(s=>s.own===t).length>=5)return;
+  t.cd=.3;const a=t.ang,x=t.x+Math.cos(a)*26,y=t.y+Math.sin(a)*26;
+  if(inWall(x,y,3))return;
+  shells.push({x,y,vx:Math.cos(a)*330,vy:Math.sin(a)*330,life:9,own:t,safe:.12});blip(480,180,.08,.04);
+}
+function cellOf(x,y){return[clamp(Math.floor(x/CS),0,CW-1),clamp(Math.floor(y/CS),0,CH-1)];}
+function canGo(x,y,nx,ny){if(nx<0||ny<0||nx>=CW||ny>=CH)return false;if(nx>x)return open[y][x].r;if(nx<x)return open[y][nx].r;if(ny>y)return open[y][x].d;return open[ny][x].d;}
+function bfs(a,b){const prev=new Map(),q=[a],k=c=>c[0]+','+c[1];prev.set(k(a),null);
+  while(q.length){const c=q.shift();if(c[0]===b[0]&&c[1]===b[1])break;for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const n=[c[0]+dx,c[1]+dy];if(!prev.has(k(n))&&canGo(c[0],c[1],n[0],n[1])){prev.set(k(n),c);q.push(n);}}}
+  const path=[];let c=b;while(c&&prev.has(k(c))){path.unshift(c);c=prev.get(k(c));}return path;}
+function los(a,b){const d=Math.hypot(b.x-a.x,b.y-a.y),n=Math.ceil(d/10);for(let i=1;i<n;i++)if(inWall(a.x+(b.x-a.x)*i/n,a.y+(b.y-a.y)*i/n,2))return false;return true;}
+// The computer follows the maze toward you and fires once its barrel lines up with a clear shot
+function cpu(t,dt){
+  const o=tanks[0],I={};
+  if(!o.alive)return I;
+  let tx,ty;
+  if(los(t,o)){tx=o.x;ty=o.y;}
+  else{t.pathT-=dt;if(t.pathT<=0||!t.path.length){t.path=bfs(cellOf(t.x,t.y),cellOf(o.x,o.y));t.pathT=.5;}
+    const nx=t.path[1]||t.path[0];if(!nx)return I;tx=nx[0]*CS+CS/2;ty=nx[1]*CS+CS/2;}
+  const want=Math.atan2(ty-t.y,tx-t.x);let da=((want-t.ang+Math.PI*3)%(Math.PI*2))-Math.PI;
+  if(da>.06)I.r=true;else if(da<-.06)I.l=true;
+  const see=los(t,o);
+  if(see){if(Math.abs(da)<.08&&Math.random()<.18)I.fire=true;if(Math.hypot(o.x-t.x,o.y-t.y)>200&&Math.abs(da)<.5)I.f=true;}
+  else if(Math.abs(da)<.6)I.f=true;
+  return I;
+}
+function stepTank(t,dt){
+  if(!t.alive)return;
+  const C=CTL[t.i],I=t.i===1&&mode==='cpu'?cpu(t,dt):{f:keys[C.f],b:keys[C.b],l:keys[C.l],r:keys[C.r],fire:C.fire.some(k=>keys[k]||taps[k])};
+  t.ang+=((I.r?1:0)-(I.l?1:0))*3.2*dt;
+  const sp=((I.f?1:0)-(I.b?.7:0))*170;
+  t.x+=Math.cos(t.ang)*sp*dt;t.y+=Math.sin(t.ang)*sp*dt;push(t);
+  t.cd-=dt;if(I.fire&&!t.prevF)fire(t);t.prevF=!!I.fire;
+}
+function boom(t){t.alive=false;blip(220,40,.5,.1,'sawtooth');for(let i=0;i<46;i++)parts.push({x:t.x,y:t.y,vx:rnd(-380,380),vy:rnd(-380,380),t:rnd(.4,.9),c:i%3?t.col:'#fff'});}
+function update(dt){
+  bannerT-=dt;
+  for(const p of parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.93;p.vy*=.93;p.t-=dt;}parts=parts.filter(p=>p.t>0);
+  if(state==='count'){roundT-=dt;if(roundT<=0){state='play';}return;}
+  if(state!=='play'&&state!=='after')return;
+  for(const t of tanks)stepTank(t,dt);
+  for(const k in taps)taps[k]=false;
+  for(const s of shells){
+    const n=4;for(let k=0;k<n;k++){
+      const px=s.x,py=s.y;s.x+=s.vx*dt/n;s.y+=s.vy*dt/n;
+      const w=inWall(s.x,s.y,3);
+      if(w){const hit=inWall(px,s.y,3);if(!hit){s.vx=-s.vx;}else if(!inWall(s.x,py,3)){s.vy=-s.vy;}else{s.vx=-s.vx;s.vy=-s.vy;}s.x=px;s.y=py;blip(900,700,.02,.012,'triangle');}
+      if(s.safe>0)s.safe-=dt/n;
+      for(const t of tanks)if(t.alive&&(s.own!==t||s.safe<=0)&&Math.hypot(t.x-s.x,t.y-s.y)<t.r+3){boom(t);s.life=0;}
+    }
+    s.life-=dt;
+  }
+  shells=shells.filter(s=>s.life>0);
+  if(state==='play'){const al=tanks.filter(t=>t.alive);if(al.length<2){state='after';roundT=2;if(al.length===1){score[al[0].i]++;banner=(mode==='cpu'?(al[0].i?'Computer':'You'):'Player '+(al[0].i+1))+' scores';}else banner='Draw';bannerT=2;}}
+  else{roundT-=dt;if(roundT<=0){if(score[0]>=5||score[1]>=5){state='over';menu.hidden=false;document.getElementById('sub').textContent=(score[0]>score[1]?(mode==='cpu'?'You win ':'Player 1 wins '):(mode==='cpu'?'The computer wins ':'Player 2 wins '))+score[0]+' – '+score[1]+'. Play again?';}else newRound();}}
+}
+function drawTank(t){
+  if(!t.alive)return;
+  g.save();g.translate(t.x,t.y);g.rotate(t.ang);g.shadowColor=t.col;g.shadowBlur=16;
+  g.fillStyle=t.col;g.fillRect(-18,-14,36,28);g.fillStyle='#06120e';g.fillRect(-18,-14,36,5);g.fillRect(-18,9,36,5);
+  g.fillStyle=t.col;g.beginPath();g.arc(0,0,9,0,6.283);g.fill();g.fillRect(4,-3.5,24,7);g.restore();g.shadowBlur=0;
+}
+function draw(){
+  g.setTransform(1,0,0,1,0,0);g.fillStyle='#060d0b';g.fillRect(0,0,cv.width,cv.height);
+  g.setTransform(S,0,0,S,OX,OY);
+  g.fillStyle='#0b1814';g.fillRect(0,0,W,H);
+  g.strokeStyle='#12261f';g.lineWidth=1;g.beginPath();for(let x=0;x<=W;x+=CS/4){g.moveTo(x,0);g.lineTo(x,H);}for(let y=0;y<=H;y+=CS/4){g.moveTo(0,y);g.lineTo(W,y);}g.stroke();
+  g.strokeStyle='#5ac8a8';g.lineWidth=T*2;g.lineCap='square';g.shadowColor='#3dffb0';g.shadowBlur=10;
+  g.beginPath();for(const w of walls){g.moveTo(w[0],w[1]);g.lineTo(w[2],w[3]);}g.stroke();g.shadowBlur=0;
+  for(const t of tanks)drawTank(t);
+  for(const s of shells){g.fillStyle='#fff';g.shadowColor=s.own.col;g.shadowBlur=12;g.beginPath();g.arc(s.x,s.y,4,0,6.283);g.fill();}g.shadowBlur=0;
+  for(const p of parts){g.globalAlpha=clamp(p.t*2,0,1);g.fillStyle=p.c;g.fillRect(p.x-3,p.y-3,6,6);}g.globalAlpha=1;
+  g.font='900 28px system-ui';g.textAlign='right';g.fillStyle='#3dffb0';g.fillText((mode==='cpu'?'YOU ':'P1 ')+score[0],W/2-20,-12);g.textAlign='left';g.fillStyle='#ffb13d';g.fillText(score[1]+(mode==='cpu'?' CPU':' P2'),W/2+20,-12);
+  if(bannerT>0){g.globalAlpha=clamp(bannerT*2,0,1);g.fillStyle='#fff';g.font='900 58px "Arial Black",system-ui';g.textAlign='center';g.fillText(banner,W/2,H/2);g.globalAlpha=1;}
+}
+function loop(now){requestAnimationFrame(loop);const dt=Math.min(.033,(now-last)/1000);last=now;update(dt);draw();}
+requestAnimationFrame(loop);
+window.__rt={start,get tanks(){return tanks;},get state(){return state;},get score(){return score;},keys,update};
+</script>
+</body>
+</html>
